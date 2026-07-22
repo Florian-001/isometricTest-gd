@@ -1,0 +1,199 @@
+[gd_scene format=3 uid="uid://b7qoms1hnb7vl"]
+
+[ext_resource type="Script" uid="uid://det1gksfltrcu" path="res://scripts/initiative_battle_controller.gd" id="1_controller"]
+[ext_resource type="Script" uid="uid://db3xtp2lso38p" path="res://scripts/isometric_grid.gd" id="2_grid"]
+[ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="3_character"]
+[ext_resource type="Script" uid="uid://dcabtm22e14rm" path="res://scripts/tactical_camera_controller.gd" id="4_camera"]
+[ext_resource type="Resource" uid="uid://clbeyhlog2wbi" path="res://resources/friendly_spellcaster.tres" id="5_friendly"]
+[ext_resource type="Resource" path="res://resources/enemy_raider.tres" id="6_enemy"]
+[ext_resource type="Script" uid="uid://br4bfrnpefm6b" path="res://scripts/initiative_turn_manager.gd" id="7_turn_manager"]
+[ext_resource type="PackedScene" path="res://scenes/turn_order_bar.tscn" id="8_order_bar"]
+[ext_resource type="PackedScene" path="res://scenes/ability_bar.tscn" id="9_ability_bar"]
+[ext_resource type="Script" uid="uid://bax5bwopqqbc1" path="res://scripts/tactical_wall.gd" id="10_wall"]
+[ext_resource type="Resource" path="res://resources/ai/melee_ai.tres" id="11_melee_ai"]
+[ext_resource type="Resource" path="res://resources/ai/ranged_ai.tres" id="12_ranged_ai"]
+
+[node name="Main" type="Node2D" unique_id=750848398]
+script = ExtResource("1_controller")
+
+[node name="Grid" type="Node2D" parent="." unique_id=190021511]
+position = Vector2(640, 96)
+script = ExtResource("2_grid")
+
+[node name="Walls" type="Node2D" parent="." unique_id=1102300341]
+
+[node name="Wall_5_4" type="Node2D" parent="Walls" unique_id=413103437]
+z_index = 109
+position = Vector2(688, 312)
+script = ExtResource("10_wall")
+grid_cell = Vector2i(5, 4)
+
+[node name="Wall_5_5" type="Node2D" parent="Walls" unique_id=775990625]
+z_index = 110
+position = Vector2(640, 336)
+script = ExtResource("10_wall")
+grid_cell = Vector2i(5, 5)
+
+[node name="Wall_5_6" type="Node2D" parent="Walls" unique_id=1348064369]
+z_index = 111
+position = Vector2(592, 360)
+script = ExtResource("10_wall")
+grid_cell = Vector2i(5, 6)
+
+[node name="Characters" type="Node2D" parent="." unique_id=557259408]
+
+[node name="FriendA" type="Node2D" parent="Characters" unique_id=1740941279]
+script = ExtResource("3_character")
+definition = ExtResource("5_friendly")
+max_health_override = 100
+movement_range_override = 6.0
+initiative_override = 12
+starting_grid_cell = Vector2i(2, 3)
+
+[node name="FriendB" type="Node2D" parent="Characters" unique_id=2129219972]
+script = ExtResource("3_character")
+definition = ExtResource("5_friendly")
+max_health_override = 100
+movement_range_override = 3.0
+initiative_override = 8
+starting_grid_cell = Vector2i(3, 6)
+
+[node name="MeleeEnemy" type="Node2D" parent="Characters" unique_id=921107907]
+script = ExtResource("3_character")
+definition = ExtResource("6_enemy")
+enemy_ai_profile = ExtResource("11_melee_ai")
+max_health_override = 100
+movement_range_override = 5.0
+initiative_override = 10
+starting_grid_cell = Vector2i(8, 6)
+
+[node name="RangedEnemy" type="Node2D" parent="Characters" unique_id=1457671969]
+script = ExtResource("3_character")
+definition = ExtResource("6_enemy")
+enemy_ai_profile = ExtResource("12_ranged_ai")
+max_health_override = 100
+movement_range_override = 5.0
+initiative_override = 9
+starting_grid_cell = Vector2i(9, 3)
+
+[node name="TurnManager" type="Node" parent="." unique_id=226977299]
+script = ExtResource("7_turn_manager")
+
+[node name="TacticalCamera" type="Camera2D" parent="." unique_id=513919283]
+position = Vector2(640, 360)
+script = ExtResource("4_camera")
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=122831205]
+layer = 10
+
+[node name="TurnOrderBar" parent="HUD" unique_id=209647319 instance=ExtResource("8_order_bar")]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -284.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 106.0
+grow_horizontal = 0
+
+[node name="AbilityBar" parent="HUD" unique_id=761141443 instance=ExtResource("9_ability_bar")]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -242.0
+offset_top = -98.0
+offset_right = 242.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="HelpBackground" type="ColorRect" parent="HUD" unique_id=741462883]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 420.0
+offset_bottom = 78.0
+mouse_filter = 2
+color = Color(0.025, 0.047, 0.075, 0.9)
+
+[node name="TurnPanel" type="PanelContainer" parent="HUD" unique_id=2025685219]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -360.0
+offset_top = -138.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="HUD/TurnPanel" unique_id=958614485]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="HUD/TurnPanel/Margin" unique_id=944152848]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="TurnStatus" type="Label" parent="HUD/TurnPanel/Margin/VBox" unique_id=410986708]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 18
+text = "FriendA's Turn | Round 1"
+
+[node name="MovementStatus" type="Label" parent="HUD/TurnPanel/Margin/VBox" unique_id=2106367089]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "Select a friendly unit"
+
+[node name="EndTurnButton" type="Button" parent="HUD/TurnPanel/Margin/VBox" unique_id=442931990]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "End Turn"
+
+[node name="AIDebugPanel" type="PanelContainer" parent="HUD" unique_id=2004355906]
+visible = false
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -380.0
+offset_right = 566.0
+offset_bottom = -120.0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="HUD/AIDebugPanel" unique_id=1631131087]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="HUD/AIDebugPanel/Margin" unique_id=784322946]
+layout_mode = 2
+
+[node name="DebugText" type="Label" parent="HUD/AIDebugPanel/Margin/VBox" unique_id=1918392964]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "AI Decision"
+autowrap_mode = 2
+
+[node name="HelpText" type="Label" parent="HUD" unique_id=68517187]
+offset_left = 28.0
+offset_top = 25.0
+offset_right = 410.0
+offset_bottom = 70.0
+theme_override_colors/font_color = Color(0.86, 0.93, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "Select a blue character, hover a highlighted cell, then click to move.
+WASD or middle-drag to pan  •  Mouse wheel to zoom  •  Esc to clear"

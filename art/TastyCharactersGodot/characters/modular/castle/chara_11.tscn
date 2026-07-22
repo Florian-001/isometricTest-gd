@@ -1,0 +1,112 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_12.tres" id="1_castle_21300024"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_29.tres" id="2_castle_21300058"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_30.tres" id="3_castle_21300060"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_46.tres" id="4_castle_21300092"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_47.tres" id="5_castle_21300094"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_52.tres" id="6_castle_21300104"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_63.tres" id="7_castle_21300126"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_64.tres" id="8_castle_21300128"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_74.tres" id="9_castle_21300148"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_75.tres" id="10_castle_21300150"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_76.tres" id="11_castle_21300152"]
+[ext_resource type="Texture2D" path="res://assets/sprites/castle/PackCastle01_77.tres" id="12_castle_21300154"]
+
+[node name="Chara_11" type="Node2D"]
+metadata/_tasty_source = "Assets/Tasty_Characters - FullPack/Tasty_Characters - Castle Pack/Ressources/Prefabs/Chara_11.prefab"
+metadata/_tasty_kind = "modular"
+
+[node name="Body" type="Sprite2D" parent="."]
+position = Vector2(0.0, 11.400002)
+texture = ExtResource("2_castle_21300058")
+offset = Vector2(0.0, 26.0)
+
+[node name="Epaulette_L" type="Sprite2D" parent="."]
+position = Vector2(-38.1, -8.9)
+scale = Vector2(-1.0, 1.0)
+texture = ExtResource("3_castle_21300060")
+offset = Vector2(0.0, 15.0)
+
+[node name="Epaulette_R" type="Sprite2D" parent="."]
+position = Vector2(40.2, -8.9)
+texture = ExtResource("3_castle_21300060")
+offset = Vector2(0.0, 15.0)
+
+[node name="Hat" type="Sprite2D" parent="."]
+position = Vector2(-0.2, -41.3)
+texture = ExtResource("8_castle_21300128")
+offset = Vector2(0.0, 30.0)
+z_index = 1
+
+[node name="Horn_L" type="Sprite2D" parent="."]
+position = Vector2(-41.0, -43.4)
+scale = Vector2(-1.0, 1.0)
+texture = ExtResource("7_castle_21300126")
+offset = Vector2(0.0, 17.5)
+
+[node name="Horn_R" type="Sprite2D" parent="."]
+position = Vector2(41.2, -43.4)
+texture = ExtResource("7_castle_21300126")
+offset = Vector2(0.0, 17.5)
+
+[node name="Horse" type="Node2D" parent="."]
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0.0, 89.0)
+texture = ExtResource("6_castle_21300104")
+offset = Vector2(0.0, 10.0)
+z_index = 1
+
+[node name="Shield" type="Sprite2D" parent="."]
+position = Vector2(24.8, 12.6)
+texture = ExtResource("5_castle_21300094")
+offset = Vector2(0.0, 25.0)
+z_index = 2
+
+[node name="Body" type="Sprite2D" parent="Horse"]
+position = Vector2(-6.7, 19.6)
+texture = ExtResource("10_castle_21300150")
+offset = Vector2(0.0, 33.5)
+
+[node name="Foot_1" type="Sprite2D" parent="Horse"]
+position = Vector2(-10.3, 72.0)
+texture = ExtResource("11_castle_21300152")
+offset = Vector2(0.0, 15.0)
+z_index = -1
+
+[node name="Foot_2" type="Sprite2D" parent="Horse"]
+position = Vector2(0.5, 72.3)
+texture = ExtResource("12_castle_21300154")
+offset = Vector2(0.0, 14.5)
+z_index = -1
+
+[node name="Foot_3" type="Sprite2D" parent="Horse"]
+position = Vector2(15.2, 72.0)
+texture = ExtResource("11_castle_21300152")
+offset = Vector2(0.0, 15.0)
+z_index = -1
+
+[node name="Foot_4" type="Sprite2D" parent="Horse"]
+position = Vector2(24.2, 72.3)
+texture = ExtResource("12_castle_21300154")
+offset = Vector2(0.0, 14.5)
+z_index = -1
+
+[node name="Hair" type="Sprite2D" parent="Horse"]
+position = Vector2(-26.9, 1.6)
+texture = ExtResource("1_castle_21300024")
+offset = Vector2(0.0, 20.0)
+z_index = -1
+
+[node name="Head" type="Sprite2D" parent="Horse"]
+position = Vector2(-43.1, -10.8)
+texture = ExtResource("9_castle_21300148")
+offset = Vector2(0.0, 44.5)
+z_index = 1
+
+[node name="Nail" type="Sprite2D" parent="Horse"]
+position = Vector2(33.0, 46.4)
+texture = ExtResource("4_castle_21300092")
+offset = Vector2(0.0, 16.0)
+z_index = -1

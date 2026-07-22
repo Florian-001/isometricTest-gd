@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CharacterDefinition" format=3 uid="uid://n6ywov3dxmd4"]
+
+[ext_resource type="Script" uid="uid://bb43sfxia744r" path="res://scripts/unit_definition.gd" id="1_definition"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
+[ext_resource type="Resource" uid="uid://ctr35lcl31o04" path="res://resources/abilities/enemy_slash.tres" id="3_slash"]
+[ext_resource type="Resource" uid="uid://b0ygs6jbuindl" path="res://resources/abilities/enemy_shot.tres" id="4_shot"]
+
+[resource]
+script = ExtResource("1_definition")
+display_name = "Enemy Raider"
+faction = 1
+movement_range = 5.0
+body_color = Color(0.95, 0.24, 0.29, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_slash"), ExtResource("4_shot")])

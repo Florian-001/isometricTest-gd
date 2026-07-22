@@ -1,0 +1,91 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_23.tres" id="1_sea_21300046"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_53.tres" id="2_sea_21300106"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_63.tres" id="3_sea_21300126"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_71.tres" id="4_sea_21300142"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_72.tres" id="5_sea_21300144"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_77.tres" id="6_sea_21300154"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_78.tres" id="7_sea_21300156"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_83.tres" id="8_sea_21300166"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_90.tres" id="9_sea_21300180"]
+
+[node name="Chara_12" type="Node2D"]
+metadata/_tasty_source = "Assets/Tasty_Characters - FullPack/Tasty_Characters - Sea Pack/Ressources/Prefabs/Chara_12.prefab"
+metadata/_tasty_kind = "modular"
+
+[node name="Body" type="Sprite2D" parent="."]
+position = Vector2(0.0, 30.0)
+texture = ExtResource("8_sea_21300166")
+offset = Vector2(0.0, 30.0)
+
+[node name="Crete" type="Sprite2D" parent="."]
+position = Vector2(2.4, -27.5)
+texture = ExtResource("3_sea_21300126")
+offset = Vector2(0.0, 23.5)
+z_index = 5
+
+[node name="Eye_L" type="Sprite2D" parent="."]
+position = Vector2(-13.0, 19.3)
+scale = Vector2(-1.0, 1.0)
+texture = ExtResource("1_sea_21300046")
+offset = Vector2(0.0, 7.0)
+z_index = 5
+
+[node name="Eye_R" type="Sprite2D" parent="."]
+position = Vector2(10.0, 18.9)
+texture = ExtResource("1_sea_21300046")
+offset = Vector2(0.0, 7.0)
+z_index = 5
+
+[node name="Eyebrows_L" type="Sprite2D" parent="."]
+position = Vector2(-12.1, 9.6)
+texture = ExtResource("4_sea_21300142")
+offset = Vector2(0.0, 2.0)
+z_index = 5
+
+[node name="Eyebrows_R" type="Sprite2D" parent="."]
+position = Vector2(10.1, 9.6)
+texture = ExtResource("4_sea_21300142")
+offset = Vector2(0.0, 2.0)
+z_index = 5
+
+[node name="Foot_L" type="Sprite2D" parent="."]
+position = Vector2(-20.1, 92.9)
+texture = ExtResource("9_sea_21300180")
+z_index = 1
+
+[node name="Foot_R" type="Sprite2D" parent="."]
+position = Vector2(25.0, 93.3)
+texture = ExtResource("9_sea_21300180")
+z_index = 1
+
+[node name="Hand_L" type="Sprite2D" parent="."]
+position = Vector2(-29.7, 39.2)
+texture = ExtResource("6_sea_21300154")
+offset = Vector2(0.0, 21.5)
+z_index = -1
+
+[node name="Hand_R" type="Sprite2D" parent="."]
+position = Vector2(29.4, 37.9)
+texture = ExtResource("7_sea_21300156")
+offset = Vector2(0.0, 24.0)
+z_index = 2
+
+[node name="Head" type="Sprite2D" parent="."]
+position = Vector2(3.9, 0.0)
+texture = ExtResource("5_sea_21300144")
+offset = Vector2(0.0, 24.5)
+z_index = 4
+
+[node name="Mouth" type="Sprite2D" parent="."]
+position = Vector2(-1.0, 34.9)
+texture = ExtResource("4_sea_21300142")
+offset = Vector2(0.0, 2.0)
+z_index = 5
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0.0, 89.0)
+texture = ExtResource("2_sea_21300106")
+offset = Vector2(0.0, 10.0)
+z_index = -1

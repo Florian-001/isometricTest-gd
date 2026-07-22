@@ -1,0 +1,73 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_12.tres" id="1_sea_21300024"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_13.tres" id="2_sea_21300026"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_21.tres" id="3_sea_21300042"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_27.tres" id="4_sea_21300054"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_40.tres" id="5_sea_21300080"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_43.tres" id="6_sea_21300086"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_44.tres" id="7_sea_21300088"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea/PackSea01_53.tres" id="8_sea_21300106"]
+
+[node name="Chara_02" type="Node2D"]
+metadata/_tasty_source = "Assets/Tasty_Characters - FullPack/Tasty_Characters - Sea Pack/Ressources/Prefabs/Chara_02.prefab"
+metadata/_tasty_kind = "modular"
+
+[node name="Beard" type="Sprite2D" parent="."]
+position = Vector2(0.0, 31.3)
+texture = ExtResource("4_sea_21300054")
+offset = Vector2(0.0, 34.5)
+z_index = 1
+
+[node name="Body" type="Sprite2D" parent="."]
+position = Vector2(13.1, 41.8)
+texture = ExtResource("7_sea_21300088")
+offset = Vector2(0.0, 29.5)
+
+[node name="Eye_L" type="Sprite2D" parent="."]
+position = Vector2(-11.7, 18.5)
+scale = Vector2(-1.0, 1.0)
+texture = ExtResource("3_sea_21300042")
+offset = Vector2(0.0, 7.5)
+z_index = 1
+
+[node name="Eye_R" type="Sprite2D" parent="."]
+position = Vector2(8.7, 18.1)
+texture = ExtResource("3_sea_21300042")
+offset = Vector2(0.0, 7.5)
+z_index = 1
+
+[node name="Eyebrows_L" type="Sprite2D" parent="."]
+position = Vector2(-12.1, 9.6)
+texture = ExtResource("1_sea_21300024")
+offset = Vector2(0.0, 2.0)
+z_index = 1
+
+[node name="Eyebrows_R" type="Sprite2D" parent="."]
+position = Vector2(10.1, 9.6)
+texture = ExtResource("1_sea_21300024")
+offset = Vector2(0.0, 2.0)
+z_index = 1
+
+[node name="Hand_L" type="Sprite2D" parent="."]
+position = Vector2(-28.2, 38.4)
+texture = ExtResource("6_sea_21300086")
+offset = Vector2(0.0, 22.0)
+z_index = -1
+
+[node name="Hand_R" type="Sprite2D" parent="."]
+position = Vector2(31.2, 43.0)
+texture = ExtResource("5_sea_21300080")
+offset = Vector2(0.0, 24.0)
+z_index = 2
+
+[node name="Head" type="Sprite2D" parent="."]
+position = Vector2(2.0, 0.0)
+texture = ExtResource("2_sea_21300026")
+offset = Vector2(0.0, 24.0)
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0.0, 89.0)
+texture = ExtResource("8_sea_21300106")
+offset = Vector2(0.0, 10.0)
+z_index = -1

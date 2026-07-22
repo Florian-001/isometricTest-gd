@@ -1,0 +1,148 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_12.tres" id="1_village_21300024"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_13.tres" id="2_village_21300026"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_18.tres" id="3_village_21300036"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_22.tres" id="4_village_21300044"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_32.tres" id="5_village_21300064"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_33.tres" id="6_village_21300066"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_36.tres" id="7_village_21300072"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_37.tres" id="8_village_21300074"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_38.tres" id="9_village_21300076"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_43.tres" id="10_village_21300086"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_44.tres" id="11_village_21300088"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_45.tres" id="12_village_21300090"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_46.tres" id="13_village_21300092"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_47.tres" id="14_village_21300094"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_48.tres" id="15_village_21300096"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_49.tres" id="16_village_21300098"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_90.tres" id="17_village_21300180"]
+
+[node name="Chara_07" type="Node2D"]
+metadata/_tasty_source = "Assets/Tasty_Characters - FullPack/Tasty_Characters - Village Pack/Ressources/Prefabs/Chara_07.prefab"
+metadata/_tasty_kind = "modular"
+
+[node name="Body" type="Sprite2D" parent="."]
+position = Vector2(1.0, 12.100005)
+texture = ExtResource("5_village_21300064")
+offset = Vector2(0.0, 20.0)
+z_index = -2
+
+[node name="Body_2" type="Sprite2D" parent="."]
+position = Vector2(1.0, -0.8999974)
+texture = ExtResource("4_village_21300044")
+offset = Vector2(0.0, 19.5)
+z_index = -1
+
+[node name="Cape" type="Sprite2D" parent="."]
+position = Vector2(42.0, 14.6)
+texture = ExtResource("9_village_21300076")
+offset = Vector2(0.0, 18.5)
+z_index = -1
+
+[node name="Eye_L" type="Sprite2D" parent="."]
+position = Vector2(-12.7, -22.099997)
+scale = Vector2(-1.0, 1.0)
+texture = ExtResource("3_village_21300036")
+offset = Vector2(0.0, 7.0)
+z_index = 1
+
+[node name="Eye_R" type="Sprite2D" parent="."]
+position = Vector2(10.0, -22.499998)
+texture = ExtResource("3_village_21300036")
+offset = Vector2(0.0, 7.0)
+z_index = 1
+
+[node name="Eyebrows_L" type="Sprite2D" parent="."]
+position = Vector2(-12.1, -31.799996)
+texture = ExtResource("2_village_21300026")
+offset = Vector2(0.0, 2.0)
+z_index = 1
+
+[node name="Eyebrows_R" type="Sprite2D" parent="."]
+position = Vector2(10.1, -31.8)
+texture = ExtResource("2_village_21300026")
+offset = Vector2(0.0, 2.0)
+z_index = 1
+
+[node name="Foot_R" type="Sprite2D" parent="."]
+position = Vector2(19.1, 47.7)
+texture = ExtResource("6_village_21300066")
+offset = Vector2(0.0, 8.0)
+z_index = 1
+
+[node name="Head" type="Sprite2D" parent="."]
+position = Vector2(1.7, -41.399997)
+texture = ExtResource("1_village_21300024")
+offset = Vector2(0.0, 24.5)
+
+[node name="Horse" type="Node2D" parent="."]
+
+[node name="Body" type="Sprite2D" parent="Horse"]
+position = Vector2(-6.7, 18.2)
+texture = ExtResource("14_village_21300094")
+offset = Vector2(0.0, 32.0)
+
+[node name="Ear_L" type="Sprite2D" parent="Horse"]
+position = Vector2(-52.5, -8.7)
+texture = ExtResource("8_village_21300074")
+offset = Vector2(0.0, 10.5)
+z_index = 2
+
+[node name="Ear_R" type="Sprite2D" parent="Horse"]
+position = Vector2(-65.6, 5.3)
+texture = ExtResource("7_village_21300072")
+offset = Vector2(0.0, 8.0)
+z_index = -1
+
+[node name="Eye" type="Sprite2D" parent="Horse"]
+position = Vector2(-41.6, 7.6)
+texture = ExtResource("10_village_21300086")
+offset = Vector2(0.0, 14.5)
+z_index = 3
+
+[node name="Foot_1" type="Sprite2D" parent="Horse"]
+position = Vector2(-10.3, 85.7)
+texture = ExtResource("17_village_21300180")
+z_index = -1
+
+[node name="Foot_2" type="Sprite2D" parent="Horse"]
+position = Vector2(0.5, 72.3)
+texture = ExtResource("16_village_21300098")
+offset = Vector2(0.0, 14.5)
+z_index = 2
+
+[node name="Foot_3" type="Sprite2D" parent="Horse"]
+position = Vector2(15.2, 86.0)
+texture = ExtResource("17_village_21300180")
+z_index = -1
+
+[node name="Foot_4" type="Sprite2D" parent="Horse"]
+position = Vector2(24.2, 72.3)
+texture = ExtResource("16_village_21300098")
+offset = Vector2(0.0, 14.5)
+z_index = 2
+
+[node name="Hair" type="Sprite2D" parent="Horse"]
+position = Vector2(-26.9, 1.6)
+texture = ExtResource("12_village_21300090")
+offset = Vector2(0.0, 20.0)
+z_index = -1
+
+[node name="Head" type="Sprite2D" parent="Horse"]
+position = Vector2(-49.2, 4.0)
+texture = ExtResource("11_village_21300088")
+offset = Vector2(0.0, 37.5)
+z_index = 1
+
+[node name="Nail" type="Sprite2D" parent="Horse"]
+position = Vector2(33.0, 49.6)
+texture = ExtResource("15_village_21300096")
+offset = Vector2(0.0, 16.5)
+z_index = -1
+
+[node name="Shadow" type="Sprite2D" parent="Horse"]
+position = Vector2(0.0, 89.0)
+texture = ExtResource("13_village_21300092")
+offset = Vector2(0.0, 9.0)
+z_index = 1

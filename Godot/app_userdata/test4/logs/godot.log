@@ -1,0 +1,76 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+TextServer: Added interface "Dummy"
+TextServer: Added interface "ICU / HarfBuzz / Graphite (Built-in)"
+Using "default" pen tablet driver...
+
+TextServer: Primary interface set to: "ICU / HarfBuzz / Graphite (Built-in)".
+CORE API HASH: 3769296884
+EDITOR API HASH: 3146738256
+Loading resource: res://tests/run_headless.gd remapped: res://tests/run_headless.gd
+Completed load for: 'res://tests/run_headless.gd' remapped 'res://tests/run_headless.gd' at thread -1
+SceneTreeFTI: traversal method DEFAULT
+Loading resource: res://tests/test_tactical_foundation.gd remapped: res://tests/test_tactical_foundation.gd
+Loading resource: res://scenes/turn_order_bar.tscn remapped: res://scenes/turn_order_bar.tscn
+Loading resource: res://scripts/turn_order_bar.gd remapped: res://scripts/turn_order_bar.gd
+Completed load for: 'res://scripts/turn_order_bar.gd' remapped 'res://scripts/turn_order_bar.gd' at thread -1
+Completed load for: 'res://scenes/turn_order_bar.tscn' remapped 'res://scenes/turn_order_bar.tscn' at thread -1
+Loading resource: res://scenes/ability_bar.tscn remapped: res://scenes/ability_bar.tscn
+Loading resource: res://scripts/ability_bar.gd remapped: res://scripts/ability_bar.gd
+Completed load for: 'res://scripts/ability_bar.gd' remapped 'res://scripts/ability_bar.gd' at thread -1
+Completed load for: 'res://scenes/ability_bar.tscn' remapped 'res://scenes/ability_bar.tscn' at thread -1
+Completed load for: 'res://tests/test_tactical_foundation.gd' remapped 'res://tests/test_tactical_foundation.gd' at thread -1
+Loading resource: res://resources/friendly_spellcaster.tres remapped: res://resources/friendly_spellcaster.tres
+Loading resource: res://resources/abilities/fireball.tres remapped: res://resources/abilities/fireball.tres
+Completed load for: 'res://resources/abilities/fireball.tres' remapped 'res://resources/abilities/fireball.tres' at thread -1
+Loading resource: res://resources/abilities/arrow.tres remapped: res://resources/abilities/arrow.tres
+Completed load for: 'res://resources/abilities/arrow.tres' remapped 'res://resources/abilities/arrow.tres' at thread -1
+Loading resource: res://resources/abilities/heal.tres remapped: res://resources/abilities/heal.tres
+Completed load for: 'res://resources/abilities/heal.tres' remapped 'res://resources/abilities/heal.tres' at thread -1
+Loading resource: res://resources/abilities/beam.tres remapped: res://resources/abilities/beam.tres
+Completed load for: 'res://resources/abilities/beam.tres' remapped 'res://resources/abilities/beam.tres' at thread -1
+Loading resource: res://resources/abilities/strike.tres remapped: res://resources/abilities/strike.tres
+Completed load for: 'res://resources/abilities/strike.tres' remapped 'res://resources/abilities/strike.tres' at thread -1
+Completed load for: 'res://resources/friendly_spellcaster.tres' remapped 'res://resources/friendly_spellcaster.tres' at thread -1
+Loading resource: res://resources/abilities/fireball.tres remapped: res://resources/abilities/fireball.tres
+Completed load for: 'res://resources/abilities/fireball.tres' remapped 'res://resources/abilities/fireball.tres' at thread -1
+Loading resource: res://resources/abilities/arrow.tres remapped: res://resources/abilities/arrow.tres
+Completed load for: 'res://resources/abilities/arrow.tres' remapped 'res://resources/abilities/arrow.tres' at thread -1
+Loading resource: res://resources/abilities/fireball.tres remapped: res://resources/abilities/fireball.tres
+Completed load for: 'res://resources/abilities/fireball.tres' remapped 'res://resources/abilities/fireball.tres' at thread -1
+Loading resource: res://resources/abilities/strike.tres remapped: res://resources/abilities/strike.tres
+Completed load for: 'res://resources/abilities/strike.tres' remapped 'res://resources/abilities/strike.tres' at thread -1
+Loading resource: res://resources/abilities/strike.tres remapped: res://resources/abilities/strike.tres
+Completed load for: 'res://resources/abilities/strike.tres' remapped 'res://resources/abilities/strike.tres' at thread -1
+Loading resource: res://resources/friendly_spellcaster.tres remapped: res://resources/friendly_spellcaster.tres
+Loading resource: res://resources/abilities/fireball.tres remapped: res://resources/abilities/fireball.tres
+Completed load for: 'res://resources/abilities/fireball.tres' remapped 'res://resources/abilities/fireball.tres' at thread -1
+Loading resource: res://resources/abilities/arrow.tres remapped: res://resources/abilities/arrow.tres
+Completed load for: 'res://resources/abilities/arrow.tres' remapped 'res://resources/abilities/arrow.tres' at thread -1
+Loading resource: res://resources/abilities/heal.tres remapped: res://resources/abilities/heal.tres
+Completed load for: 'res://resources/abilities/heal.tres' remapped 'res://resources/abilities/heal.tres' at thread -1
+Loading resource: res://resources/abilities/beam.tres remapped: res://resources/abilities/beam.tres
+Completed load for: 'res://resources/abilities/beam.tres' remapped 'res://resources/abilities/beam.tres' at thread -1
+Loading resource: res://resources/abilities/strike.tres remapped: res://resources/abilities/strike.tres
+Completed load for: 'res://resources/abilities/strike.tres' remapped 'res://resources/abilities/strike.tres' at thread -1
+Completed load for: 'res://resources/friendly_spellcaster.tres' remapped 'res://resources/friendly_spellcaster.tres' at thread -1
+Loading resource: res://main.tscn remapped: res://main.tscn
+Loading resource: res://scripts/initiative_battle_controller.gd remapped: res://scripts/initiative_battle_controller.gd
+Completed load for: 'res://scripts/initiative_battle_controller.gd' remapped 'res://scripts/initiative_battle_controller.gd' at thread -1
+Loading resource: res://resources/friendly_spellcaster.tres remapped: res://resources/friendly_spellcaster.tres
+Completed load for: 'res://resources/friendly_spellcaster.tres' remapped 'res://resources/friendly_spellcaster.tres' at thread -1
+Loading resource: res://resources/enemy_raider.tres remapped: res://resources/enemy_raider.tres
+Loading resource: res://resources/abilities/enemy_slash.tres remapped: res://resources/abilities/enemy_slash.tres
+Completed load for: 'res://resources/abilities/enemy_slash.tres' remapped 'res://resources/abilities/enemy_slash.tres' at thread -1
+Loading resource: res://resources/abilities/enemy_shot.tres remapped: res://resources/abilities/enemy_shot.tres
+Completed load for: 'res://resources/abilities/enemy_shot.tres' remapped 'res://resources/abilities/enemy_shot.tres' at thread -1
+Completed load for: 'res://resources/enemy_raider.tres' remapped 'res://resources/enemy_raider.tres' at thread -1
+Loading resource: res://resources/ai/melee_ai.tres remapped: res://resources/ai/melee_ai.tres
+Completed load for: 'res://resources/ai/melee_ai.tres' remapped 'res://resources/ai/melee_ai.tres' at thread -1
+Loading resource: res://resources/ai/ranged_ai.tres remapped: res://resources/ai/ranged_ai.tres
+Completed load for: 'res://resources/ai/ranged_ai.tres' remapped 'res://resources/ai/ranged_ai.tres' at thread -1
+Completed load for: 'res://main.tscn' remapped 'res://main.tscn' at thread -1
+TACTICAL_TESTS_OK
+Loading resource: res://addons/godot_ai/runtime/game_helper.gd remapped: res://addons/godot_ai/runtime/game_helper.gd
+Completed load for: 'res://addons/godot_ai/runtime/game_helper.gd' remapped 'res://addons/godot_ai/runtime/game_helper.gd' at thread -1
+Loaded system CA certificates
+[godot_ai game_helper] registered mcp capture (debugger active=false, logger=true)

@@ -1,0 +1,8 @@
+Tasty Characters Unity -> Godot conversion report
+=================================================
+Atlases: 4
+Sprite regions: 361
+Reference scenes: 64
+Modular scenes: 48
+Total scene sprite nodes: 690
+Warnings: 0

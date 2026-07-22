@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="EnemyAIProfile" format=3 uid="uid://cjf8v1k07fmgg"]
+
+[ext_resource type="Script" uid="uid://cs2gq4qhfmybf" path="res://scripts/enemy_ai_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+display_name = "Ranged AI"
+behavior_style = 1
+lookahead_candidate_limit = 10

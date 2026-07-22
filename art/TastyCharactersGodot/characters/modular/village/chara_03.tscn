@@ -1,0 +1,34 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_8.tres" id="1_village_21300016"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_16.tres" id="2_village_21300032"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_40.tres" id="3_village_21300080"]
+[ext_resource type="Texture2D" path="res://assets/sprites/village/PackVillage01_46.tres" id="4_village_21300092"]
+
+[node name="Chara_03" type="Node2D"]
+metadata/_tasty_source = "Assets/Tasty_Characters - FullPack/Tasty_Characters - Village Pack/Ressources/Prefabs/Chara_03.prefab"
+metadata/_tasty_kind = "modular"
+scale = Vector2(-1.0, 1.0)
+
+[node name="Body" type="Sprite2D" parent="."]
+position = Vector2(1.0, 49.5)
+texture = ExtResource("3_village_21300080")
+offset = Vector2(0.0, 24.5)
+z_index = 1
+
+[node name="Eyes" type="Sprite2D" parent="."]
+position = Vector2(-0.4, 13.9)
+texture = ExtResource("1_village_21300016")
+offset = Vector2(0.0, 11.0)
+z_index = 3
+
+[node name="Head" type="Sprite2D" parent="."]
+position = Vector2(1.7, -19.4)
+texture = ExtResource("2_village_21300032")
+offset = Vector2(0.0, 47.0)
+z_index = 2
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0.0, 89.0)
+texture = ExtResource("4_village_21300092")
+offset = Vector2(0.0, 9.0)

@@ -1,0 +1,717 @@
+extends Node2D
+
+@export var center_camera_on_start := true
+@export_range(0.0, 2.0, 0.05) var enemy_path_preview_delay: float = 0.35
+@export_range(0.0, 2.0, 0.05) var enemy_ability_preview_delay: float = 0.35
+@export_category("AI Debugging")
+@export var show_ai_debug_panel := true
+@export_range(1, 10, 1) var ai_debug_candidate_count := 5
+
+@onready var grid: IsometricGrid = $Grid
+@onready var walls_container: Node2D = $Walls
+@onready var characters_container: Node2D = $Characters
+@onready var turn_manager: TurnManager = $TurnManager
+@onready var tactical_camera: TacticalCameraController = $TacticalCamera
+@onready var turn_order_bar: TurnOrderBar = $HUD/TurnOrderBar
+@onready var ability_bar: AbilityBar = $HUD/AbilityBar
+@onready var turn_status: Label = $HUD/TurnPanel/Margin/VBox/TurnStatus
+@onready var movement_status: Label = $HUD/TurnPanel/Margin/VBox/MovementStatus
+@onready var end_turn_button: Button = $HUD/TurnPanel/Margin/VBox/EndTurnButton
+@onready var ai_debug_panel: PanelContainer = $HUD/AIDebugPanel
+@onready var ai_debug_label: Label = $HUD/AIDebugPanel/Margin/VBox/DebugText
+
+var _pathfinder: GridPathfinder
+var _enemy_ai_planner: EnemyAIPlanner
+var _ability_targeting: AbilityTargeting
+var _ability_executor: AbilityExecutor
+var _characters: Array[TacticalCharacter] = []
+var _walls: Array[TacticalWall] = []
+var _selected_character: TacticalCharacter
+var _selected_ability: AbilityDefinition
+var _reachable_cells: Dictionary = {}
+var _ability_range_cells: Dictionary = {}
+var _ability_target_cells: Dictionary = {}
+var _hovered_cell := Vector2i.ZERO
+var _has_hovered_cell := false
+var _movement_locked := true
+var _last_mouse_screen_position := Vector2.ZERO
+var _has_mouse_screen_position := false
+
+
+func _ready() -> void:
+	_pathfinder = GridPathfinder.new(grid.grid_size)
+	_enemy_ai_planner = EnemyAIPlanner.new()
+	_ability_targeting = AbilityTargeting.new(grid.grid_size)
+	_ability_executor = AbilityExecutor.new()
+	add_child(_ability_executor)
+	turn_manager.turn_started.connect(_on_turn_started)
+	turn_manager.turn_ended.connect(_on_turn_ended)
+	turn_manager.turn_order_changed.connect(_on_turn_order_changed)
+	turn_manager.round_started.connect(_on_round_started)
+	end_turn_button.pressed.connect(_on_end_turn_pressed)
+	ability_bar.ability_selected.connect(_on_ability_selected)
+
+	for child in characters_container.get_children():
+		if child is TacticalCharacter:
+			var character := child as TacticalCharacter
+			_characters.append(character)
+			character.initialize(grid)
+			character.movement_remaining_changed.connect(
+				_on_unit_movement_changed.bind(character)
+			)
+			character.ability_availability_changed.connect(
+				_on_unit_ability_availability_changed.bind(character)
+			)
+			character.defeated.connect(_on_character_defeated)
+	_initialize_walls()
+
+	if center_camera_on_start:
+		tactical_camera.position = grid.position + grid.get_local_bounds().get_center()
+	turn_manager.start_combat(_characters)
+	ai_debug_panel.visible = false
+	_update_turn_hud()
+
+
+func _process(_delta: float) -> void:
+	if not _movement_locked and turn_manager.is_player_turn() and _has_mouse_screen_position:
+		if _selected_ability != null:
+			_update_ability_hover(_screen_to_world(_last_mouse_screen_position))
+		elif _selected_character != null and _selected_character == turn_manager.current_unit:
+			_update_hover(_screen_to_world(_last_mouse_screen_position))
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouse:
+		_last_mouse_screen_position = event.position
+		_has_mouse_screen_position = true
+
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		if not _movement_locked and turn_manager.is_player_turn():
+			if _selected_ability != null:
+				_cancel_ability_targeting()
+			else:
+				clear_selection()
+		get_viewport().set_input_as_handled()
+		return
+
+	if _movement_locked or not turn_manager.is_player_turn():
+		return
+
+	if event is InputEventMouseMotion:
+		if _selected_ability != null:
+			_update_ability_hover(_screen_to_world(event.position))
+		elif _selected_character != null:
+			_update_hover(_screen_to_world(event.position))
+
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_handle_left_click(_screen_to_world(event.position))
+		get_viewport().set_input_as_handled()
+
+
+func clear_selection() -> void:
+	_selected_character = null
+	_selected_ability = null
+	_reachable_cells.clear()
+	_ability_range_cells.clear()
+	_ability_target_cells.clear()
+	_has_hovered_cell = false
+	grid.clear_overlays()
+	_update_turn_hud()
+
+
+func _handle_left_click(global_mouse: Vector2) -> void:
+	if _selected_ability != null:
+		_handle_ability_click(global_mouse)
+		return
+
+	var clicked_character := _get_character_at_global_point(global_mouse)
+	if clicked_character != null:
+		if clicked_character == turn_manager.current_unit and clicked_character.is_friendly():
+			_select_character(clicked_character)
+		return
+
+	var cell := grid.global_to_grid(global_mouse)
+	if not grid.is_in_bounds(cell):
+		clear_selection()
+		return
+
+	clicked_character = _get_character_at(cell)
+	if clicked_character != null:
+		if clicked_character == turn_manager.current_unit and clicked_character.is_friendly():
+			_select_character(clicked_character)
+		return
+
+	if _selected_character == null or not _reachable_cells.has(cell):
+		return
+
+	var blocked_cells := _get_blocked_cells(_selected_character)
+	var path := _pathfinder.find_path(
+		_selected_character.grid_cell,
+		cell,
+		_selected_character.remaining_movement,
+		blocked_cells
+	)
+	if path.size() > 1:
+		_begin_friendly_move(path)
+
+
+func _select_character(character: TacticalCharacter) -> void:
+	if not turn_manager.is_player_turn() or character != turn_manager.current_unit:
+		return
+	_selected_character = character
+	_selected_ability = null
+	_ability_range_cells.clear()
+	_ability_target_cells.clear()
+	ability_bar.set_selected(null)
+	_refresh_reachable_cells()
+	_has_hovered_cell = false
+	grid.clear_path()
+	_update_turn_hud()
+
+
+func _refresh_reachable_cells() -> void:
+	if (
+		_selected_character == null
+		or not turn_manager.is_player_turn()
+		or _selected_character != turn_manager.current_unit
+	):
+		clear_selection()
+		return
+	_pathfinder.set_grid_size(grid.grid_size)
+	_reachable_cells = _pathfinder.get_reachable(
+		_selected_character.grid_cell,
+		_selected_character.remaining_movement,
+		_get_blocked_cells(_selected_character)
+	)
+	grid.show_reachable(_selected_character.grid_cell, _reachable_cells)
+
+
+func _update_hover(global_mouse: Vector2) -> void:
+	var cell := grid.global_to_grid(global_mouse)
+	if _has_hovered_cell and cell == _hovered_cell:
+		return
+
+	_has_hovered_cell = true
+	_hovered_cell = cell
+	if not grid.is_in_bounds(cell) or cell == _selected_character.grid_cell or not _reachable_cells.has(cell):
+		grid.clear_path()
+		return
+
+	var path := _pathfinder.find_path(
+		_selected_character.grid_cell,
+		cell,
+		_selected_character.remaining_movement,
+		_get_blocked_cells(_selected_character)
+	)
+	if path.size() > 1:
+		grid.show_path(cell, path)
+	else:
+		grid.clear_path()
+
+
+func _on_ability_selected(ability: AbilityDefinition) -> void:
+	var caster := turn_manager.current_unit
+	if (
+		_movement_locked
+		or not turn_manager.is_player_turn()
+		or not is_instance_valid(caster)
+		or not caster.ability_available
+		or ability == null
+		or not caster.get_abilities().has(ability)
+	):
+		return
+	if _selected_ability == ability:
+		_cancel_ability_targeting()
+		return
+	_selected_character = caster
+	_selected_ability = ability
+	_has_hovered_cell = false
+	_ability_targeting.set_grid_size(grid.grid_size)
+	_ability_range_cells = _ability_targeting.get_cells_in_range(caster, ability)
+	_ability_target_cells = _ability_targeting.get_valid_target_cells(
+		caster,
+		ability,
+		_characters,
+		_get_wall_cells()
+	)
+	grid.show_ability_targets(caster.grid_cell, _ability_range_cells, _ability_target_cells)
+	ability_bar.set_selected(ability)
+
+
+func _cancel_ability_targeting() -> void:
+	_selected_ability = null
+	_ability_range_cells.clear()
+	_ability_target_cells.clear()
+	_has_hovered_cell = false
+	ability_bar.set_selected(null)
+	var caster := turn_manager.current_unit
+	if is_instance_valid(caster) and caster.is_friendly() and not _movement_locked:
+		_select_character(caster)
+	else:
+		grid.clear_overlays()
+
+
+func _update_ability_hover(global_mouse: Vector2) -> void:
+	var cell := _get_ability_cell_at_global_point(global_mouse)
+	if _has_hovered_cell and cell == _hovered_cell:
+		return
+	_has_hovered_cell = true
+	_hovered_cell = cell
+	if not grid.is_in_bounds(cell):
+		grid.clear_ability_preview()
+		return
+	var is_valid := _ability_target_cells.has(cell)
+	var wall_cells := _get_wall_cells()
+	var affected_cells: Array[Vector2i] = []
+	var trajectory_cells: Array[Vector2i] = []
+	if is_valid:
+		affected_cells = _ability_targeting.get_affected_cells(
+			_selected_character.grid_cell,
+			cell,
+			_selected_ability,
+			wall_cells
+		)
+		if _selected_ability.shape == AbilityDefinition.Shape.LINE_FROM_CASTER:
+			trajectory_cells = _ability_targeting.get_trajectory_cells(
+				_selected_character.grid_cell,
+				cell,
+				wall_cells
+			)
+	if (
+		_selected_ability.delivery_type == AbilityDefinition.DeliveryType.PROJECTILE
+		and _ability_range_cells.has(cell)
+	):
+		trajectory_cells = _ability_executor.projectile_delivery.get_preview(
+			_selected_character.grid_cell,
+			cell,
+			wall_cells
+		)
+	grid.show_ability_preview(cell, affected_cells, trajectory_cells, is_valid)
+
+
+func _handle_ability_click(global_mouse: Vector2) -> void:
+	var target_cell := _get_ability_cell_at_global_point(global_mouse)
+	if not _ability_target_cells.has(target_cell):
+		return
+	_begin_ability_cast(target_cell)
+
+
+func _begin_ability_cast(target_cell: Vector2i) -> void:
+	if _movement_locked or _selected_ability == null:
+		return
+	var caster := _selected_character
+	var ability := _selected_ability
+	if caster != turn_manager.current_unit or not caster.ability_available:
+		return
+
+	_set_movement_locked(true)
+	grid.clear_overlays()
+	var cast_succeeded := await _ability_executor.execute(
+		caster,
+		ability,
+		target_cell,
+		_characters,
+		grid,
+		_ability_targeting,
+		_get_wall_cells()
+	)
+	_selected_ability = null
+	_ability_range_cells.clear()
+	_ability_target_cells.clear()
+	_has_hovered_cell = false
+	ability_bar.set_selected(null)
+	if cast_succeeded and is_instance_valid(caster) and caster == turn_manager.current_unit and caster.current_health > 0:
+		_set_movement_locked(false)
+		_select_character(caster)
+	else:
+		_set_movement_locked(false)
+	_refresh_ability_bar()
+	_update_turn_hud()
+
+
+func _begin_friendly_move(path: Array[Vector2i]) -> void:
+	if _movement_locked or _selected_character != turn_manager.current_unit:
+		return
+	var path_cost := _pathfinder.get_path_cost(path)
+	if not _selected_character.can_afford_path(path_cost):
+		return
+
+	_set_movement_locked(true)
+	var moving_character := _selected_character
+	grid.clear_overlays()
+	await moving_character.move_along(path)
+	moving_character.spend_movement(path_cost)
+	_set_movement_locked(false)
+	if is_instance_valid(moving_character) and moving_character == turn_manager.current_unit:
+		_selected_character = moving_character
+		_has_hovered_cell = false
+		_refresh_reachable_cells()
+		_update_turn_hud()
+
+
+func _on_end_turn_pressed() -> void:
+	if _movement_locked or not turn_manager.is_player_turn():
+		return
+	_set_movement_locked(true)
+	_selected_ability = null
+	clear_selection()
+	turn_manager.end_current_turn()
+
+
+func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
+	if unit != turn_manager.current_unit:
+		return
+	grid.show_reachable(unit.grid_cell, {})
+	movement_status.text = "%s is planning..." % unit.name
+	_show_ai_thinking(unit)
+	await get_tree().process_frame
+	if unit != turn_manager.current_unit:
+		return
+
+	var plan := _enemy_ai_planner.choose_plan(
+		unit,
+		_characters,
+		_pathfinder,
+		_ability_targeting,
+		_get_wall_cells()
+	)
+	_update_ai_debug(unit, plan)
+	var executed := await _execute_enemy_plan(unit, plan)
+	if not executed and unit == turn_manager.current_unit and unit.current_health > 0:
+		# Signals or future dynamic effects can make a forecast stale. Replan once from
+		# the live state; a second invalidation safely ends the turn.
+		plan = _enemy_ai_planner.choose_plan(
+			unit,
+			_characters,
+			_pathfinder,
+			_ability_targeting,
+			_get_wall_cells()
+		)
+		_update_ai_debug(unit, plan, "Replanned")
+		await _execute_enemy_plan(unit, plan)
+
+	grid.clear_overlays()
+	if unit == turn_manager.current_unit:
+		turn_manager.end_current_turn()
+
+
+func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
+	if unit != turn_manager.current_unit or plan == null:
+		return false
+	var performed_action := false
+	if not plan.pre_cast_path.is_empty():
+		var pre_destination := plan.pre_cast_path[plan.pre_cast_path.size() - 1]
+		if not await _move_enemy_to(unit, pre_destination):
+			return false
+		performed_action = true
+
+	if plan.ability != null:
+		if not _ability_executor.can_execute(
+			unit,
+			plan.ability,
+			plan.target_cell,
+			_characters,
+			grid,
+			_ability_targeting,
+			_get_wall_cells()
+		):
+			return false
+		_show_enemy_ability_preview(unit, plan.ability, plan.target_cell)
+		if enemy_ability_preview_delay > 0.0:
+			await get_tree().create_timer(enemy_ability_preview_delay).timeout
+		if unit != turn_manager.current_unit:
+			return false
+		grid.clear_overlays()
+		var cast_succeeded := await _ability_executor.execute(
+			unit,
+			plan.ability,
+			plan.target_cell,
+			_characters,
+			grid,
+			_ability_targeting,
+			_get_wall_cells()
+		)
+		if not cast_succeeded:
+			return false
+		performed_action = true
+
+	if not plan.post_cast_path.is_empty() and unit.current_health > 0:
+		var post_destination := plan.post_cast_path[plan.post_cast_path.size() - 1]
+		if not await _move_enemy_to(unit, post_destination):
+			return false
+		performed_action = true
+
+	if not performed_action and enemy_path_preview_delay > 0.0:
+		await get_tree().create_timer(enemy_path_preview_delay).timeout
+	return unit == turn_manager.current_unit
+
+
+func _move_enemy_to(unit: TacticalCharacter, destination: Vector2i) -> bool:
+	if unit.grid_cell == destination:
+		return true
+	var path := _pathfinder.find_path(
+		unit.grid_cell,
+		destination,
+		unit.remaining_movement,
+		_get_blocked_cells(unit)
+	)
+	if path.size() < 2:
+		return false
+	var path_cost := _pathfinder.get_path_cost(path)
+	if not unit.can_afford_path(path_cost):
+		return false
+	grid.show_path(destination, path)
+	if enemy_path_preview_delay > 0.0:
+		await get_tree().create_timer(enemy_path_preview_delay).timeout
+	if unit != turn_manager.current_unit:
+		return false
+	grid.clear_overlays()
+	await unit.move_along(path)
+	return unit.spend_movement(path_cost)
+
+
+func _show_enemy_ability_preview(
+	unit: TacticalCharacter,
+	ability: AbilityDefinition,
+	target_cell: Vector2i
+) -> void:
+	var wall_cells := _get_wall_cells()
+	var affected_cells := _ability_targeting.get_affected_cells(
+		unit.grid_cell,
+		target_cell,
+		ability,
+		wall_cells
+	)
+	var trajectory_cells: Array[Vector2i] = []
+	if ability.delivery_type == AbilityDefinition.DeliveryType.PROJECTILE:
+		trajectory_cells = _ability_executor.projectile_delivery.get_preview(
+			unit.grid_cell,
+			target_cell,
+			wall_cells
+		)
+	elif ability.shape == AbilityDefinition.Shape.LINE_FROM_CASTER:
+		trajectory_cells = _ability_targeting.get_trajectory_cells(
+			unit.grid_cell,
+			target_cell,
+			wall_cells
+		)
+	grid.show_ability_preview(target_cell, affected_cells, trajectory_cells, true)
+
+
+func _show_ai_thinking(unit: TacticalCharacter) -> void:
+	if not show_ai_debug_panel:
+		ai_debug_panel.visible = false
+		return
+	ai_debug_panel.visible = true
+	var profile_name := (
+		unit.enemy_ai_profile.display_name
+		if unit.enemy_ai_profile != null
+		else "Default Melee AI"
+	)
+	ai_debug_label.text = "AI Decision · %s · %s\nEvaluating legal turns and counterplay..." % [
+		unit.name,
+		profile_name,
+	]
+
+
+func _update_ai_debug(
+	unit: TacticalCharacter,
+	plan: EnemyTurnPlan,
+	status: String = "Chosen"
+) -> void:
+	if not show_ai_debug_panel:
+		ai_debug_panel.visible = false
+		return
+	ai_debug_panel.visible = true
+	var profile_name := (
+		unit.enemy_ai_profile.display_name
+		if unit.enemy_ai_profile != null
+		else "Default Melee AI"
+	)
+	var lines: Array[String] = [
+		"AI Decision · %s · %s" % [unit.name, profile_name],
+		"%s in %d ms: %s" % [status, _enemy_ai_planner.last_planning_duration_ms, plan.get_debug_summary()],
+		"Top candidates:",
+	]
+	var count := mini(ai_debug_candidate_count, _enemy_ai_planner.ranked_candidates.size())
+	for index in range(count):
+		lines.append("%d. %s" % [index + 1, _enemy_ai_planner.ranked_candidates[index].get_debug_summary()])
+	ai_debug_label.text = "\n".join(lines)
+
+
+func _on_turn_started(unit: TacticalCharacter) -> void:
+	_selected_ability = null
+	_ability_range_cells.clear()
+	_ability_target_cells.clear()
+	turn_order_bar.rebuild(turn_manager.get_rotating_order(), unit)
+	if unit.is_friendly():
+		ai_debug_panel.visible = false
+		_set_movement_locked(false)
+		_select_character(unit)
+	else:
+		_set_movement_locked(true)
+		clear_selection()
+		grid.show_reachable(unit.grid_cell, {})
+		_run_enemy_unit_turn(unit)
+	_refresh_ability_bar()
+	_update_turn_hud()
+
+
+func _on_turn_ended(_unit: TacticalCharacter) -> void:
+	grid.clear_overlays()
+
+
+func _on_turn_order_changed(order: Array[TacticalCharacter]) -> void:
+	turn_order_bar.rebuild(order, turn_manager.current_unit)
+
+
+func _on_round_started(_round_number: int) -> void:
+	_update_turn_hud()
+
+
+func _on_character_defeated(character: TacticalCharacter) -> void:
+	turn_manager.notify_unit_state_changed()
+	if character == turn_manager.current_unit:
+		call_deferred("_end_defeated_current_unit", character)
+
+
+func _end_defeated_current_unit(character: TacticalCharacter) -> void:
+	if character == turn_manager.current_unit:
+		turn_manager.end_current_turn()
+
+
+func _on_unit_movement_changed(_remaining: float, _maximum: float, unit: TacticalCharacter) -> void:
+	if unit == turn_manager.current_unit:
+		_update_turn_hud()
+
+
+func _on_unit_ability_availability_changed(_available: bool, unit: TacticalCharacter) -> void:
+	if unit == turn_manager.current_unit:
+		_refresh_ability_bar()
+		_update_turn_hud()
+
+
+func _set_movement_locked(value: bool) -> void:
+	_movement_locked = value
+	_refresh_ability_bar()
+	_update_turn_hud()
+
+
+func _refresh_ability_bar() -> void:
+	if ability_bar == null or turn_manager == null:
+		return
+	var unit := turn_manager.current_unit
+	var enabled := (
+		not _movement_locked
+		and turn_manager.is_player_turn()
+		and is_instance_valid(unit)
+		and unit.ability_available
+	)
+	ability_bar.rebuild(unit, enabled)
+	ability_bar.set_selected(_selected_ability)
+
+
+func _update_turn_hud() -> void:
+	if turn_manager == null or end_turn_button == null:
+		return
+	var unit := turn_manager.current_unit
+	if unit == null:
+		turn_status.text = "No Active Unit"
+		movement_status.text = ""
+		end_turn_button.disabled = true
+		return
+
+	turn_status.text = "%s's Turn | Round %d" % [unit.name, turn_manager.round_number]
+	if unit.is_friendly():
+		movement_status.text = "%s | Move %.2f / %.2f | Ability %s" % [
+			unit.name,
+			unit.remaining_movement,
+			unit.get_movement_range(),
+			"Ready" if unit.ability_available else "Used",
+		]
+		end_turn_button.text = "End Turn"
+		end_turn_button.disabled = _movement_locked
+	else:
+		movement_status.text = "%s is acting..." % unit.name
+		end_turn_button.text = "Enemy Turn..."
+		end_turn_button.disabled = true
+
+
+func _get_living_friendlies() -> Array[TacticalCharacter]:
+	var friendlies: Array[TacticalCharacter] = []
+	for character in _characters:
+		if is_instance_valid(character) and character.is_friendly() and character.current_health > 0:
+			friendlies.append(character)
+	return friendlies
+
+
+func _get_character_at(cell: Vector2i) -> TacticalCharacter:
+	for character in _characters:
+		if is_instance_valid(character) and character.grid_cell == cell:
+			return character
+	return null
+
+
+func _get_character_at_global_point(point: Vector2) -> TacticalCharacter:
+	for character in _characters:
+		if is_instance_valid(character) and character.contains_global_point(point):
+			return character
+	return null
+
+
+func _get_ability_cell_at_global_point(point: Vector2) -> Vector2i:
+	var hovered_character := _get_character_at_global_point(point)
+	if is_instance_valid(hovered_character) and hovered_character.current_health > 0:
+		return hovered_character.grid_cell
+	return grid.global_to_grid(point)
+
+
+func _get_blocked_cells(except_character: TacticalCharacter = null) -> Dictionary:
+	var blocked: Dictionary = _get_wall_cells()
+	for character in _characters:
+		if is_instance_valid(character) and character != except_character:
+			blocked[character.grid_cell] = true
+	return blocked
+
+
+func _initialize_walls() -> void:
+	_walls.clear()
+	var occupied_start_cells: Dictionary = {}
+	for character in _characters:
+		occupied_start_cells[character.starting_grid_cell] = character.name
+	var accepted_cells: Dictionary = {}
+	for child in walls_container.get_children():
+		if not child is TacticalWall:
+			continue
+		var wall := child as TacticalWall
+		wall.initialize(grid)
+		_walls.append(wall)
+		if not grid.is_in_bounds(wall.grid_cell):
+			push_warning("Ignoring wall %s: cell %s is outside the grid." % [wall.name, wall.grid_cell])
+		elif occupied_start_cells.has(wall.grid_cell):
+			push_warning("Ignoring wall %s: cell %s is occupied by %s's starting position." % [wall.name, wall.grid_cell, occupied_start_cells[wall.grid_cell]])
+		elif accepted_cells.has(wall.grid_cell):
+			push_warning("Ignoring duplicate wall %s at cell %s." % [wall.name, wall.grid_cell])
+		else:
+			accepted_cells[wall.grid_cell] = true
+
+
+func _get_wall_cells() -> Dictionary:
+	var cells: Dictionary = {}
+	var character_start_cells: Dictionary = {}
+	for character in _characters:
+		if is_instance_valid(character):
+			character_start_cells[character.starting_grid_cell] = true
+	for wall in _walls:
+		if (
+			is_instance_valid(wall)
+			and grid.is_in_bounds(wall.grid_cell)
+			and not character_start_cells.has(wall.grid_cell)
+			and not cells.has(wall.grid_cell)
+		):
+			cells[wall.grid_cell] = true
+	return cells
+
+
+func _screen_to_world(screen_position: Vector2) -> Vector2:
+	return get_canvas_transform().affine_inverse() * screen_position

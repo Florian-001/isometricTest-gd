@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/forest/PackForest01_54.tres" id="1_forest_21300108"]
+
+[node name="CharaRef_15" type="Node2D"]
+metadata/_tasty_source = "Assets/Tasty_Characters - FullPack/Tasty_Characters - Forest Pack/Ressources/Prefabs/References/CharaRef_15.prefab"
+metadata/_tasty_kind = "reference"
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("1_forest_21300108")
+offset = Vector2(0.0, 79.5)

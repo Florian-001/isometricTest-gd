@@ -1,11 +1,10 @@
 extends Node2D
 
 @export var center_camera_on_start := true
-@export_range(0.0, 2.0, 0.05) var enemy_path_preview_delay: float = 0.35
-@export_range(0.0, 2.0, 0.05) var enemy_ability_preview_delay: float = 0.35
-@export_category("AI Debugging")
-@export var show_ai_debug_panel := true
+@export_category("Developer Tools")
+@export var enable_dev_tools := true
 @export_range(1, 10, 1) var ai_debug_candidate_count := 5
+@export_range(1, 100, 1) var ai_debug_history_limit := 30
 
 @onready var grid: IsometricGrid = $Grid
 @onready var walls_container: Node2D = $Walls
@@ -17,8 +16,9 @@ extends Node2D
 @onready var turn_status: Label = $HUD/TurnPanel/Margin/VBox/TurnStatus
 @onready var movement_status: Label = $HUD/TurnPanel/Margin/VBox/MovementStatus
 @onready var end_turn_button: Button = $HUD/TurnPanel/Margin/VBox/EndTurnButton
-@onready var ai_debug_panel: PanelContainer = $HUD/AIDebugPanel
-@onready var ai_debug_label: Label = $HUD/AIDebugPanel/Margin/VBox/DebugText
+@onready var dev_button: Button = $HUD/DevButton
+@onready var dev_history_panel: PanelContainer = $HUD/DevHistoryPanel
+@onready var ai_debug_label: Label = $HUD/DevHistoryPanel/Margin/VBox/HistoryScroll/DebugText
 
 var _pathfinder: GridPathfinder
 var _enemy_ai_planner: EnemyAIPlanner
@@ -36,6 +36,7 @@ var _has_hovered_cell := false
 var _movement_locked := true
 var _last_mouse_screen_position := Vector2.ZERO
 var _has_mouse_screen_position := false
+var _ai_debug_history: Array[String] = []
 
 
 func _ready() -> void:
@@ -50,6 +51,7 @@ func _ready() -> void:
 	turn_manager.round_started.connect(_on_round_started)
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	ability_bar.ability_selected.connect(_on_ability_selected)
+	dev_button.pressed.connect(_on_dev_button_pressed)
 
 	for child in characters_container.get_children():
 		if child is TacticalCharacter:
@@ -67,8 +69,10 @@ func _ready() -> void:
 
 	if center_camera_on_start:
 		tactical_camera.position = grid.position + grid.get_local_bounds().get_center()
+	dev_button.visible = enable_dev_tools
+	dev_history_panel.visible = false
+	_refresh_ai_debug_history()
 	turn_manager.start_combat(_characters)
-	ai_debug_panel.visible = false
 	_update_turn_hud()
 
 
@@ -362,11 +366,6 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 	if unit != turn_manager.current_unit:
 		return
 	grid.show_reachable(unit.grid_cell, {})
-	movement_status.text = "%s is planning..." % unit.name
-	_show_ai_thinking(unit)
-	await get_tree().process_frame
-	if unit != turn_manager.current_unit:
-		return
 
 	var plan := _enemy_ai_planner.choose_plan(
 		unit,
@@ -392,18 +391,21 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 
 	grid.clear_overlays()
 	if unit == turn_manager.current_unit:
+		call_deferred("_finish_enemy_turn", unit)
+
+
+func _finish_enemy_turn(unit: TacticalCharacter) -> void:
+	if unit == turn_manager.current_unit:
 		turn_manager.end_current_turn()
 
 
 func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
 	if unit != turn_manager.current_unit or plan == null:
 		return false
-	var performed_action := false
 	if not plan.pre_cast_path.is_empty():
 		var pre_destination := plan.pre_cast_path[plan.pre_cast_path.size() - 1]
 		if not await _move_enemy_to(unit, pre_destination):
 			return false
-		performed_action = true
 
 	if plan.ability != null:
 		if not _ability_executor.can_execute(
@@ -415,11 +417,6 @@ func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
 			_ability_targeting,
 			_get_wall_cells()
 		):
-			return false
-		_show_enemy_ability_preview(unit, plan.ability, plan.target_cell)
-		if enemy_ability_preview_delay > 0.0:
-			await get_tree().create_timer(enemy_ability_preview_delay).timeout
-		if unit != turn_manager.current_unit:
 			return false
 		grid.clear_overlays()
 		var cast_succeeded := await _ability_executor.execute(
@@ -433,16 +430,11 @@ func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
 		)
 		if not cast_succeeded:
 			return false
-		performed_action = true
 
 	if not plan.post_cast_path.is_empty() and unit.current_health > 0:
 		var post_destination := plan.post_cast_path[plan.post_cast_path.size() - 1]
 		if not await _move_enemy_to(unit, post_destination):
 			return false
-		performed_action = true
-
-	if not performed_action and enemy_path_preview_delay > 0.0:
-		await get_tree().create_timer(enemy_path_preview_delay).timeout
 	return unit == turn_manager.current_unit
 
 
@@ -460,9 +452,6 @@ func _move_enemy_to(unit: TacticalCharacter, destination: Vector2i) -> bool:
 	var path_cost := _pathfinder.get_path_cost(path)
 	if not unit.can_afford_path(path_cost):
 		return false
-	grid.show_path(destination, path)
-	if enemy_path_preview_delay > 0.0:
-		await get_tree().create_timer(enemy_path_preview_delay).timeout
 	if unit != turn_manager.current_unit:
 		return false
 	grid.clear_overlays()
@@ -470,73 +459,48 @@ func _move_enemy_to(unit: TacticalCharacter, destination: Vector2i) -> bool:
 	return unit.spend_movement(path_cost)
 
 
-func _show_enemy_ability_preview(
-	unit: TacticalCharacter,
-	ability: AbilityDefinition,
-	target_cell: Vector2i
-) -> void:
-	var wall_cells := _get_wall_cells()
-	var affected_cells := _ability_targeting.get_affected_cells(
-		unit.grid_cell,
-		target_cell,
-		ability,
-		wall_cells
-	)
-	var trajectory_cells: Array[Vector2i] = []
-	if ability.delivery_type == AbilityDefinition.DeliveryType.PROJECTILE:
-		trajectory_cells = _ability_executor.projectile_delivery.get_preview(
-			unit.grid_cell,
-			target_cell,
-			wall_cells
-		)
-	elif ability.shape == AbilityDefinition.Shape.LINE_FROM_CASTER:
-		trajectory_cells = _ability_targeting.get_trajectory_cells(
-			unit.grid_cell,
-			target_cell,
-			wall_cells
-		)
-	grid.show_ability_preview(target_cell, affected_cells, trajectory_cells, true)
-
-
-func _show_ai_thinking(unit: TacticalCharacter) -> void:
-	if not show_ai_debug_panel:
-		ai_debug_panel.visible = false
-		return
-	ai_debug_panel.visible = true
-	var profile_name := (
-		unit.enemy_ai_profile.display_name
-		if unit.enemy_ai_profile != null
-		else "Default Melee AI"
-	)
-	ai_debug_label.text = "AI Decision · %s · %s\nEvaluating legal turns and counterplay..." % [
-		unit.name,
-		profile_name,
-	]
-
-
 func _update_ai_debug(
 	unit: TacticalCharacter,
 	plan: EnemyTurnPlan,
 	status: String = "Chosen"
 ) -> void:
-	if not show_ai_debug_panel:
-		ai_debug_panel.visible = false
+	if not enable_dev_tools:
 		return
-	ai_debug_panel.visible = true
 	var profile_name := (
 		unit.enemy_ai_profile.display_name
 		if unit.enemy_ai_profile != null
 		else "Default Melee AI"
 	)
 	var lines: Array[String] = [
-		"AI Decision · %s · %s" % [unit.name, profile_name],
+		"Round %d · %s · %s" % [turn_manager.round_number, unit.name, profile_name],
 		"%s in %d ms: %s" % [status, _enemy_ai_planner.last_planning_duration_ms, plan.get_debug_summary()],
 		"Top candidates:",
 	]
 	var count := mini(ai_debug_candidate_count, _enemy_ai_planner.ranked_candidates.size())
 	for index in range(count):
 		lines.append("%d. %s" % [index + 1, _enemy_ai_planner.ranked_candidates[index].get_debug_summary()])
-	ai_debug_label.text = "\n".join(lines)
+	_ai_debug_history.append("\n".join(lines))
+	while _ai_debug_history.size() > ai_debug_history_limit:
+		_ai_debug_history.remove_at(0)
+	_refresh_ai_debug_history()
+
+
+func _on_dev_button_pressed() -> void:
+	if not enable_dev_tools:
+		return
+	dev_history_panel.visible = not dev_history_panel.visible
+
+
+func _refresh_ai_debug_history() -> void:
+	if ai_debug_label == null:
+		return
+	if _ai_debug_history.is_empty():
+		ai_debug_label.text = "No AI decisions recorded yet.\nEnd a friendly turn to let an enemy act."
+		return
+	var newest_first: Array[String] = []
+	for index in range(_ai_debug_history.size() - 1, -1, -1):
+		newest_first.append(_ai_debug_history[index])
+	ai_debug_label.text = "\n\n────────────────────────────────────────\n\n".join(newest_first)
 
 
 func _on_turn_started(unit: TacticalCharacter) -> void:
@@ -545,7 +509,6 @@ func _on_turn_started(unit: TacticalCharacter) -> void:
 	_ability_target_cells.clear()
 	turn_order_bar.rebuild(turn_manager.get_rotating_order(), unit)
 	if unit.is_friendly():
-		ai_debug_panel.visible = false
 		_set_movement_locked(false)
 		_select_character(unit)
 	else:

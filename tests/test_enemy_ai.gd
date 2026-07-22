@@ -157,7 +157,7 @@ func test_walls_block_ai_ability_targeting() -> void:
 	assert_eq(plan.ability, null, "AI should not select a projectile through a wall")
 
 
-func test_sample_scene_has_two_profiles_shared_loadout_and_debug_panel() -> void:
+func test_sample_scene_has_two_profiles_shared_loadout_and_dev_history() -> void:
 	ResourceLoader.load("res://resources/enemy_raider.tres", "", ResourceLoader.CACHE_MODE_REPLACE)
 	var scene := ResourceLoader.load("res://main.tscn", "", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
 	var root: Node = track(scene.instantiate())
@@ -170,7 +170,19 @@ func test_sample_scene_has_two_profiles_shared_loadout_and_debug_panel() -> void
 	assert_eq(melee.initiative_override, 10, "sample melee initiative should remain 10")
 	assert_eq(ranged.initiative_override, 9, "sample ranged initiative should be 9")
 	assert_eq(ranged.starting_grid_cell, Vector2i(9, 3), "sample ranged placement should match the design")
-	assert_true(root.has_node("HUD/AIDebugPanel"), "the sample HUD should contain the bottom-left AI score panel")
+	assert_true(root.has_node("HUD/DevButton"), "the sample HUD should expose the Dev button")
+	assert_eq(root.get_node("HUD/DevButton").text, "Dev", "the developer history button should have a clear compact label")
+	assert_true(root.has_node("HUD/DevHistoryPanel"), "the sample HUD should contain an AI score history panel")
+	assert_false(root.get_node("HUD/DevHistoryPanel").visible, "AI scores should stay off the battlefield until Dev is pressed")
+
+
+func test_enemy_controller_has_no_planning_or_preview_delays() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/initiative_battle_controller.gd")
+	assert_false(source.contains("is planning..."), "enemy turns should not expose a planning phase")
+	assert_false(source.contains("enemy_path_preview_delay"), "enemy path previews should not add an artificial delay")
+	assert_false(source.contains("enemy_ability_preview_delay"), "enemy ability previews should not add an artificial delay")
+	assert_false(source.contains("_show_enemy_ability_preview"), "enemy abilities should execute without a preview overlay")
+	assert_true(source.contains("call_deferred(\"_finish_enemy_turn\", unit)"), "instant enemy turns should advance through a guarded deferred callback")
 
 
 func _choose(

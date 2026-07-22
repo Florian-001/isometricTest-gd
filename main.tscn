@@ -5,13 +5,13 @@
 [ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="3_character"]
 [ext_resource type="Script" uid="uid://dcabtm22e14rm" path="res://scripts/tactical_camera_controller.gd" id="4_camera"]
 [ext_resource type="Resource" uid="uid://clbeyhlog2wbi" path="res://resources/friendly_spellcaster.tres" id="5_friendly"]
-[ext_resource type="Resource" path="res://resources/enemy_raider.tres" id="6_enemy"]
+[ext_resource type="Resource" uid="uid://n6ywov3dxmd4" path="res://resources/enemy_raider.tres" id="6_enemy"]
 [ext_resource type="Script" uid="uid://br4bfrnpefm6b" path="res://scripts/initiative_turn_manager.gd" id="7_turn_manager"]
 [ext_resource type="PackedScene" path="res://scenes/turn_order_bar.tscn" id="8_order_bar"]
 [ext_resource type="PackedScene" path="res://scenes/ability_bar.tscn" id="9_ability_bar"]
 [ext_resource type="Script" uid="uid://bax5bwopqqbc1" path="res://scripts/tactical_wall.gd" id="10_wall"]
-[ext_resource type="Resource" path="res://resources/ai/melee_ai.tres" id="11_melee_ai"]
-[ext_resource type="Resource" path="res://resources/ai/ranged_ai.tres" id="12_ranged_ai"]
+[ext_resource type="Resource" uid="uid://be3ci0o703acb" path="res://resources/ai/melee_ai.tres" id="11_melee_ai"]
+[ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="12_ranged_ai"]
 
 [node name="Main" type="Node2D" unique_id=750848398]
 script = ExtResource("1_controller")
@@ -159,34 +159,74 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "End Turn"
 
-[node name="AIDebugPanel" type="PanelContainer" parent="HUD" unique_id=2004355906]
+[node name="DevButton" type="Button" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -56.0
+offset_right = 104.0
+offset_bottom = -16.0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 15
+text = "Dev"
+tooltip_text = "Show AI decision score history"
+
+[node name="DevHistoryPanel" type="PanelContainer" parent="HUD" unique_id=2004355906]
 visible = false
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = -380.0
-offset_right = 566.0
-offset_bottom = -120.0
+offset_top = -610.0
+offset_right = 666.0
+offset_bottom = -70.0
 grow_vertical = 0
-mouse_filter = 2
 
-[node name="Margin" type="MarginContainer" parent="HUD/AIDebugPanel" unique_id=1631131087]
+[node name="Margin" type="MarginContainer" parent="HUD/DevHistoryPanel" unique_id=1631131087]
 layout_mode = 2
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 10
 
-[node name="VBox" type="VBoxContainer" parent="HUD/AIDebugPanel/Margin" unique_id=784322946]
+[node name="VBox" type="VBoxContainer" parent="HUD/DevHistoryPanel/Margin" unique_id=784322946]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="HBoxContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
 layout_mode = 2
 
-[node name="DebugText" type="Label" parent="HUD/AIDebugPanel/Margin/VBox" unique_id=1918392964]
+[node name="Title" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 18
+text = "AI Debug Score History"
+
+[node name="Spacer" type="Control" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CloseHint" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.68, 0.78, 1)
+theme_override_font_sizes/font_size = 12
+text = "Press Dev to close"
+
+[node name="HistoryScroll" type="ScrollContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 480)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="DebugText" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/HistoryScroll" unique_id=1918392964]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 12
-text = "AI Decision"
+text = "No AI decisions recorded yet."
 autowrap_mode = 2
+selectable = true
 
 [node name="HelpText" type="Label" parent="HUD" unique_id=68517187]
 offset_left = 28.0

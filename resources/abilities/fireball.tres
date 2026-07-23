@@ -7,6 +7,7 @@
 [sub_resource type="Resource" id="Damage_fireball"]
 script = ExtResource("3_damage")
 amount = 30
+scaling_stat = 3
 display_name = "Damage"
 
 [resource]

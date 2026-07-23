@@ -54,12 +54,45 @@ func _run() -> void:
 
 	_check(succeeded, "Strike should complete successfully")
 	_check(target.current_health == 70, "Strike should deal 30 damage at impact")
+	var damage_numbers := target.get_children().filter(func(child): return child.has_meta("damage_number"))
+	_check(damage_numbers.size() == 1, "Taking damage should create one floating damage number")
+	_check(damage_numbers[0].text == "-30", "The floating number should show the actual health lost")
 	_check(not caster.ability_available, "Strike should consume the ability action")
 	_check(caster.grid_cell == original_cell, "Strike must not change grid occupancy")
 	_check(caster.global_position.is_equal_approx(original_position), "The caster should return to its exact starting position")
 	_check(is_equal_approx(caster.remaining_movement, original_movement), "Strike must not consume movement")
 	_check(signal_order == ["started", "impact", "finished"], "Melee signals should fire once in order")
 	_check(not battlefield.has_node("MeleeSlash"), "The slash visual should be cleaned up")
+
+	caster.reset_ability_action()
+	var focus := load("res://resources/abilities/focus.tres") as AbilityDefinition
+	var focus_succeeded: bool = await executor.execute(
+		caster,
+		focus,
+		caster.grid_cell,
+		units,
+		grid,
+		targeting,
+		{}
+	)
+	_check(focus_succeeded, "Focus should execute through the normal ability pipeline")
+	_check(caster.get_active_statuses().size() == 1, "Focus should add one active status")
+	_check(is_equal_approx(caster.get_effective_stat(UnitStat.Type.STRENGTH), 12.0), "Focus should grant Strength")
+
+	caster.reset_ability_action()
+	var slow := load("res://resources/abilities/slow.tres") as AbilityDefinition
+	var slow_succeeded: bool = await executor.execute(
+		caster,
+		slow,
+		target.grid_cell,
+		units,
+		grid,
+		targeting,
+		{}
+	)
+	_check(slow_succeeded, "Slow should execute through the normal ability pipeline")
+	_check(target.get_active_statuses().size() == 1, "Slow should add one active status")
+	_check(target.get_initiative() == 6, "Slow should reduce effective Speed")
 
 	battlefield.queue_free()
 	if _failures.is_empty():

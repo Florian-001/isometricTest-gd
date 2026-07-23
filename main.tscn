@@ -12,6 +12,11 @@
 [ext_resource type="Script" uid="uid://bax5bwopqqbc1" path="res://scripts/tactical_wall.gd" id="10_wall"]
 [ext_resource type="Resource" uid="uid://be3ci0o703acb" path="res://resources/ai/melee_ai.tres" id="11_melee_ai"]
 [ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="12_ranged_ai"]
+[ext_resource type="Script" path="res://scripts/tactical_terrain.gd" id="13_terrain"]
+[ext_resource type="Script" path="res://scripts/tactical_tile.gd" id="14_tile"]
+[ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="15_palette"]
+[ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="16_mud"]
+[ext_resource type="Resource" path="res://resources/tiles/fire.tres" id="17_fire"]
 
 [node name="Main" type="Node2D" unique_id=750848398]
 script = ExtResource("1_controller")
@@ -20,6 +25,30 @@ script = ExtResource("1_controller")
 position = Vector2(640, 96)
 script = ExtResource("2_grid")
 
+[node name="Terrain" type="Node" parent="."]
+script = ExtResource("13_terrain")
+palette = ExtResource("15_palette")
+
+[node name="Mud_3_4" type="Node" parent="Terrain"]
+script = ExtResource("14_tile")
+definition = ExtResource("16_mud")
+grid_cell = Vector2i(3, 4)
+
+[node name="Mud_4_4" type="Node" parent="Terrain"]
+script = ExtResource("14_tile")
+definition = ExtResource("16_mud")
+grid_cell = Vector2i(4, 4)
+
+[node name="Fire_6_4" type="Node" parent="Terrain"]
+script = ExtResource("14_tile")
+definition = ExtResource("17_fire")
+grid_cell = Vector2i(6, 4)
+
+[node name="Fire_7_4" type="Node" parent="Terrain"]
+script = ExtResource("14_tile")
+definition = ExtResource("17_fire")
+grid_cell = Vector2i(7, 4)
+
 [node name="Walls" type="Node2D" parent="." unique_id=1102300341]
 
 [node name="Wall_5_4" type="Node2D" parent="Walls" unique_id=413103437]
@@ -27,18 +56,21 @@ z_index = 109
 position = Vector2(688, 312)
 script = ExtResource("10_wall")
 grid_cell = Vector2i(5, 4)
+wall_height = 20.0
 
 [node name="Wall_5_5" type="Node2D" parent="Walls" unique_id=775990625]
 z_index = 110
 position = Vector2(640, 336)
 script = ExtResource("10_wall")
 grid_cell = Vector2i(5, 5)
+wall_height = 20.0
 
 [node name="Wall_5_6" type="Node2D" parent="Walls" unique_id=1348064369]
 z_index = 111
 position = Vector2(592, 360)
 script = ExtResource("10_wall")
 grid_cell = Vector2i(5, 6)
+wall_height = 20.0
 
 [node name="Characters" type="Node2D" parent="." unique_id=557259408]
 
@@ -47,7 +79,7 @@ script = ExtResource("3_character")
 definition = ExtResource("5_friendly")
 max_health_override = 100
 movement_range_override = 6.0
-initiative_override = 12
+speed_override = 12
 starting_grid_cell = Vector2i(2, 3)
 
 [node name="FriendB" type="Node2D" parent="Characters" unique_id=2129219972]
@@ -55,7 +87,7 @@ script = ExtResource("3_character")
 definition = ExtResource("5_friendly")
 max_health_override = 100
 movement_range_override = 3.0
-initiative_override = 8
+speed_override = 8
 starting_grid_cell = Vector2i(3, 6)
 
 [node name="MeleeEnemy" type="Node2D" parent="Characters" unique_id=921107907]
@@ -64,7 +96,7 @@ definition = ExtResource("6_enemy")
 enemy_ai_profile = ExtResource("11_melee_ai")
 max_health_override = 100
 movement_range_override = 5.0
-initiative_override = 10
+speed_override = 10
 starting_grid_cell = Vector2i(8, 6)
 
 [node name="RangedEnemy" type="Node2D" parent="Characters" unique_id=1457671969]
@@ -73,7 +105,7 @@ definition = ExtResource("6_enemy")
 enemy_ai_profile = ExtResource("12_ranged_ai")
 max_health_override = 100
 movement_range_override = 5.0
-initiative_override = 9
+speed_override = 9
 starting_grid_cell = Vector2i(9, 3)
 
 [node name="TurnManager" type="Node" parent="." unique_id=226977299]
@@ -159,7 +191,7 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "End Turn"
 
-[node name="DevButton" type="Button" parent="HUD"]
+[node name="DevButton" type="Button" parent="HUD" unique_id=649615961]
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -168,9 +200,9 @@ offset_top = -56.0
 offset_right = 104.0
 offset_bottom = -16.0
 grow_vertical = 0
+tooltip_text = "Show AI decision score history"
 theme_override_font_sizes/font_size = 15
 text = "Dev"
-tooltip_text = "Show AI decision score history"
 
 [node name="DevHistoryPanel" type="PanelContainer" parent="HUD" unique_id=2004355906]
 visible = false
@@ -194,26 +226,26 @@ theme_override_constants/margin_bottom = 10
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Header" type="HBoxContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
+[node name="Header" type="HBoxContainer" parent="HUD/DevHistoryPanel/Margin/VBox" unique_id=1438440474]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
+[node name="Title" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header" unique_id=614464264]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
 theme_override_font_sizes/font_size = 18
 text = "AI Debug Score History"
 
-[node name="Spacer" type="Control" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
+[node name="Spacer" type="Control" parent="HUD/DevHistoryPanel/Margin/VBox/Header" unique_id=851780709]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="CloseHint" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
+[node name="CloseHint" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header" unique_id=1933916316]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.58, 0.68, 0.78, 1)
 theme_override_font_sizes/font_size = 12
 text = "Press Dev to close"
 
-[node name="HistoryScroll" type="ScrollContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
+[node name="HistoryScroll" type="ScrollContainer" parent="HUD/DevHistoryPanel/Margin/VBox" unique_id=1392581608]
 custom_minimum_size = Vector2(0, 480)
 layout_mode = 2
 size_flags_vertical = 3
@@ -226,7 +258,6 @@ theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 12
 text = "No AI decisions recorded yet."
 autowrap_mode = 2
-selectable = true
 
 [node name="HelpText" type="Label" parent="HUD" unique_id=68517187]
 offset_left = 28.0

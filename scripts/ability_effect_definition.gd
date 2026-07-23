@@ -27,5 +27,5 @@ func estimate_for_ai(
 	}
 
 
-func get_description() -> String:
+func get_description(_caster: TacticalCharacter = null) -> String:
 	return display_name

@@ -22,7 +22,7 @@ func rebuild(unit: TacticalCharacter, interaction_enabled: bool) -> void:
 	for ability in unit.get_abilities():
 		if ability == null:
 			continue
-		var button := _create_button(ability)
+		var button := _create_button(ability, unit)
 		button.disabled = not interaction_enabled or not unit.ability_available
 		entries.add_child(button)
 	set_selected(_selected_ability)
@@ -36,14 +36,23 @@ func set_selected(ability: AbilityDefinition) -> void:
 			button.button_pressed = button.get_meta("ability") == ability
 
 
-func _create_button(ability: AbilityDefinition) -> Button:
+func _create_button(ability: AbilityDefinition, caster: TacticalCharacter) -> Button:
 	var button := Button.new()
 	button.custom_minimum_size = Vector2(button_width, button_height)
 	button.toggle_mode = true
-	button.text = ability.display_name if ability.image == null else ""
+	var has_damage := _has_damage_effect(ability)
+	var damage_text := "%d DMG" % _get_total_damage(ability, caster)
+	if ability.image == null:
+		button.text = (
+			"%s\n%s" % [ability.display_name, damage_text]
+			if has_damage
+			else ability.display_name
+		)
+	else:
+		button.text = damage_text if has_damage else ""
 	button.icon = ability.image
 	button.expand_icon = true
-	button.tooltip_text = "%s\n%s" % [ability.display_name, ability.get_description()]
+	button.tooltip_text = "%s\n%s" % [ability.display_name, ability.get_description(caster)]
 	button.set_meta("ability", ability)
 	button.pressed.connect(_on_ability_pressed.bind(ability))
 
@@ -58,8 +67,23 @@ func _create_button(ability: AbilityDefinition) -> Button:
 	button.add_theme_stylebox_override("disabled", _make_style(Color(0.06, 0.08, 0.11, 0.88), Color(0.23, 0.28, 0.34), 1))
 	button.add_theme_color_override("font_color", Color.WHITE)
 	button.add_theme_color_override("font_disabled_color", Color(0.45, 0.49, 0.54))
-	button.add_theme_font_size_override("font_size", 14)
+	button.add_theme_font_size_override("font_size", 13)
 	return button
+
+
+func _has_damage_effect(ability: AbilityDefinition) -> bool:
+	for effect in ability.effects:
+		if effect is DamageEffectDefinition:
+			return true
+	return false
+
+
+func _get_total_damage(ability: AbilityDefinition, caster: TacticalCharacter) -> int:
+	var total := 0
+	for effect in ability.effects:
+		if effect is DamageEffectDefinition:
+			total += (effect as DamageEffectDefinition).calculate_amount(caster)
+	return total
 
 
 func _make_style(background: Color, border: Color, border_width: int) -> StyleBoxFlat:

@@ -68,11 +68,11 @@ func has_target_flag(flag: TargetFlags) -> bool:
 	return (target_flags & int(flag)) != 0
 
 
-func get_description() -> String:
+func get_description(caster: TacticalCharacter = null) -> String:
 	var effect_descriptions: Array[String] = []
 	for effect in effects:
 		if effect != null:
-			effect_descriptions.append(effect.get_description())
+			effect_descriptions.append(effect.get_description(caster))
 	var delivery := "Cast"
 	match delivery_type:
 		DeliveryType.PROJECTILE:

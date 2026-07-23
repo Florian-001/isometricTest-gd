@@ -149,8 +149,8 @@ func test_walls_block_ai_ability_targeting() -> void:
 	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
 	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile)
 	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
-	var pathfinder := GridPathfinderScript.new(Vector2i(5, 3)) as GridPathfinder
-	var targeting := AbilityTargetingScript.new(Vector2i(5, 3)) as AbilityTargeting
+	var pathfinder := GridPathfinderScript.new(Vector2i(5, 1)) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(Vector2i(5, 1)) as AbilityTargeting
 	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
 	var walls := {Vector2i(2, 0): true}
 	var plan := planner.choose_plan(enemy, _typed_units([enemy, target]), pathfinder, targeting, walls)
@@ -167,8 +167,8 @@ func test_sample_scene_has_two_profiles_shared_loadout_and_dev_history() -> void
 	assert_eq(ranged.enemy_ai_profile.behavior_style, EnemyAIProfile.BehaviorStyle.RANGED, "sample ranged enemy should use the ranged template")
 	assert_eq(melee.definition, ranged.definition, "both samples should share the same mixed character loadout")
 	assert_eq(melee.get_abilities().size(), 2, "the enemy template should expose slash and shot in the Inspector")
-	assert_eq(melee.initiative_override, 10, "sample melee initiative should remain 10")
-	assert_eq(ranged.initiative_override, 9, "sample ranged initiative should be 9")
+	assert_eq(melee.speed_override, 10, "sample melee Speed should remain 10")
+	assert_eq(ranged.speed_override, 9, "sample ranged Speed should be 9")
 	assert_eq(ranged.starting_grid_cell, Vector2i(9, 3), "sample ranged placement should match the design")
 	assert_true(root.has_node("HUD/DevButton"), "the sample HUD should expose the Dev button")
 	assert_eq(root.get_node("HUD/DevButton").text, "Dev", "the developer history button should have a clear compact label")

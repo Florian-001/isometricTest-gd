@@ -46,6 +46,7 @@ var _ability_target_cells: Dictionary = {}
 var _ability_area_cells: Array[Vector2i] = []
 var _ability_trajectory_cells: Array[Vector2i] = []
 var _ability_hover_valid := false
+var _terrain_definitions: Dictionary = {}
 
 
 func grid_to_world(cell: Vector2i) -> Vector2:
@@ -71,6 +72,15 @@ func grid_to_global(cell: Vector2i) -> Vector2:
 
 func is_in_bounds(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < grid_size.x and cell.y < grid_size.y
+
+
+func set_terrain_definitions(definitions: Dictionary) -> void:
+	_terrain_definitions = definitions.duplicate()
+	queue_redraw()
+
+
+func get_terrain_definition(cell: Vector2i) -> TileDefinition:
+	return _terrain_definitions.get(cell) as TileDefinition
 
 
 func get_local_bounds() -> Rect2:
@@ -160,6 +170,9 @@ func _draw() -> void:
 		for x in range(grid_size.x):
 			var cell := Vector2i(x, y)
 			var base_color := cell_color if (x + y) % 2 == 0 else alternate_cell_color
+			var terrain_definition := get_terrain_definition(cell)
+			if terrain_definition != null:
+				base_color = terrain_definition.tile_color
 			_draw_cell(cell, base_color, true)
 
 	if _ability_mode:

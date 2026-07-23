@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="TileDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/tile_definition.gd" id="1_tile"]
+[ext_resource type="Script" path="res://scripts/tile_triggered_effect_definition.gd" id="2_trigger"]
+[ext_resource type="Script" path="res://scripts/damage_effect_definition.gd" id="3_damage"]
+
+[sub_resource type="Resource" id="Damage_fire"]
+script = ExtResource("3_damage")
+amount = 1
+
+[sub_resource type="Resource" id="Trigger_fire"]
+script = ExtResource("2_trigger")
+triggers = 3
+effect = SubResource("Damage_fire")
+
+[resource]
+script = ExtResource("1_tile")
+display_name = "Fire"
+tile_color = Color(0.88, 0.20, 0.055, 1)
+movement_cost_multiplier = 1.0
+effects = Array[ExtResource("2_trigger")]([SubResource("Trigger_fire")])

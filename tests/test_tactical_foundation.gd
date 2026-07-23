@@ -88,25 +88,25 @@ func test_per_unit_stat_overrides() -> void:
 	var definition = CharacterDefinitionScript.new()
 	definition.max_health = 100
 	definition.movement_range = 6.0
-	definition.initiative = 9
+	definition.speed = 9
 	var character = track(TacticalCharacterScript.new())
 	character.definition = definition
 	character.max_health_override = 140
 	character.movement_range_override = 7.5
-	character.initiative_override = 14
+	character.speed_override = 14
 	character._ready()
 
 	assert_eq(character.get_max_health(), 140, "unit health override should replace the template value")
 	assert_eq(character.current_health, 140, "current health should initialize from the unit override")
-	assert_true(is_equal_approx(character.get_movement_range(), 7.5), "unit movement override should replace the template value")
-	assert_eq(character.get_initiative(), 14, "unit initiative override should replace the template value")
+	assert_true(is_equal_approx(character.get_movement_range(), 8.5), "Speed should modify the overridden base movement")
+	assert_eq(character.get_initiative(), 14, "unit Speed override should determine initiative")
 
 	character.max_health_override = 0
 	character.movement_range_override = -1.0
-	character.initiative_override = -1
+	character.speed_override = -1
 	assert_eq(character.get_max_health(), 100, "zero health override should fall back to the template")
-	assert_true(is_equal_approx(character.get_movement_range(), 6.0), "negative movement override should fall back to the template")
-	assert_eq(character.get_initiative(), 9, "negative initiative override should fall back to the template")
+	assert_true(is_equal_approx(character.get_movement_range(), 5.75), "inherited Speed should modify inherited base movement")
+	assert_eq(character.get_initiative(), 9, "negative Speed override should fall back to the template")
 
 
 func test_split_movement_budget_and_reset() -> void:
@@ -138,8 +138,8 @@ func test_initiative_sorting_and_scene_order_ties() -> void:
 	assert_eq(manager.current_unit, friend_a, "the highest-initiative unit should begin combat")
 	assert_eq(manager.round_number, 1, "combat should begin on round one")
 
-	friend_a.initiative_override = 10
-	friend_b.initiative_override = 10
+	friend_a.speed_override = 10
+	friend_b.speed_override = 10
 	manager.start_combat(units)
 	assert_eq(manager.turn_order, [friend_a, friend_b, enemy], "initiative ties should retain the supplied scene order")
 
@@ -499,13 +499,17 @@ func test_ability_action_resets_only_on_active_turn() -> void:
 
 func test_ability_bar_populates_and_disables_after_cast() -> void:
 	var friendly_definition = load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
-	var unit := _make_unit(true, Vector2i.ZERO, 6.0)
+	var unit = track(TacticalCharacterScript.new()) as TacticalCharacter
 	unit.definition = friendly_definition
+	unit._ready()
 	unit.reset_ability_action()
 	var bar = track(AbilityBarScene.instantiate())
 	bar.rebuild(unit, true)
 	var entries: HBoxContainer = bar.get_node("Margin/HBox")
 	assert_eq(entries.get_child_count(), 5, "the ability bar should create one button per configured ability")
+	assert_true(entries.get_child(0).text.contains("32 DMG"), "damage buttons should show their caster-scaled total damage")
+	assert_true(entries.get_child(1).text.contains("27 DMG"), "Dexterity-scaled damage should show on its button")
+	assert_false(entries.get_child(2).text.contains("DMG"), "non-damaging ability buttons should remain uncluttered")
 	assert_false(entries.get_child(0).disabled, "ability buttons should be enabled while the action is available")
 	unit.spend_ability_action()
 	bar.rebuild(unit, true)
@@ -639,15 +643,15 @@ func test_sample_scene_contains_editable_wall_barrier() -> void:
 	assert_eq(cells, [Vector2i(5, 4), Vector2i(5, 5), Vector2i(5, 6)], "the sample should include the planned three-cell barrier")
 
 
-func _make_unit(friendly: bool, cell: Vector2i, movement: float, initiative: int = 10) -> TacticalCharacter:
+func _make_unit(friendly: bool, cell: Vector2i, movement: float, speed: int = 10) -> TacticalCharacter:
 	var definition = CharacterDefinitionScript.new()
 	definition.faction = CharacterDefinition.Faction.FRIENDLY if friendly else CharacterDefinition.Faction.ENEMY
 	definition.max_health = 100
 	definition.movement_range = movement
 	var character = track(TacticalCharacterScript.new()) as TacticalCharacter
 	character.definition = definition
-	character.movement_range_override = movement
-	character.initiative_override = initiative
+	character.movement_range_override = movement - (float(speed) - 10.0) * 0.25
+	character.speed_override = speed
 	character.starting_grid_cell = cell
 	character._ready()
 	return character

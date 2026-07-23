@@ -15,7 +15,8 @@ func choose_plan(
 	units: Array[TacticalCharacter],
 	pathfinder: GridPathfinder,
 	targeting: AbilityTargeting,
-	wall_cells: Dictionary = {}
+	wall_cells: Dictionary = {},
+	terrain_definitions: Dictionary = {}
 ) -> EnemyTurnPlan:
 	var planning_started := Time.get_ticks_msec()
 	ranked_candidates.clear()
@@ -31,7 +32,12 @@ func choose_plan(
 	var profile := actor.enemy_ai_profile
 	if profile == null:
 		profile = EnemyAIProfile.new()
-	var snapshot := AIBoardSnapshot.from_battle(units, pathfinder.grid_size, wall_cells)
+	var snapshot := AIBoardSnapshot.from_battle(
+		units,
+		pathfinder.grid_size,
+		wall_cells,
+		terrain_definitions
+	)
 	var candidates := _generate_candidates(
 		actor,
 		snapshot,
@@ -98,6 +104,7 @@ func _generate_candidates(
 	var seen: Dictionary = {}
 	var start := snapshot.get_cell(actor)
 	var blocked := snapshot.get_blocked_cells(actor)
+	var path_penalties := _get_terrain_path_penalties(actor, snapshot, profile)
 	var reachable := pathfinder.get_reachable(start, maxf(0.0, movement_budget), blocked)
 	var reachable_cells := _sorted_cells(reachable.keys())
 
@@ -108,14 +115,32 @@ func _generate_candidates(
 	for destination in reachable_cells:
 		if destination == start:
 			continue
-		var move_path := pathfinder.find_path(start, destination, movement_budget, blocked)
+		var move_path := pathfinder.find_path(
+			start,
+			destination,
+			movement_budget,
+			blocked,
+			path_penalties
+		)
 		if move_path.size() < 2:
+			continue
+		var move_state := snapshot.duplicate_state()
+		var move_forecast := _forecast_terrain_path(
+			actor,
+			move_path,
+			move_state,
+			profile
+		)
+		var actual_move_path := move_forecast["path"] as Array[Vector2i]
+		if actual_move_path.size() < 2:
 			continue
 		var move_plan := EnemyTurnPlan.new()
 		move_plan.sequence = EnemyTurnPlan.Sequence.MOVE_ONLY
-		move_plan.pre_cast_path = move_path
-		move_plan.movement_cost = pathfinder.get_path_cost(move_path)
-		_finalize_plan(move_plan, actor, start, snapshot, targeting, profile, include_position)
+		move_plan.pre_cast_path = actual_move_path
+		move_plan.movement_cost = pathfinder.get_path_cost(actual_move_path)
+		move_plan.terrain_score = float(move_forecast["score"])
+		move_plan.effect_score = move_plan.terrain_score
+		_finalize_plan(move_plan, actor, start, move_state, targeting, profile, include_position)
 		_append_unique(candidates, seen, move_plan, start)
 
 	if not ability_ready:
@@ -128,9 +153,21 @@ func _generate_candidates(
 			continue
 		var pre_path: Array[Vector2i] = []
 		if pre_cell != start:
-			pre_path = pathfinder.find_path(start, pre_cell, movement_budget, blocked)
+			pre_path = pathfinder.find_path(
+				start,
+				pre_cell,
+				movement_budget,
+				blocked,
+				path_penalties
+			)
 			if pre_path.size() < 2:
 				continue
+		var pre_state := snapshot.duplicate_state()
+		var pre_forecast := _forecast_terrain_path(actor, pre_path, pre_state, profile)
+		var actual_pre_path := pre_forecast["path"] as Array[Vector2i]
+		var pre_terrain_score := float(pre_forecast["score"])
+		if not pre_state.is_living(actor):
+			continue
 
 		for ability_index in range(abilities.size()):
 			var ability := abilities[ability_index]
@@ -149,9 +186,8 @@ func _generate_candidates(
 					):
 						continue
 
-					var cast_state := snapshot.duplicate_state()
-					cast_state.set_cell(actor, pre_cell)
-					var effect_score := _forecast_ability(
+					var cast_state := pre_state.duplicate_state()
+					var ability_score := _forecast_ability(
 						actor,
 						ability,
 						target_cell,
@@ -163,12 +199,13 @@ func _generate_candidates(
 						actor,
 						start,
 						pre_cell,
-						pre_path,
+						actual_pre_path,
 						pre_cost,
 						ability,
 						ability_index,
 						target_cell,
-						effect_score,
+						ability_score + pre_terrain_score,
+						pre_terrain_score,
 						cast_state,
 						targeting,
 						profile,
@@ -203,27 +240,41 @@ func _generate_candidates(
 							pre_cell,
 							post_cell,
 							remaining,
-							post_blocked
+							post_blocked,
+							_get_terrain_path_penalties(actor, cast_state, profile)
 						)
 						if post_path.size() < 2:
+							continue
+						var post_state := cast_state.duplicate_state()
+						var post_forecast := _forecast_terrain_path(
+							actor,
+							post_path,
+							post_state,
+							profile
+						)
+						var actual_post_path := post_forecast["path"] as Array[Vector2i]
+						if actual_post_path.size() < 2:
 							continue
 						var repositioned := _make_cast_plan(
 							actor,
 							start,
 							pre_cell,
-							pre_path,
+							actual_pre_path,
 							pre_cost,
 							ability,
 							ability_index,
 							target_cell,
-							effect_score,
+							ability_score + pre_terrain_score,
+							pre_terrain_score,
 							cast_state,
 							targeting,
 							profile,
 							include_position
 						)
-						repositioned.post_cast_path = post_path
-						repositioned.movement_cost += pathfinder.get_path_cost(post_path)
+						repositioned.post_cast_path = actual_post_path
+						repositioned.movement_cost += pathfinder.get_path_cost(actual_post_path)
+						repositioned.terrain_score += float(post_forecast["score"])
+						repositioned.effect_score += float(post_forecast["score"])
 						repositioned.sequence = (
 							EnemyTurnPlan.Sequence.MOVE_CAST_MOVE
 							if pre_cell != start
@@ -233,7 +284,7 @@ func _generate_candidates(
 							repositioned,
 							actor,
 							start,
-							cast_state,
+							post_state,
 							targeting,
 							profile,
 							include_position
@@ -253,6 +304,7 @@ func _make_cast_plan(
 	ability_index: int,
 	target_cell: Vector2i,
 	effect_score: float,
+	terrain_score: float,
 	cast_state: AIBoardSnapshot,
 	targeting: AbilityTargeting,
 	profile: EnemyAIProfile,
@@ -270,6 +322,7 @@ func _make_cast_plan(
 	plan.target_cell = target_cell
 	plan.movement_cost = pre_cost
 	plan.effect_score = effect_score
+	plan.terrain_score = terrain_score
 	var primary := cast_state.get_living_unit_at(target_cell)
 	if primary != null:
 		plan.scene_target_index = cast_state.units.find(primary)
@@ -299,6 +352,7 @@ func _finalize_plan(
 	plan.total_score = plan.immediate_score
 	plan.score_breakdown = {
 		"effects": plan.effect_score,
+		"terrain": plan.terrain_score,
 		"position": plan.position_score,
 		"preferred_delivery": plan.preferred_delivery_score,
 		"counterplay": 0.0,
@@ -376,13 +430,11 @@ func _simulate_plan(
 	profile: EnemyAIProfile
 ) -> AIBoardSnapshot:
 	var result := initial_state.duplicate_state()
-	var start := result.get_cell(actor)
-	var cast_cell := plan.get_cast_cell(start)
-	result.set_cell(actor, cast_cell)
+	_forecast_terrain_path(actor, plan.pre_cast_path, result, profile)
 	if plan.ability != null and result.is_living(actor):
 		_forecast_ability(actor, plan.ability, plan.target_cell, result, targeting, profile)
 	if result.is_living(actor):
-		result.set_cell(actor, plan.get_end_cell(start))
+		_forecast_terrain_path(actor, plan.post_cast_path, result, profile)
 	return result
 
 
@@ -413,16 +465,56 @@ func _get_best_friendly_reply(
 			or responder.is_friendly() == acting_enemy.is_friendly()
 		):
 			continue
+		var turn_state := snapshot.duplicate_state()
+		var turn_start_score := _forecast_terrain_trigger(
+			responder,
+			TileTriggeredEffectDefinition.Trigger.TURN_START,
+			turn_state,
+			response_profile
+		)
+		if not turn_state.is_living(responder):
+			continue
 		# A reply is the terminal depth of the search, so paths and post-cast
 		# destinations cannot affect its reward. Scan reachable cast origins directly
 		# instead of allocating thousands of throwaway EnemyTurnPlan objects.
-		var start := snapshot.get_cell(responder)
+		var start := turn_state.get_cell(responder)
 		var reachable := pathfinder.get_reachable(
 			start,
 			responder.get_movement_range(),
-			snapshot.get_blocked_cells(responder)
+			turn_state.get_blocked_cells(responder)
 		)
 		var reachable_cells := _sorted_cells(reachable.keys())
+		var response_path_penalties := _get_terrain_path_penalties(
+			responder,
+			turn_state,
+			response_profile
+		)
+		var origin_states: Dictionary = {}
+		for caster_cell in reachable_cells:
+			var origin_state := turn_state.duplicate_state()
+			var path: Array[Vector2i] = []
+			if caster_cell != start:
+				path = pathfinder.find_path(
+					start,
+					caster_cell,
+					responder.get_movement_range(),
+					turn_state.get_blocked_cells(responder),
+					response_path_penalties
+				)
+				if path.size() < 2:
+					continue
+			var path_forecast := _forecast_terrain_path(
+				responder,
+				path,
+				origin_state,
+				response_profile
+			)
+			if not origin_state.is_living(responder):
+				continue
+			origin_states[caster_cell] = {
+				"state": origin_state,
+				"score": turn_start_score + float(path_forecast["score"]),
+			}
 		for ability in responder.get_abilities():
 			if ability == null:
 				continue
@@ -434,20 +526,23 @@ func _get_best_friendly_reply(
 				for x in range(snapshot.grid_size.x):
 					var target_cell := Vector2i(x, y)
 					for caster_cell in reachable_cells:
+						if not origin_states.has(caster_cell):
+							continue
+						var origin_data := origin_states[caster_cell] as Dictionary
+						var origin_state := origin_data["state"] as AIBoardSnapshot
 						if not _is_valid_primary_target(
 							responder,
 							caster_cell,
 							target_cell,
 							ability,
-							snapshot,
+							origin_state,
 							targeting
 						):
 							continue
-						var reply_state := snapshot.duplicate_state()
-						reply_state.set_cell(responder, caster_cell)
+						var reply_state := origin_state.duplicate_state()
 						best_reply = maxf(
 							best_reply,
-							_forecast_ability(
+							float(origin_data["score"]) + _forecast_ability(
 								responder,
 								ability,
 								target_cell,
@@ -461,6 +556,76 @@ func _get_best_friendly_reply(
 						if not origin_sensitive:
 							break
 	return best_reply
+
+
+func _forecast_terrain_path(
+	unit: TacticalCharacter,
+	path: Array[Vector2i],
+	snapshot: AIBoardSnapshot,
+	profile: EnemyAIProfile
+) -> Dictionary:
+	var traversed: Array[Vector2i] = []
+	var score := 0.0
+	if path.is_empty():
+		return {"path": traversed, "score": score}
+	traversed.append(path[0])
+	for index in range(1, path.size()):
+		if not snapshot.is_living(unit):
+			break
+		snapshot.set_cell(unit, path[index])
+		traversed.append(path[index])
+		score += _forecast_terrain_trigger(
+			unit,
+			TileTriggeredEffectDefinition.Trigger.ENTER,
+			snapshot,
+			profile
+		)
+	return {"path": traversed, "score": score}
+
+
+func _forecast_terrain_trigger(
+	unit: TacticalCharacter,
+	trigger: TileTriggeredEffectDefinition.Trigger,
+	snapshot: AIBoardSnapshot,
+	profile: EnemyAIProfile
+) -> float:
+	if not snapshot.is_living(unit):
+		return 0.0
+	var definition := snapshot.get_terrain(snapshot.get_cell(unit))
+	if definition == null:
+		return 0.0
+	var before := snapshot.get_health(unit)
+	var estimate := definition.estimate_trigger(unit, trigger, before)
+	var after := clampi(int(estimate.get("health", before)), 0, unit.get_max_health())
+	snapshot.set_health(unit, after)
+	var score := float(estimate.get("utility_hint", 0.0)) * profile.custom_effect_weight
+	if after < before:
+		score -= float(before - after) * profile.friendly_damage_penalty
+		if after == 0:
+			score -= profile.defeat_reward
+	elif after > before:
+		score += float(after - before) * profile.healing_reward
+	return score
+
+
+func _get_terrain_path_penalties(
+	unit: TacticalCharacter,
+	snapshot: AIBoardSnapshot,
+	profile: EnemyAIProfile
+) -> Dictionary:
+	var result: Dictionary = {}
+	for cell: Vector2i in snapshot.terrain_definitions:
+		var probe := snapshot.duplicate_state()
+		probe.set_cell(unit, cell)
+		var score := _forecast_terrain_trigger(
+			unit,
+			TileTriggeredEffectDefinition.Trigger.ENTER,
+			probe,
+			profile
+		)
+		if score < -COST_EPSILON:
+			result[cell] = -score
+	return result
 
 
 func _get_snapshot_key(snapshot: AIBoardSnapshot) -> String:
@@ -529,6 +694,8 @@ func _score_position(
 	targeting: AbilityTargeting,
 	profile: EnemyAIProfile
 ) -> float:
+	if not snapshot.is_living(actor):
+		return 0.0
 	var opponents := snapshot.get_living_opponents(actor)
 	if opponents.is_empty():
 		return 0.0

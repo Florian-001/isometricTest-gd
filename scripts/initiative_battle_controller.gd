@@ -7,6 +7,7 @@ extends Node2D
 @export_range(1, 100, 1) var ai_debug_history_limit := 30
 
 @onready var grid: IsometricGrid = $Grid
+@onready var terrain: TacticalTerrain = $Terrain
 @onready var walls_container: Node2D = $Walls
 @onready var characters_container: Node2D = $Characters
 @onready var turn_manager: TurnManager = $TurnManager
@@ -52,6 +53,7 @@ func _ready() -> void:
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	ability_bar.ability_selected.connect(_on_ability_selected)
 	dev_button.pressed.connect(_on_dev_button_pressed)
+	terrain.terrain_changed.connect(_on_terrain_changed)
 
 	for child in characters_container.get_children():
 		if child is TacticalCharacter:
@@ -64,8 +66,10 @@ func _ready() -> void:
 			character.ability_availability_changed.connect(
 				_on_unit_ability_availability_changed.bind(character)
 			)
+			character.cell_entered.connect(_on_character_cell_entered)
 			character.defeated.connect(_on_character_defeated)
 	_initialize_walls()
+	terrain.initialize(grid, _get_wall_cells())
 
 	if center_camera_on_start:
 		tactical_camera.position = grid.position + grid.get_local_bounds().get_center()
@@ -344,9 +348,15 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 	var moving_character := _selected_character
 	grid.clear_overlays()
 	await moving_character.move_along(path)
-	moving_character.spend_movement(path_cost)
-	_set_movement_locked(false)
-	if is_instance_valid(moving_character) and moving_character == turn_manager.current_unit:
+	var traversed_path := _get_traversed_path(path, moving_character.grid_cell)
+	moving_character.spend_movement(_pathfinder.get_path_cost(traversed_path))
+	var can_continue := (
+		is_instance_valid(moving_character)
+		and moving_character == turn_manager.current_unit
+		and moving_character.current_health > 0
+	)
+	_set_movement_locked(not can_continue)
+	if can_continue:
 		_selected_character = moving_character
 		_has_hovered_cell = false
 		_refresh_reachable_cells()
@@ -372,7 +382,8 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 		_characters,
 		_pathfinder,
 		_ability_targeting,
-		_get_wall_cells()
+		_get_wall_cells(),
+		terrain.get_definitions()
 	)
 	_update_ai_debug(unit, plan)
 	var executed := await _execute_enemy_plan(unit, plan)
@@ -384,7 +395,8 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 			_characters,
 			_pathfinder,
 			_ability_targeting,
-			_get_wall_cells()
+			_get_wall_cells(),
+			terrain.get_definitions()
 		)
 		_update_ai_debug(unit, plan, "Replanned")
 		await _execute_enemy_plan(unit, plan)
@@ -404,7 +416,7 @@ func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
 		return false
 	if not plan.pre_cast_path.is_empty():
 		var pre_destination := plan.pre_cast_path[plan.pre_cast_path.size() - 1]
-		if not await _move_enemy_to(unit, pre_destination):
+		if not await _move_enemy_to(unit, pre_destination, plan.pre_cast_path):
 			return false
 
 	if plan.ability != null:
@@ -433,20 +445,32 @@ func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
 
 	if not plan.post_cast_path.is_empty() and unit.current_health > 0:
 		var post_destination := plan.post_cast_path[plan.post_cast_path.size() - 1]
-		if not await _move_enemy_to(unit, post_destination):
+		if not await _move_enemy_to(unit, post_destination, plan.post_cast_path):
 			return false
 	return unit == turn_manager.current_unit
 
 
-func _move_enemy_to(unit: TacticalCharacter, destination: Vector2i) -> bool:
+func _move_enemy_to(
+	unit: TacticalCharacter,
+	destination: Vector2i,
+	preferred_path: Array[Vector2i] = []
+) -> bool:
 	if unit.grid_cell == destination:
 		return true
-	var path := _pathfinder.find_path(
-		unit.grid_cell,
-		destination,
-		unit.remaining_movement,
-		_get_blocked_cells(unit)
-	)
+	var blocked_cells := _get_blocked_cells(unit)
+	var path := preferred_path.duplicate()
+	if (
+		path.is_empty()
+		or path[0] != unit.grid_cell
+		or path[path.size() - 1] != destination
+		or not _pathfinder.is_path_walkable(path, blocked_cells)
+	):
+		path = _pathfinder.find_path(
+			unit.grid_cell,
+			destination,
+			unit.remaining_movement,
+			blocked_cells
+		)
 	if path.size() < 2:
 		return false
 	var path_cost := _pathfinder.get_path_cost(path)
@@ -456,7 +480,9 @@ func _move_enemy_to(unit: TacticalCharacter, destination: Vector2i) -> bool:
 		return false
 	grid.clear_overlays()
 	await unit.move_along(path)
-	return unit.spend_movement(path_cost)
+	var traversed_path := _get_traversed_path(path, unit.grid_cell)
+	var spent := unit.spend_movement(_pathfinder.get_path_cost(traversed_path))
+	return spent and unit.current_health > 0 and unit.grid_cell == destination
 
 
 func _update_ai_debug(
@@ -508,6 +534,12 @@ func _on_turn_started(unit: TacticalCharacter) -> void:
 	_ability_range_cells.clear()
 	_ability_target_cells.clear()
 	turn_order_bar.rebuild(turn_manager.get_rotating_order(), unit)
+	terrain.apply_trigger(unit, TileTriggeredEffectDefinition.Trigger.TURN_START)
+	if unit.current_health <= 0:
+		_set_movement_locked(true)
+		clear_selection()
+		grid.clear_overlays()
+		return
 	if unit.is_friendly():
 		_set_movement_locked(false)
 		_select_character(unit)
@@ -536,6 +568,21 @@ func _on_character_defeated(character: TacticalCharacter) -> void:
 	turn_manager.notify_unit_state_changed()
 	if character == turn_manager.current_unit:
 		call_deferred("_end_defeated_current_unit", character)
+
+
+func _on_character_cell_entered(
+	character: TacticalCharacter,
+	_cell: Vector2i
+) -> void:
+	terrain.apply_trigger(character, TileTriggeredEffectDefinition.Trigger.ENTER)
+
+
+func _on_terrain_changed(
+	_definitions: Dictionary,
+	movement_cost_multipliers: Dictionary
+) -> void:
+	if _pathfinder != null:
+		_pathfinder.set_cell_cost_multipliers(movement_cost_multipliers)
 
 
 func _end_defeated_current_unit(character: TacticalCharacter) -> void:
@@ -635,6 +682,18 @@ func _get_blocked_cells(except_character: TacticalCharacter = null) -> Dictionar
 		if is_instance_valid(character) and character != except_character:
 			blocked[character.grid_cell] = true
 	return blocked
+
+
+func _get_traversed_path(
+	planned_path: Array[Vector2i],
+	reached_cell: Vector2i
+) -> Array[Vector2i]:
+	var traversed: Array[Vector2i] = []
+	for cell in planned_path:
+		traversed.append(cell)
+		if cell == reached_cell:
+			break
+	return traversed
 
 
 func _initialize_walls() -> void:

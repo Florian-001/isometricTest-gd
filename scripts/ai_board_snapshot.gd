@@ -3,6 +3,7 @@ extends RefCounted
 
 var grid_size: Vector2i
 var wall_cells: Dictionary = {}
+var terrain_definitions: Dictionary = {}
 var units: Array[TacticalCharacter] = []
 var unit_cells: Dictionary = {}
 var unit_health: Dictionary = {}
@@ -11,11 +12,13 @@ var unit_health: Dictionary = {}
 static func from_battle(
 	battle_units: Array[TacticalCharacter],
 	initial_grid_size: Vector2i,
-	walls: Dictionary = {}
+	walls: Dictionary = {},
+	terrain: Dictionary = {}
 ) -> AIBoardSnapshot:
 	var snapshot := AIBoardSnapshot.new()
 	snapshot.grid_size = initial_grid_size
 	snapshot.wall_cells = walls.duplicate()
+	snapshot.terrain_definitions = terrain.duplicate()
 	for unit in battle_units:
 		if not is_instance_valid(unit):
 			continue
@@ -29,6 +32,7 @@ func duplicate_state() -> AIBoardSnapshot:
 	var result := AIBoardSnapshot.new()
 	result.grid_size = grid_size
 	result.wall_cells = wall_cells.duplicate()
+	result.terrain_definitions = terrain_definitions.duplicate()
 	result.units = units.duplicate()
 	result.unit_cells = unit_cells.duplicate()
 	result.unit_health = unit_health.duplicate()
@@ -55,6 +59,10 @@ func get_health(unit: TacticalCharacter) -> int:
 func set_health(unit: TacticalCharacter, value: int) -> void:
 	if unit_health.has(unit):
 		unit_health[unit] = clampi(value, 0, unit.get_max_health())
+
+
+func get_terrain(cell: Vector2i) -> TileDefinition:
+	return terrain_definitions.get(cell) as TileDefinition
 
 
 func get_living_unit_at(cell: Vector2i) -> TacticalCharacter:
@@ -91,4 +99,3 @@ func get_living_allies(unit: TacticalCharacter, include_self: bool = true) -> Ar
 		):
 			result.append(candidate)
 	return result
-

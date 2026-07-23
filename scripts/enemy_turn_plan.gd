@@ -21,6 +21,7 @@ var ability_index := -1
 var scene_target_index := 999999
 var movement_cost := 0.0
 var effect_score := 0.0
+var terrain_score := 0.0
 var position_score := 0.0
 var preferred_delivery_score := 0.0
 var immediate_score := 0.0
@@ -74,10 +75,11 @@ func get_debug_summary() -> String:
 	if ability != null:
 		action += " %s from %s @ %s" % [ability.display_name, cast_origin, target_cell]
 	action += " -> %s" % end_cell
-	return "%s | %.2f = %.2f effect + %.2f position + %.2f style - %.2f reply" % [
+	return "%s | %.2f = %.2f effect (%.2f terrain) + %.2f position + %.2f style - %.2f reply" % [
 		action,
 		total_score,
 		effect_score,
+		terrain_score,
 		position_score,
 		preferred_delivery_score,
 		counterplay_score,

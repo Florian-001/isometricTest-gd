@@ -10,25 +10,20 @@ var turn_order: Array[TacticalCharacter] = []
 var current_unit: TacticalCharacter
 var current_index: int = -1
 var round_number: int = 1
+var _scene_indices: Dictionary = {}
 
 
 func start_combat(units: Array[TacticalCharacter]) -> void:
 	turn_order.clear()
-	var scene_indices: Dictionary = {}
+	_scene_indices.clear()
 	for index in range(units.size()):
 		var unit := units[index]
+		_scene_indices[unit] = index
 		if not _is_living(unit):
 			continue
-		scene_indices[unit] = index
 		turn_order.append(unit)
 
-	turn_order.sort_custom(func(a: TacticalCharacter, b: TacticalCharacter) -> bool:
-		var initiative_a := a.get_initiative()
-		var initiative_b := b.get_initiative()
-		if initiative_a != initiative_b:
-			return initiative_a > initiative_b
-		return int(scene_indices[a]) < int(scene_indices[b])
-	)
+	_sort_turn_order()
 
 	round_number = 1
 	current_index = 0 if not turn_order.is_empty() else -1
@@ -42,6 +37,7 @@ func end_current_turn() -> void:
 	if current_unit == null or turn_order.is_empty():
 		return
 	var ended_unit := current_unit
+	ended_unit.advance_status_durations()
 	turn_ended.emit(ended_unit)
 
 	var next_index := current_index
@@ -64,10 +60,20 @@ func end_current_turn() -> void:
 
 	if wrapped:
 		round_number += 1
+		_rebuild_living_turn_order()
+		if turn_order.is_empty():
+			current_index = -1
+			current_unit = null
+			turn_order_changed.emit(get_rotating_order())
+			return
+		current_index = 0
+		current_unit = turn_order[0]
+		turn_order_changed.emit(get_rotating_order())
 		round_started.emit(round_number)
-	current_index = next_index
-	current_unit = turn_order[current_index]
-	turn_order_changed.emit(get_rotating_order())
+	else:
+		current_index = next_index
+		current_unit = turn_order[current_index]
+		turn_order_changed.emit(get_rotating_order())
 	_start_current_turn()
 
 
@@ -102,3 +108,22 @@ func _start_current_turn() -> void:
 
 func _is_living(unit: TacticalCharacter) -> bool:
 	return is_instance_valid(unit) and unit.current_health > 0
+
+
+func _rebuild_living_turn_order() -> void:
+	var living_units: Array[TacticalCharacter] = []
+	for unit in turn_order:
+		if _is_living(unit):
+			living_units.append(unit)
+	turn_order = living_units
+	_sort_turn_order()
+
+
+func _sort_turn_order() -> void:
+	turn_order.sort_custom(func(a: TacticalCharacter, b: TacticalCharacter) -> bool:
+		var initiative_a := a.get_initiative()
+		var initiative_b := b.get_initiative()
+		if initiative_a != initiative_b:
+			return initiative_a > initiative_b
+		return int(_scene_indices.get(a, 999999)) < int(_scene_indices.get(b, 999999))
+	)

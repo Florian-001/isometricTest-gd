@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="TileDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tile_definition.gd" id="1_tile"]
+
+[resource]
+script = ExtResource("1_tile")
+display_name = "Mud"
+tile_color = Color(0.31, 0.20, 0.10, 1)
+movement_cost_multiplier = 2.0

@@ -5,6 +5,8 @@ func _init() -> void:
 	var suite_paths := [
 		"res://tests/test_tactical_foundation.gd",
 		"res://tests/test_enemy_ai.gd",
+		"res://tests/test_stats_system.gd",
+		"res://tests/test_terrain_system.gd",
 	]
 	for suite_path in suite_paths:
 		var suite_script: Script = load(suite_path)

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="StatusEffectDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="1_status"]
+[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
+
+[sub_resource type="Resource" id="SpeedPenalty"]
+script = ExtResource("2_modifier")
+stat = 4
+value = -4.0
+
+[resource]
+script = ExtResource("1_status")
+status_id = &"slow"
+display_name = "Slow"
+duration_turns = 2
+color = Color(0.3, 0.62, 1, 1)
+modifiers = Array[ExtResource("2_modifier")]([SubResource("SpeedPenalty")])

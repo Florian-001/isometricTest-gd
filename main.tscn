@@ -17,9 +17,19 @@
 [ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="15_palette"]
 [ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="16_mud"]
 [ext_resource type="Resource" uid="uid://bvb1c027wvf5u" path="res://resources/tiles/fire.tres" id="17_fire"]
+[ext_resource type="Script" path="res://scripts/general_inventory.gd" id="18_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/inventory_screen.tscn" id="19_inventory_screen"]
+[ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="20_sword"]
+[ext_resource type="Resource" path="res://resources/items/ranger_armor.tres" id="21_armor"]
+[ext_resource type="Resource" path="res://resources/items/sage_charm.tres" id="22_charm"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="23_item_type"]
 
 [node name="Main" type="Node2D" unique_id=750848398]
 script = ExtResource("1_controller")
+
+[node name="GeneralInventory" type="Node" parent="."]
+script = ExtResource("18_inventory")
+starting_items = Array[ExtResource("23_item_type")]([ExtResource("20_sword"), ExtResource("21_armor"), ExtResource("22_charm")])
 
 [node name="Grid" type="Node2D" parent="." unique_id=190021511]
 position = Vector2(640, 96)
@@ -208,6 +218,20 @@ tooltip_text = "Show AI decision score history"
 theme_override_font_sizes/font_size = 15
 text = "Dev"
 
+[node name="InventoryButton" type="Button" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 116.0
+offset_top = -56.0
+offset_right = 226.0
+offset_bottom = -16.0
+grow_vertical = 0
+tooltip_text = "Open the general inventory and character equipment"
+toggle_mode = true
+theme_override_font_sizes/font_size = 15
+text = "Inventory"
+
 [node name="DevHistoryPanel" type="PanelContainer" parent="HUD" unique_id=2004355906]
 visible = false
 anchors_preset = 2
@@ -262,6 +286,8 @@ theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 12
 text = "No AI decisions recorded yet."
 autowrap_mode = 2
+
+[node name="InventoryScreen" parent="HUD" instance=ExtResource("19_inventory_screen")]
 
 [node name="HelpText" type="Label" parent="HUD" unique_id=68517187]
 offset_left = 28.0

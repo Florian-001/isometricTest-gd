@@ -14,6 +14,9 @@ extends Node2D
 @onready var tactical_camera: TacticalCameraController = $TacticalCamera
 @onready var turn_order_bar: TurnOrderBar = $HUD/TurnOrderBar
 @onready var ability_bar: AbilityBar = $HUD/AbilityBar
+@onready var general_inventory: GeneralInventory = $GeneralInventory
+@onready var inventory_button: Button = $HUD/InventoryButton
+@onready var inventory_screen: InventoryScreen = $HUD/InventoryScreen
 @onready var turn_status: Label = $HUD/TurnPanel/Margin/VBox/TurnStatus
 @onready var movement_status: Label = $HUD/TurnPanel/Margin/VBox/MovementStatus
 @onready var end_turn_button: Button = $HUD/TurnPanel/Margin/VBox/EndTurnButton
@@ -52,6 +55,9 @@ func _ready() -> void:
 	turn_manager.round_started.connect(_on_round_started)
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	ability_bar.ability_selected.connect(_on_ability_selected)
+	inventory_button.toggled.connect(_on_inventory_button_toggled)
+	inventory_screen.closed.connect(_on_inventory_screen_closed)
+	inventory_screen.equipment_updated.connect(_on_inventory_equipment_updated)
 	dev_button.pressed.connect(_on_dev_button_pressed)
 	terrain.terrain_changed.connect(_on_terrain_changed)
 
@@ -68,6 +74,7 @@ func _ready() -> void:
 			)
 			character.cell_entered.connect(_on_character_cell_entered)
 			character.defeated.connect(_on_character_defeated)
+	inventory_screen.setup(general_inventory, _get_living_friendlies())
 	_initialize_walls()
 	terrain.initialize(grid, _get_wall_cells())
 
@@ -89,6 +96,12 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if inventory_screen.visible:
+		if event.is_action_pressed("ui_cancel"):
+			inventory_screen.close_screen()
+			get_viewport().set_input_as_handled()
+		return
+
 	if event is InputEventMouse:
 		_last_mouse_screen_position = event.position
 		_has_mouse_screen_position = true
@@ -515,6 +528,29 @@ func _on_dev_button_pressed() -> void:
 	if not enable_dev_tools:
 		return
 	dev_history_panel.visible = not dev_history_panel.visible
+
+
+func _on_inventory_button_toggled(open: bool) -> void:
+	if open:
+		var preferred_character := _selected_character
+		if not is_instance_valid(preferred_character) or not preferred_character.is_friendly():
+			var current_unit := turn_manager.current_unit
+			preferred_character = current_unit if is_instance_valid(current_unit) and current_unit.is_friendly() else null
+		inventory_screen.open_for(preferred_character)
+	else:
+		inventory_screen.close_screen()
+
+
+func _on_inventory_screen_closed() -> void:
+	inventory_button.set_pressed_no_signal(false)
+
+
+func _on_inventory_equipment_updated(character: TacticalCharacter) -> void:
+	if character == turn_manager.current_unit:
+		_refresh_ability_bar()
+		_update_turn_hud()
+	if character == _selected_character and not _movement_locked:
+		_refresh_reachable_cells()
 
 
 func _refresh_ai_debug_history() -> void:

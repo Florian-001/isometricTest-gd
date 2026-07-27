@@ -1,0 +1,156 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/inventory_screen.gd" id="1_screen"]
+
+[node name="InventoryScreen" type="Control"]
+visible = false
+z_index = 100
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_screen")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.018, 0.03, 0.78)
+
+[node name="Panel" type="PanelContainer" parent="Dim"]
+custom_minimum_size = Vector2(820, 540)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -410.0
+offset_top = -270.0
+offset_right = 410.0
+offset_bottom = 270.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="Dim/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="Dim/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Header" type="HBoxContainer" parent="Dim/Panel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Dim/Panel/Margin/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 26
+text = "Inventory"
+
+[node name="Spacer" type="Control" parent="Dim/Panel/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CloseButton" type="Button" parent="Dim/Panel/Margin/VBox/Header"]
+custom_minimum_size = Vector2(90, 38)
+layout_mode = 2
+text = "Close"
+
+[node name="CharacterRow" type="HBoxContainer" parent="Dim/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="Dim/Panel/Margin/VBox/CharacterRow"]
+layout_mode = 2
+text = "Character"
+
+[node name="CharacterPicker" type="OptionButton" parent="Dim/Panel/Margin/VBox/CharacterRow"]
+custom_minimum_size = Vector2(300, 40)
+layout_mode = 2
+
+[node name="Hint" type="Label" parent="Dim/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.72, 0.82, 1)
+text = "Click an unused item to equip it. Click equipped gear to return it to the general inventory."
+
+[node name="Columns" type="HBoxContainer" parent="Dim/Panel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="GeneralPanel" type="PanelContainer" parent="Dim/Panel/Margin/VBox/Columns"]
+custom_minimum_size = Vector2(370, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Margin" type="MarginContainer" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+text = "General Inventory"
+
+[node name="Subtitle" type="Label" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.66, 0.74, 1)
+text = "Unused items"
+
+[node name="Scroll" type="ScrollContainer" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Entries" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EquipmentPanel" type="PanelContainer" parent="Dim/Panel/Margin/VBox/Columns"]
+custom_minimum_size = Vector2(370, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Margin" type="MarginContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+text = "Character Equipment"
+
+[node name="CharacterName" type="Label" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.72, 1, 1)
+text = "Character"
+
+[node name="EquipmentEntries" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8

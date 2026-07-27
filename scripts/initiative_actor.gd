@@ -53,7 +53,12 @@ signal statuses_changed
 @export var ability_overrides: Array[AbilityDefinition] = []
 
 @export_category("Placement and Presentation")
-@export var starting_grid_cell: Vector2i = Vector2i.ZERO
+@export var starting_grid_cell: Vector2i = Vector2i.ZERO:
+	set(value):
+		starting_grid_cell = value
+		if Engine.is_editor_hint():
+			grid_cell = value
+			_queue_editor_position_sync()
 @export_range(20.0, 1000.0, 10.0) var movement_animation_speed: float = 260.0
 
 var current_health: int = 0
@@ -72,13 +77,88 @@ var _ability_available := false
 var _equipped_items: Dictionary = {}
 var _active_statuses: Array[ActiveStatus] = []
 var _runtime_stats_initialized := false
+var _editor_syncing_placement := false
+var _editor_position_sync_queued := false
+var _editor_cell_sync_queued := false
 
 
 func _ready() -> void:
 	_initialize_runtime_stats()
 	grid_cell = starting_grid_cell
 	current_health = get_max_health()
+	if Engine.is_editor_hint():
+		set_notify_transform(true)
+		_queue_editor_position_sync()
 	queue_redraw()
+
+
+func _notification(what: int) -> void:
+	if (
+		what == NOTIFICATION_TRANSFORM_CHANGED
+		and Engine.is_editor_hint()
+		and is_node_ready()
+		and not _editor_syncing_placement
+		and not _editor_cell_sync_queued
+	):
+		_editor_cell_sync_queued = true
+		call_deferred("_sync_editor_cell_from_position")
+
+
+func _validate_property(property: Dictionary) -> void:
+	if property.name == "position":
+		property.usage = property.usage & ~PROPERTY_USAGE_STORAGE
+
+
+func _queue_editor_position_sync() -> void:
+	if (
+		not Engine.is_editor_hint()
+		or not is_inside_tree()
+		or _editor_syncing_placement
+		or _editor_position_sync_queued
+	):
+		return
+	_editor_position_sync_queued = true
+	call_deferred("_sync_editor_position_from_cell")
+
+
+func _sync_editor_position_from_cell() -> void:
+	_editor_position_sync_queued = false
+	if not Engine.is_editor_hint() or not is_inside_tree():
+		return
+	var editor_grid := _get_editor_grid()
+	if editor_grid == null:
+		return
+	_editor_syncing_placement = true
+	global_position = editor_grid.grid_to_global(starting_grid_cell)
+	grid_cell = starting_grid_cell
+	_update_sorting()
+	_editor_syncing_placement = false
+	queue_redraw()
+
+
+func _sync_editor_cell_from_position() -> void:
+	_editor_cell_sync_queued = false
+	if not Engine.is_editor_hint() or not is_inside_tree() or _editor_syncing_placement:
+		return
+	var editor_grid := _get_editor_grid()
+	if editor_grid == null:
+		return
+	var snapped_cell := editor_grid.global_to_grid(global_position)
+	snapped_cell.x = clampi(snapped_cell.x, 0, editor_grid.grid_size.x - 1)
+	snapped_cell.y = clampi(snapped_cell.y, 0, editor_grid.grid_size.y - 1)
+	_editor_syncing_placement = true
+	starting_grid_cell = snapped_cell
+	grid_cell = snapped_cell
+	global_position = editor_grid.grid_to_global(snapped_cell)
+	_update_sorting()
+	_editor_syncing_placement = false
+	queue_redraw()
+
+
+func _get_editor_grid() -> IsometricGrid:
+	if owner == null:
+		return null
+	return owner.get_node_or_null("Grid") as IsometricGrid
 
 
 func initialize(grid: IsometricGrid) -> void:

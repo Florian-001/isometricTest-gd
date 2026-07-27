@@ -12,11 +12,11 @@
 [ext_resource type="Script" uid="uid://bax5bwopqqbc1" path="res://scripts/tactical_wall.gd" id="10_wall"]
 [ext_resource type="Resource" uid="uid://be3ci0o703acb" path="res://resources/ai/melee_ai.tres" id="11_melee_ai"]
 [ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="12_ranged_ai"]
-[ext_resource type="Script" path="res://scripts/tactical_terrain.gd" id="13_terrain"]
-[ext_resource type="Script" path="res://scripts/tactical_tile.gd" id="14_tile"]
+[ext_resource type="Script" uid="uid://cw40etoqakmre" path="res://scripts/tactical_terrain.gd" id="13_terrain"]
+[ext_resource type="Script" uid="uid://cy77b7iubppb4" path="res://scripts/tactical_tile.gd" id="14_tile"]
 [ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="15_palette"]
 [ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="16_mud"]
-[ext_resource type="Resource" path="res://resources/tiles/fire.tres" id="17_fire"]
+[ext_resource type="Resource" uid="uid://bvb1c027wvf5u" path="res://resources/tiles/fire.tres" id="17_fire"]
 
 [node name="Main" type="Node2D" unique_id=750848398]
 script = ExtResource("1_controller")
@@ -25,26 +25,26 @@ script = ExtResource("1_controller")
 position = Vector2(640, 96)
 script = ExtResource("2_grid")
 
-[node name="Terrain" type="Node" parent="."]
+[node name="Terrain" type="Node" parent="." unique_id=1111338219]
 script = ExtResource("13_terrain")
 palette = ExtResource("15_palette")
 
-[node name="Mud_3_4" type="Node" parent="Terrain"]
+[node name="Mud_3_4" type="Node" parent="Terrain" unique_id=1199995300]
 script = ExtResource("14_tile")
 definition = ExtResource("16_mud")
 grid_cell = Vector2i(3, 4)
 
-[node name="Mud_4_4" type="Node" parent="Terrain"]
+[node name="Mud_4_4" type="Node" parent="Terrain" unique_id=703906068]
 script = ExtResource("14_tile")
 definition = ExtResource("16_mud")
 grid_cell = Vector2i(4, 4)
 
-[node name="Fire_6_4" type="Node" parent="Terrain"]
+[node name="Fire_6_4" type="Node" parent="Terrain" unique_id=1823150032]
 script = ExtResource("14_tile")
 definition = ExtResource("17_fire")
 grid_cell = Vector2i(6, 4)
 
-[node name="Fire_7_4" type="Node" parent="Terrain"]
+[node name="Fire_7_4" type="Node" parent="Terrain" unique_id=578440902]
 script = ExtResource("14_tile")
 definition = ExtResource("17_fire")
 grid_cell = Vector2i(7, 4)
@@ -75,31 +75,35 @@ wall_height = 20.0
 [node name="Characters" type="Node2D" parent="." unique_id=557259408]
 
 [node name="FriendA" type="Node2D" parent="Characters" unique_id=1740941279]
+z_index = 109
 script = ExtResource("3_character")
 definition = ExtResource("5_friendly")
 max_health_override = 100
 movement_range_override = 6.0
 speed_override = 12
-starting_grid_cell = Vector2i(2, 3)
+starting_grid_cell = Vector2i(1, 8)
 
 [node name="FriendB" type="Node2D" parent="Characters" unique_id=2129219972]
+z_index = 111
 script = ExtResource("3_character")
 definition = ExtResource("5_friendly")
 max_health_override = 100
-movement_range_override = 3.0
+movement_range_override = 5.0
 speed_override = 8
-starting_grid_cell = Vector2i(3, 6)
+starting_grid_cell = Vector2i(0, 11)
 
 [node name="MeleeEnemy" type="Node2D" parent="Characters" unique_id=921107907]
+z_index = 111
 script = ExtResource("3_character")
 definition = ExtResource("6_enemy")
 enemy_ai_profile = ExtResource("11_melee_ai")
 max_health_override = 100
 movement_range_override = 5.0
 speed_override = 10
-starting_grid_cell = Vector2i(8, 6)
+starting_grid_cell = Vector2i(3, 8)
 
 [node name="RangedEnemy" type="Node2D" parent="Characters" unique_id=1457671969]
+z_index = 112
 script = ExtResource("3_character")
 definition = ExtResource("6_enemy")
 enemy_ai_profile = ExtResource("12_ranged_ai")

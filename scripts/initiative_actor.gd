@@ -14,7 +14,13 @@ signal equipment_changed(slot: ItemDefinition.EquipmentSlot, item: ItemDefinitio
 signal statuses_changed
 
 @export_category("Character Template")
-@export var definition: CharacterDefinition
+@export var definition: CharacterDefinition:
+	set(value):
+		definition = value
+		if Engine.is_editor_hint():
+			current_health = get_max_health()
+			update_configuration_warnings()
+		queue_redraw()
 
 @export_category("Enemy AI")
 ## Attach an EnemyAIProfile resource to enemy units. Friendly units ignore this setting.
@@ -34,9 +40,13 @@ signal statuses_changed
 			current_health = get_max_health()
 		queue_redraw()
 
-## Set to zero or higher to override the template's movement range for this unit.
-## Set to -1 to inherit the value from Character Template.
-@export_range(-1.0, 100.0, 0.5, "or_greater") var movement_range_override: float = -1.0
+## Maximum movement for this unit before Speed adjustments.
+## Set to -1 to use the value from Character Template.
+## This is a regular numeric Inspector field so it can be typed directly instead of
+## relying on Godot's range slider. Values are kept in half-cell increments.
+@export var movement_range: float = -1.0:
+	set(value):
+		movement_range = clampf(snappedf(value, 0.5), -1.0, 10.0)
 
 ## Primary-stat overrides use -1 to inherit from the Character Template.
 @export_range(-1, 999, 1, "or_greater") var strength_override: int = -1
@@ -53,7 +63,14 @@ signal statuses_changed
 @export var ability_overrides: Array[AbilityDefinition] = []
 
 @export_category("Placement and Presentation")
-@export var starting_grid_cell: Vector2i = Vector2i.ZERO
+## Grid cell used by the Unit Paint tool and when the battle starts.
+@export var starting_grid_cell: Vector2i = Vector2i.ZERO:
+	set(value):
+		starting_grid_cell = value
+		if Engine.is_editor_hint() and is_inside_tree():
+			set_notify_transform(true)
+			if not _editor_syncing_transform:
+				call_deferred("_sync_editor_placement")
 @export_range(20.0, 1000.0, 10.0) var movement_animation_speed: float = 260.0
 
 var current_health: int = 0
@@ -72,13 +89,30 @@ var _ability_available := false
 var _equipped_items: Dictionary = {}
 var _active_statuses: Array[ActiveStatus] = []
 var _runtime_stats_initialized := false
+var _editor_syncing_transform := false
+var _editor_transform_sync_pending := false
 
 
 func _ready() -> void:
 	_initialize_runtime_stats()
 	grid_cell = starting_grid_cell
 	current_health = get_max_health()
+	if Engine.is_editor_hint():
+		set_notify_transform(true)
+		call_deferred("_sync_editor_placement")
 	queue_redraw()
+
+
+func _notification(what: int) -> void:
+	if (
+		what == NOTIFICATION_TRANSFORM_CHANGED
+		and Engine.is_editor_hint()
+		and is_inside_tree()
+		and not _editor_syncing_transform
+		and not _editor_transform_sync_pending
+	):
+		_editor_transform_sync_pending = true
+		call_deferred("_capture_editor_placement")
 
 
 func initialize(grid: IsometricGrid) -> void:
@@ -101,8 +135,8 @@ func get_movement_range() -> float:
 
 
 func _get_base_movement_range() -> float:
-	if movement_range_override >= 0.0:
-		return movement_range_override
+	if movement_range >= 0.0:
+		return movement_range
 	return definition.movement_range if definition != null else 0.0
 
 
@@ -450,6 +484,48 @@ func _show_damage_number(amount: int) -> void:
 
 func _update_sorting() -> void:
 	z_index = 100 + grid_cell.x + grid_cell.y
+
+
+func _sync_editor_placement() -> void:
+	if not Engine.is_editor_hint() or not is_inside_tree():
+		return
+	var scene_root := get_tree().edited_scene_root
+	if scene_root == null:
+		return
+	var editor_grid := scene_root.get_node_or_null("Grid") as IsometricGrid
+	if editor_grid == null:
+		return
+	_editor_syncing_transform = true
+	grid_cell = starting_grid_cell
+	global_position = editor_grid.grid_to_global(starting_grid_cell)
+	_update_sorting()
+	_editor_syncing_transform = false
+	queue_redraw()
+
+
+func _capture_editor_placement() -> void:
+	_editor_transform_sync_pending = false
+	if not Engine.is_editor_hint() or not is_inside_tree():
+		return
+	var scene_root := get_tree().edited_scene_root
+	if scene_root == null:
+		return
+	var editor_grid := scene_root.get_node_or_null("Grid") as IsometricGrid
+	if editor_grid == null:
+		return
+	var moved_cell := editor_grid.global_to_grid(global_position)
+	moved_cell = Vector2i(
+		clampi(moved_cell.x, 0, editor_grid.grid_size.x - 1),
+		clampi(moved_cell.y, 0, editor_grid.grid_size.y - 1)
+	)
+	_editor_syncing_transform = true
+	starting_grid_cell = moved_cell
+	grid_cell = moved_cell
+	global_position = editor_grid.grid_to_global(moved_cell)
+	_update_sorting()
+	_editor_syncing_transform = false
+	notify_property_list_changed()
+	queue_redraw()
 
 
 func _draw() -> void:

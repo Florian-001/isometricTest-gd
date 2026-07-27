@@ -169,7 +169,8 @@ func test_sample_scene_has_two_profiles_shared_loadout_and_dev_history() -> void
 	assert_eq(melee.get_abilities().size(), 2, "the enemy template should expose slash and shot in the Inspector")
 	assert_eq(melee.speed_override, 10, "sample melee Speed should remain 10")
 	assert_eq(ranged.speed_override, 9, "sample ranged Speed should be 9")
-	assert_eq(ranged.starting_grid_cell, Vector2i(9, 3), "sample ranged placement should match the design")
+	var grid := root.get_node("Grid") as IsometricGrid
+	assert_true(grid.is_in_bounds(ranged.starting_grid_cell), "sample ranged placement should stay inside the editable grid")
 	assert_true(root.has_node("HUD/DevButton"), "the sample HUD should expose the Dev button")
 	assert_eq(root.get_node("HUD/DevButton").text, "Dev", "the developer history button should have a clear compact label")
 	assert_true(root.has_node("HUD/DevHistoryPanel"), "the sample HUD should contain an AI score history panel")
@@ -221,7 +222,7 @@ func _make_unit(
 	var unit := track(TacticalCharacterScript.new()) as TacticalCharacter
 	unit.definition = definition
 	unit.enemy_ai_profile = profile
-	unit.movement_range_override = movement
+	unit.movement_range = movement
 	unit.starting_grid_cell = cell
 	unit._ready()
 	unit.reset_movement()

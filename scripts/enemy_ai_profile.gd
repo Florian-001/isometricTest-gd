@@ -39,4 +39,3 @@ enum BehaviorStyle {
 @export_range(0.0, 25.0, 0.25, "or_greater") var ranged_too_close_penalty: float = 6.0
 @export_range(0.0, 25.0, 0.25, "or_greater") var ranged_out_of_range_penalty: float = 3.0
 @export_range(0.0, 100.0, 0.5, "or_greater") var ranged_clear_shot_reward: float = 6.0
-

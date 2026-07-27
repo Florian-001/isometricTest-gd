@@ -30,7 +30,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg", "res://addons/wall_painter/plugin.cfg", "res://addons/tile_painter/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg", "res://addons/wall_painter/plugin.cfg", "res://addons/tile_painter/plugin.cfg", "res://addons/unit_painter/plugin.cfg")
 
 [physics]
 

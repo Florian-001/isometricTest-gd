@@ -92,7 +92,7 @@ func test_per_unit_stat_overrides() -> void:
 	var character = track(TacticalCharacterScript.new())
 	character.definition = definition
 	character.max_health_override = 140
-	character.movement_range_override = 7.5
+	character.movement_range = 7.5
 	character.speed_override = 14
 	character._ready()
 
@@ -102,7 +102,7 @@ func test_per_unit_stat_overrides() -> void:
 	assert_eq(character.get_initiative(), 14, "unit Speed override should determine initiative")
 
 	character.max_health_override = 0
-	character.movement_range_override = -1.0
+	character.movement_range = -1.0
 	character.speed_override = -1
 	assert_eq(character.get_max_health(), 100, "zero health override should fall back to the template")
 	assert_true(is_equal_approx(character.get_movement_range(), 5.75), "inherited Speed should modify inherited base movement")
@@ -650,7 +650,7 @@ func _make_unit(friendly: bool, cell: Vector2i, movement: float, speed: int = 10
 	definition.movement_range = movement
 	var character = track(TacticalCharacterScript.new()) as TacticalCharacter
 	character.definition = definition
-	character.movement_range_override = movement - (float(speed) - 10.0) * 0.25
+	character.movement_range = movement - (float(speed) - 10.0) * 0.25
 	character.speed_override = speed
 	character.starting_grid_cell = cell
 	character._ready()

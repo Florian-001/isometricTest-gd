@@ -86,6 +86,7 @@ func can_execute(
 		or caster.current_health <= 0
 		or not caster.ability_available
 		or ability == null
+		or not ability.can_be_used_by(caster)
 		or grid == null
 		or targeting == null
 		or not targeting.is_valid_primary_target(caster, selected_cell, ability, units, wall_cells)

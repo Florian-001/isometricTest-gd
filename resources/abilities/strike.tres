@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1_ability")
 display_name = "Strike"
+ability_type = 0
 effect = 1
 range = 1.414
 delivery_type = 2

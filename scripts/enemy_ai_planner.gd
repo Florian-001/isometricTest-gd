@@ -171,7 +171,7 @@ func _generate_candidates(
 
 		for ability_index in range(abilities.size()):
 			var ability := abilities[ability_index]
-			if ability == null:
+			if ability == null or not ability.can_be_used_by(actor):
 				continue
 			for y in range(snapshot.grid_size.y):
 				for x in range(snapshot.grid_size.x):
@@ -411,7 +411,16 @@ func _forecast_ability(
 			):
 				continue
 			var before := snapshot.get_health(recipient)
-			var estimate := additional_effect.estimate_for_ai(caster, recipient, before)
+			var estimate := (
+				(additional_effect as DamageEffectDefinition).estimate_for_ability(
+					caster,
+					recipient,
+					before,
+					ability
+				)
+				if additional_effect is DamageEffectDefinition
+				else additional_effect.estimate_for_ai(caster, recipient, before)
+			)
 			score += _score_effect_estimate(caster, recipient, estimate, profile, snapshot)
 	return score
 
@@ -677,6 +686,7 @@ func _is_valid_primary_target(
 		or target_cell.x >= snapshot.grid_size.x
 		or target_cell.y >= snapshot.grid_size.y
 		or snapshot.wall_cells.has(target_cell)
+		or not ability.can_be_used_by(caster)
 	):
 		return false
 	if targeting.get_weighted_distance(caster_cell, target_cell) > ability.range + COST_EPSILON:
@@ -756,6 +766,7 @@ func _get_maximum_ranged_range(actor: TacticalCharacter) -> float:
 	for ability in actor.get_abilities():
 		if (
 			ability != null
+			and ability.can_be_used_by(actor)
 			and ability.delivery_type != AbilityDefinition.DeliveryType.MELEE
 			and (
 				ability.has_target_flag(AbilityDefinition.TargetFlags.ENEMY)

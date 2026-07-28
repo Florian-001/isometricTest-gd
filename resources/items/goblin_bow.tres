@@ -11,5 +11,6 @@ value = 1.0
 [resource]
 script = ExtResource("1_item")
 display_name = "Goblin Bow"
+weapon_type = 1
 weapon_damage = 7
 modifiers = Array[ExtResource("2_modifier")]([SubResource("DexterityBonus")])

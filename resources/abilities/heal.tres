@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1_ability")
 display_name = "Heal"
+ability_type = 2
 effect = 2
 effect_amount = 25
 scaling_stat = 3

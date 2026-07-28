@@ -40,7 +40,7 @@ func get_valid_target_cells_from(
 	wall_cells: Dictionary = {}
 ) -> Dictionary:
 	var valid_cells: Dictionary = {}
-	if not _is_living(caster) or ability == null:
+	if not _is_living(caster) or ability == null or not ability.can_be_used_by(caster):
 		return valid_cells
 	for y in range(grid_size.y):
 		for x in range(grid_size.x):
@@ -51,7 +51,11 @@ func get_valid_target_cells_from(
 
 
 func get_cells_in_range(caster: TacticalCharacter, ability: AbilityDefinition) -> Dictionary:
-	return get_cells_in_range_from(caster.grid_cell, ability) if _is_living(caster) else {}
+	return (
+		get_cells_in_range_from(caster.grid_cell, ability)
+		if _is_living(caster) and ability != null and ability.can_be_used_by(caster)
+		else {}
+	)
 
 
 func get_cells_in_range_from(caster_cell: Vector2i, ability: AbilityDefinition) -> Dictionary:
@@ -92,7 +96,12 @@ func is_valid_primary_target_from(
 	units: Array[TacticalCharacter],
 	wall_cells: Dictionary = {}
 ) -> bool:
-	if not _is_living(caster) or ability == null or not _is_in_bounds(selected_cell):
+	if (
+		not _is_living(caster)
+		or ability == null
+		or not ability.can_be_used_by(caster)
+		or not _is_in_bounds(selected_cell)
+	):
 		return false
 	if get_weighted_distance(caster_cell, selected_cell) > ability.range + COST_EPSILON:
 		return false
@@ -194,7 +203,7 @@ func get_affected_units_from(
 	wall_cells: Dictionary = {}
 ) -> Array[TacticalCharacter]:
 	var affected: Array[TacticalCharacter] = []
-	if not _is_living(caster) or ability == null:
+	if not _is_living(caster) or ability == null or not ability.can_be_used_by(caster):
 		return affected
 	var cells := get_affected_cells(caster_cell, selected_cell, ability, wall_cells)
 	for unit in units:

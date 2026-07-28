@@ -291,6 +291,9 @@ func _make_ability_entry(ability: AbilityDefinition) -> PanelContainer:
 
 
 func _get_ability_summary(ability: AbilityDefinition) -> String:
+	var unavailable_reason := ability.get_unavailable_reason(_character)
+	if not unavailable_reason.is_empty():
+		return unavailable_reason
 	if ability.has_damage():
 		return "%d DMG" % ability.calculate_damage(_character)
 	if ability.effect == AbilityDefinition.PrimaryEffect.HEAL:
@@ -383,6 +386,7 @@ func _unequip_slot(slot: ItemDefinition.EquipmentSlot) -> void:
 
 func _make_item_button(item: ItemDefinition, equipped: bool) -> Button:
 	var button := Button.new()
+	button.set_meta("item", item)
 	button.custom_minimum_size = Vector2(0.0, 56.0)
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.text = "%s\n%s" % [item.display_name, _get_item_slot_summary(item)]
@@ -417,20 +421,29 @@ func _get_slot_name(slot: ItemDefinition.EquipmentSlot) -> String:
 
 func _get_item_name_with_damage(item: ItemDefinition) -> String:
 	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
-		return "%s · %d DMG" % [item.display_name, item.weapon_damage]
+		return "%s · %s · %d DMG" % [
+			item.display_name,
+			_get_weapon_type_name(item),
+			item.weapon_damage,
+		]
 	return item.display_name
 
 
 func _get_item_slot_summary(item: ItemDefinition) -> String:
 	var summary := _get_slot_name(item.slot)
 	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
-		summary += " · %d DMG" % item.weapon_damage
+		summary += " · %s · %d DMG" % [_get_weapon_type_name(item), item.weapon_damage]
 	return summary
 
 
 func _get_item_tooltip(item: ItemDefinition, action: String) -> String:
 	var lines: Array[String] = [item.display_name]
 	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
+		lines.append("Weapon type: %s" % _get_weapon_type_name(item))
 		lines.append("Weapon damage: %d" % item.weapon_damage)
 	lines.append("Click to %s" % action)
 	return "\n".join(lines)
+
+
+func _get_weapon_type_name(item: ItemDefinition) -> String:
+	return ItemDefinition.WeaponType.keys()[item.weapon_type].capitalize()

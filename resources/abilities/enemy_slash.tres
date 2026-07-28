@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1_ability")
 display_name = "Enemy Slash"
+ability_type = 0
 effect = 1
 scaling_amount = 200.0
 range = 1.414

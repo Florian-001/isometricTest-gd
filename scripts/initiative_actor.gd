@@ -310,11 +310,35 @@ func get_equipped_items() -> Array[ItemDefinition]:
 	return result
 
 
-func get_weapon_damage() -> int:
+func get_equipped_weapon() -> ItemDefinition:
+	return get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON)
+
+
+func has_equipped_weapon_type(weapon_type: ItemDefinition.WeaponType) -> bool:
+	var weapon := get_equipped_weapon()
+	return weapon != null and weapon.weapon_type == weapon_type
+
+
+func get_equipped_weapon_type() -> int:
+	var weapon := get_equipped_weapon()
+	return int(weapon.weapon_type) if weapon != null else -1
+
+
+func get_weapon_damage(required_weapon_type: int = -1) -> int:
 	var weapon := get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON)
 	if weapon == null:
 		return 0
+	if required_weapon_type >= 0 and weapon.weapon_type != required_weapon_type:
+		return 0
 	return maxi(0, weapon.weapon_damage)
+
+
+func can_use_ability(ability: AbilityDefinition) -> bool:
+	return ability != null and ability.can_be_used_by(self)
+
+
+func get_ability_unavailable_reason(ability: AbilityDefinition) -> String:
+	return ability.get_unavailable_reason(self) if ability != null else "Ability unavailable"
 
 
 func apply_status(

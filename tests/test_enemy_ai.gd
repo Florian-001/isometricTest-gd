@@ -152,12 +152,12 @@ func test_melee_profile_prioritizes_melee_when_adjacent() -> void:
 
 func test_melee_profile_closes_and_uses_ranged_fallback() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
-	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
+	var fallback := _make_damage_ability("Magic Fallback", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 10)
 	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
-	var enemy := _make_unit(false, Vector2i(0, 2), 2.0, [slash, shot], profile)
+	var enemy := _make_unit(false, Vector2i(0, 2), 2.0, [slash, fallback], profile)
 	var target := _make_unit(true, Vector2i(6, 2), 3.0, [])
 	var plan := _choose(enemy, [enemy, target], Vector2i(8, 6))
-	assert_eq(plan.ability, shot, "melee AI should use a ranged ability when melee cannot be reached")
+	assert_eq(plan.ability, fallback, "melee AI should use an available Magic fallback when melee cannot be reached")
 	assert_true(plan.get_end_cell(enemy.grid_cell).x > enemy.grid_cell.x, "the fallback shot should still end closer to the opponent")
 
 
@@ -165,7 +165,7 @@ func test_ranged_profile_shoots_and_retreats_to_standoff() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
 	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
-	var enemy := _make_unit(false, Vector2i(3, 3), 3.0, [slash, shot], profile)
+	var enemy := _make_unit(false, Vector2i(3, 3), 3.0, [slash, shot], profile, ItemDefinition.WeaponType.RANGED)
 	var target := _make_unit(true, Vector2i(5, 3), 3.0, [])
 	var plan := _choose(enemy, [enemy, target], Vector2i(10, 7))
 	assert_eq(plan.ability, shot, "a ranged unit outside melee reach should use its ranged attack")
@@ -217,7 +217,7 @@ func test_counterplay_forecast_chooses_safer_plan_without_mutation() -> void:
 func test_walls_block_ai_ability_targeting() -> void:
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
 	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
-	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile)
+	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile, ItemDefinition.WeaponType.RANGED)
 	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
 	var pathfinder := GridPathfinderScript.new(Vector2i(5, 1)) as GridPathfinder
 	var targeting := AbilityTargetingScript.new(Vector2i(5, 1)) as AbilityTargeting
@@ -225,6 +225,22 @@ func test_walls_block_ai_ability_targeting() -> void:
 	var walls := {Vector2i(2, 0): true}
 	var plan := planner.choose_plan(enemy, _typed_units([enemy, target]), pathfinder, targeting, walls)
 	assert_eq(plan.ability, null, "AI should not select a projectile through a wall")
+
+
+func test_ai_skips_incompatible_abilities_and_resumes_after_weapon_swap() -> void:
+	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
+	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
+	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile)
+	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
+	var melee_plan := _choose(enemy, [enemy, target], Vector2i(5, 2))
+	assert_eq(melee_plan.ability, null, "AI should never plan a Ranged ability while holding a Melee weapon")
+
+	var bow := ItemDefinition.new()
+	bow.weapon_type = ItemDefinition.WeaponType.RANGED
+	bow.weapon_damage = 10
+	enemy.equip_item(bow)
+	var ranged_plan := _choose(enemy, [enemy, target], Vector2i(5, 2))
+	assert_eq(ranged_plan.ability, shot, "AI should resume using the ability after a compatible weapon is equipped")
 
 
 func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> void:
@@ -253,7 +269,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 		"res://resources/enemies/wolf.tres",
 		"Wolf", 85, 7.0, [14, 10, 4, 14],
 		EnemyAIProfile.BehaviorStyle.MELEE,
-		[],
+		["Wolf Claws"],
 		["Strike"]
 	)
 	var mage := _assert_enemy_definition(
@@ -296,6 +312,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	sword_goblin._ready()
 	second_sword_goblin._ready()
 	assert_eq(sword_goblin.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON).display_name, "Goblin Sword", "the base Goblin Warrior should inherit its Sword")
+	assert_eq(sword_goblin.get_equipped_weapon_type(), ItemDefinition.WeaponType.MELEE, "Goblin Sword should be a Melee weapon")
 	assert_eq(sword_goblin.get_weapon_damage(), 8, "Goblin Sword should provide 8 weapon damage")
 	assert_true(is_equal_approx(sword_goblin.get_effective_stat(UnitStat.Type.STRENGTH), 13.0), "Goblin Sword should add one Strength")
 	assert_eq(sword_goblin.get_abilities()[0].calculate_damage(sword_goblin), 34, "Sword Goblin Slash should deal 8 + 200% of Strength 13")
@@ -318,16 +335,22 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	var ranger_unit := track((load("res://scenes/enemies/ranger.tscn") as PackedScene).instantiate()) as TacticalCharacter
 	ranger_unit._ready()
 	assert_eq(ranger_unit.get_weapon_damage(), 10, "Ranger Bow should provide 10 weapon damage")
+	assert_eq(ranger_unit.get_equipped_weapon_type(), ItemDefinition.WeaponType.RANGED, "Ranger Bow should be a Ranged weapon")
 	assert_true(is_equal_approx(ranger_unit.get_effective_stat(UnitStat.Type.DEXTERITY), 16.0), "Ranger Armor should add two Dexterity")
 	assert_eq(ranger_unit.get_abilities()[0].calculate_damage(ranger_unit), 26, "Ranger Shot should use Bow damage and equipped Dexterity")
 	var archer_unit := track((load("res://scenes/enemies/goblin_archer.tscn") as PackedScene).instantiate()) as TacticalCharacter
 	archer_unit._ready()
 	assert_eq(archer_unit.get_weapon_damage(), 7, "Goblin Bow should provide 7 weapon damage")
+	assert_eq(archer_unit.get_equipped_weapon_type(), ItemDefinition.WeaponType.RANGED, "Goblin Bow should be a Ranged weapon")
 	assert_true(is_equal_approx(archer_unit.get_effective_stat(UnitStat.Type.DEXTERITY), 12.0), "Goblin Bow should add one Dexterity")
 	assert_eq(archer_unit.get_abilities()[0].calculate_damage(archer_unit), 19, "Goblin Archer Shot should use Bow damage and equipped Dexterity")
 	var wolf_unit := track((load("res://scenes/enemies/wolf.tscn") as PackedScene).instantiate()) as TacticalCharacter
 	wolf_unit._ready()
-	assert_true(wolf_unit.get_equipped_items().is_empty(), "Wolf should start without equipment")
+	assert_eq(wolf_unit.get_equipped_items().size(), 1, "Wolf should start with its reusable Claws weapon")
+	assert_eq(wolf_unit.get_equipped_weapon().display_name, "Wolf Claws", "Wolf should equip Wolf Claws")
+	assert_eq(wolf_unit.get_equipped_weapon_type(), ItemDefinition.WeaponType.MELEE, "Wolf Claws should be Melee")
+	assert_eq(wolf_unit.get_weapon_damage(), 0, "Wolf Claws should add no innate weapon damage")
+	assert_true(wolf_unit.get_abilities()[0].can_be_used_by(wolf_unit), "Wolf Claws should keep Strike available")
 	assert_eq(wolf_unit.get_abilities()[0].calculate_damage(wolf_unit), 14, "Wolf Strike should scale from Strength without weapon damage")
 	var mage_unit := track((load("res://scenes/enemies/mage.tscn") as PackedScene).instantiate()) as TacticalCharacter
 	mage_unit._ready()
@@ -335,6 +358,8 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_eq(mage_unit.get_abilities()[0].calculate_damage(mage_unit), 37, "Mage Fireball should deal 20 plus effective Intelligence")
 	assert_eq(mage_unit.get_abilities()[1].calculate_damage(mage_unit), 32, "Mage Ice Shard should deal 15 plus effective Intelligence")
 	assert_eq(mage_unit.get_abilities()[2].calculate_primary_effect_amount(mage_unit), 42, "Mage Heal should restore 25 plus effective Intelligence")
+	for ability in mage_unit.get_abilities():
+		assert_true(ability.can_be_used_by(mage_unit), "Mage abilities should remain usable despite the Staff being a Melee weapon")
 
 	var ranger_variant := track(TacticalCharacterScript.new()) as TacticalCharacter
 	ranger_variant.definition = ranger
@@ -351,6 +376,12 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_eq(ranger_variant.get_enemy_ai_profile(), explicit_ai, "an explicit per-instance AI profile should override the bundled profile")
 	var legacy := load("res://resources/enemy_raider.tres") as CharacterDefinition
 	assert_true(legacy != null, "the legacy Enemy Raider resource should remain loadable")
+	var legacy_raider := track(TacticalCharacterScript.new()) as TacticalCharacter
+	legacy_raider.definition = legacy
+	legacy_raider._ready()
+	assert_eq(legacy_raider.get_equipped_weapon_type(), ItemDefinition.WeaponType.MELEE, "Raider Weapon should remain Melee")
+	assert_true(legacy_raider.get_abilities()[0].can_be_used_by(legacy_raider), "Enemy Slash should remain available to the Raider")
+	assert_false(legacy_raider.get_abilities()[1].can_be_used_by(legacy_raider), "Enemy Shot should remain visible but unavailable to the Melee Raider")
 
 
 func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
@@ -436,7 +467,8 @@ func _make_unit(
 	cell: Vector2i,
 	movement: float,
 	abilities_value: Array,
-	profile: EnemyAIProfile = null
+	profile: EnemyAIProfile = null,
+	weapon_type: ItemDefinition.WeaponType = ItemDefinition.WeaponType.MELEE
 ) -> TacticalCharacter:
 	var definition := CharacterDefinitionScript.new() as CharacterDefinition
 	definition.faction = CharacterDefinition.Faction.FRIENDLY if friendly else CharacterDefinition.Faction.ENEMY
@@ -448,6 +480,7 @@ func _make_unit(
 	definition.abilities = abilities
 	if not friendly:
 		var weapon := ItemDefinition.new()
+		weapon.weapon_type = weapon_type
 		weapon.weapon_damage = 10
 		var equipment: Array[ItemDefinition] = [weapon]
 		definition.starting_equipment = equipment

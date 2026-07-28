@@ -14,6 +14,7 @@ ai_utility_hint = 12.0
 [resource]
 script = ExtResource("1_ability")
 display_name = "Focus"
+ability_type = 2
 range = 0.0
 target_flags = 4
 effects = Array[ExtResource("2_effect_base")]([SubResource("ApplyFocus")])

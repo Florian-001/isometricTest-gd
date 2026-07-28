@@ -209,6 +209,8 @@ func test_turn_order_bar_uses_fallback_and_portrait_visuals() -> void:
 
 func test_ability_resources_and_sample_assignment() -> void:
 	var ability = AbilityDefinitionScript.new()
+	assert_eq(ability.ability_type, AbilityDefinition.AbilityType.MAGIC, "new abilities should default to Magic")
+	assert_true(_has_editor_property(ability, &"ability_type"), "Ability Type should always be visible in the Inspector")
 	ability.area_of_effect = 4
 	assert_eq(ability.area_of_effect, 5, "even area sizes should normalize to the next odd span")
 	assert_eq(ability.get_effective_area_span(), 5, "normalized area span should be exposed to targeting")
@@ -272,6 +274,144 @@ func test_ability_resources_and_sample_assignment() -> void:
 		StatusEffectDefinition.ModifierValueType.PERCENTAGE,
 		["affected_stat", "modifier_direction", "modifier_value_type", "percentage_amount", "affected_unit_ai_utility"]
 	)
+
+	var item := ItemDefinition.new()
+	assert_eq(item.weapon_type, ItemDefinition.WeaponType.MELEE, "new weapons should default to Melee")
+	assert_true(_has_editor_property(item, &"weapon_type"), "Weapon Type should be visible for Weapon items")
+	item.slot = ItemDefinition.EquipmentSlot.ARMOR
+	assert_false(_has_editor_property(item, &"weapon_type"), "Weapon Type should be hidden for Armor items")
+	item.slot = ItemDefinition.EquipmentSlot.ACCESSORY
+	assert_false(_has_editor_property(item, &"weapon_type"), "Weapon Type should be hidden for Accessory items")
+
+
+func test_weapon_compatibility_is_independent_from_damage_type_and_delivery() -> void:
+	var caster := _make_unit(true, Vector2i(1, 1), 6.0)
+	caster.reset_ability_action()
+	var target := _make_unit(false, Vector2i(2, 1), 6.0)
+	var units: Array[TacticalCharacter] = [caster, target]
+	var melee := AbilityDefinition.new()
+	melee.display_name = "Arcane Slash"
+	melee.ability_type = AbilityDefinition.AbilityType.MELEE
+	melee.delivery_type = AbilityDefinition.DeliveryType.PROJECTILE
+	melee.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	melee.damage_type = DamageCalculator.Type.MAGICAL
+	melee.innate_damage = 3
+	melee.scaling_stat = UnitStat.Type.NONE
+	melee.range = 2.0
+	var ranged := AbilityDefinition.new()
+	ranged.display_name = "Physical Shot"
+	ranged.ability_type = AbilityDefinition.AbilityType.RANGED
+	ranged.delivery_type = AbilityDefinition.DeliveryType.CAST_ON_TARGET
+	ranged.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	ranged.damage_type = DamageCalculator.Type.PHYSICAL
+	ranged.innate_damage = 4
+	ranged.scaling_stat = UnitStat.Type.NONE
+	ranged.range = 2.0
+	var magic := AbilityDefinition.new()
+	magic.display_name = "Physical Magic"
+	magic.ability_type = AbilityDefinition.AbilityType.MAGIC
+	magic.delivery_type = AbilityDefinition.DeliveryType.MELEE
+	magic.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	magic.damage_type = DamageCalculator.Type.PHYSICAL
+	magic.innate_damage = 5
+	magic.scaling_stat = UnitStat.Type.NONE
+	magic.range = 2.0
+	var ranged_utility := AbilityDefinition.new()
+	ranged_utility.ability_type = AbilityDefinition.AbilityType.RANGED
+
+	assert_false(melee.can_be_used_by(caster), "Melee abilities should require a Melee weapon")
+	assert_false(ranged.can_be_used_by(caster), "Ranged abilities should require a Ranged weapon")
+	assert_true(magic.can_be_used_by(caster), "Magic abilities should work without a weapon")
+	assert_false(ranged_utility.can_be_used_by(caster), "non-damaging Ranged abilities should still require a Ranged weapon")
+	assert_eq(melee.get_unavailable_reason(caster), "Requires a Melee weapon", "Melee should expose a clear unavailable reason")
+	assert_eq(ranged.get_unavailable_reason(caster), "Requires a Ranged weapon", "Ranged should expose a clear unavailable reason")
+
+	var melee_weapon := ItemDefinition.new()
+	melee_weapon.display_name = "Test Blade"
+	melee_weapon.weapon_type = ItemDefinition.WeaponType.MELEE
+	melee_weapon.weapon_damage = 11
+	caster.equip_item(melee_weapon)
+	assert_true(melee.can_be_used_by(caster), "a matching Melee weapon should enable a Melee ability")
+	assert_false(ranged.can_be_used_by(caster), "a Melee weapon should not enable a Ranged ability")
+	assert_eq(melee.calculate_damage(caster), 14, "Melee ability damage should include a matching weapon even when Damage Type is Magical")
+	assert_eq(ranged.calculate_damage(caster), 4, "a mismatched weapon should contribute zero damage")
+	assert_eq(magic.calculate_damage(caster), 5, "Magic abilities should ignore weapons even when Damage Type is Physical")
+
+	var targeting := AbilityTargetingScript.new(Vector2i(5, 5)) as AbilityTargeting
+	var grid := track(IsometricGridScript.new()) as IsometricGrid
+	grid.grid_size = Vector2i(5, 5)
+	var executor := track(AbilityExecutorScript.new()) as AbilityExecutor
+	assert_false(targeting.is_valid_primary_target(caster, target.grid_cell, ranged, units), "targeting should reject an incompatible ability")
+	assert_false(executor.can_execute(caster, ranged, target.grid_cell, units, grid, targeting), "execution should reject an incompatible ability")
+	assert_true(caster.ability_available, "rejecting an incompatible ability should not spend the action")
+
+	var ranged_weapon := ItemDefinition.new()
+	ranged_weapon.display_name = "Test Bow"
+	ranged_weapon.weapon_type = ItemDefinition.WeaponType.RANGED
+	ranged_weapon.weapon_damage = 7
+	caster.equip_item(ranged_weapon)
+	assert_false(melee.can_be_used_by(caster), "a Ranged weapon should disable Melee abilities")
+	assert_true(ranged.can_be_used_by(caster), "a matching Ranged weapon should enable Ranged abilities")
+	assert_true(ranged_utility.can_be_used_by(caster), "a matching weapon should enable non-damaging Ranged abilities")
+	assert_eq(ranged.calculate_damage(caster), 11, "Ranged ability damage should include only a matching Ranged weapon")
+	assert_eq(magic.calculate_damage(caster), 5, "Magic ability damage should remain unchanged after a weapon swap")
+
+	var legacy_damage := DamageEffectScript.new() as DamageEffectDefinition
+	legacy_damage.damage_type = DamageEffectDefinition.DamageType.PHYSICAL
+	legacy_damage.innate_damage = 2
+	legacy_damage.scaling_stat = UnitStat.Type.NONE
+	var magic_legacy := AbilityDefinition.new()
+	magic_legacy.ability_type = AbilityDefinition.AbilityType.MAGIC
+	var legacy_effects: Array[AbilityEffectDefinition] = [legacy_damage]
+	magic_legacy.effects = legacy_effects
+	assert_eq(magic_legacy.calculate_damage(caster), 2, "ability-owned legacy damage should inherit the originating Magic type")
+	assert_eq(legacy_damage.calculate_amount(caster), 9, "standalone legacy Physical damage should preserve its original weapon behavior")
+
+
+func test_sample_weapon_and_ability_type_migration() -> void:
+	var ability_paths := {
+		AbilityDefinition.AbilityType.MELEE: [
+			"res://resources/abilities/strike.tres",
+			"res://resources/abilities/enemy_slash.tres",
+		],
+		AbilityDefinition.AbilityType.RANGED: [
+			"res://resources/abilities/arrow.tres",
+			"res://resources/abilities/enemy_shot.tres",
+		],
+		AbilityDefinition.AbilityType.MAGIC: [
+			"res://resources/abilities/fireball.tres",
+			"res://resources/abilities/beam.tres",
+			"res://resources/abilities/ice_shard.tres",
+			"res://resources/abilities/heal.tres",
+			"res://resources/abilities/slow.tres",
+			"res://resources/abilities/focus.tres",
+		],
+	}
+	for expected_type in ability_paths:
+		for path in ability_paths[expected_type]:
+			var ability := load(path) as AbilityDefinition
+			assert_eq(ability.ability_type, expected_type, "%s should use its migrated Ability Type" % ability.display_name)
+
+	var weapon_paths := {
+		ItemDefinition.WeaponType.MELEE: [
+			"res://resources/items/iron_sword.tres",
+			"res://resources/items/wooden_sword.tres",
+			"res://resources/items/goblin_sword.tres",
+			"res://resources/items/goblin_club.tres",
+			"res://resources/items/mage_staff.tres",
+			"res://resources/items/raider_weapon.tres",
+			"res://resources/items/wolf_claws.tres",
+		],
+		ItemDefinition.WeaponType.RANGED: [
+			"res://resources/items/ranger_bow.tres",
+			"res://resources/items/goblin_bow.tres",
+		],
+	}
+	for expected_type in weapon_paths:
+		for path in weapon_paths[expected_type]:
+			var weapon := load(path) as ItemDefinition
+			assert_eq(weapon.slot, ItemDefinition.EquipmentSlot.WEAPON, "%s should remain a Weapon-slot item" % weapon.display_name)
+			assert_eq(weapon.weapon_type, expected_type, "%s should use its migrated Weapon Type" % weapon.display_name)
 
 
 func test_unit_ability_loadout_override() -> void:
@@ -455,6 +595,9 @@ func test_melee_delivery_values_targeting_and_corner_walls() -> void:
 	assert_eq(strike.innate_damage, 0, "Strike should have zero innate damage")
 
 	var caster := _make_unit(true, Vector2i(2, 2), 6.0)
+	var melee_weapon := ItemDefinition.new()
+	melee_weapon.weapon_type = ItemDefinition.WeaponType.MELEE
+	caster.equip_item(melee_weapon)
 	var orthogonal_enemy := _make_unit(false, Vector2i(3, 2), 6.0)
 	var diagonal_enemy := _make_unit(false, Vector2i(3, 3), 6.0)
 	var distant_enemy := _make_unit(false, Vector2i(4, 2), 6.0)
@@ -476,6 +619,9 @@ func test_melee_delivery_values_targeting_and_corner_walls() -> void:
 
 func test_melee_preflight_rejects_invalid_attacks_without_spending_action() -> void:
 	var caster := _make_unit(true, Vector2i(2, 2), 6.0)
+	var melee_weapon := ItemDefinition.new()
+	melee_weapon.weapon_type = ItemDefinition.WeaponType.MELEE
+	caster.equip_item(melee_weapon)
 	var enemy := _make_unit(false, Vector2i(3, 3), 6.0)
 	var units: Array[TacticalCharacter] = [caster, enemy]
 	var grid = track(IsometricGridScript.new()) as IsometricGrid
@@ -675,11 +821,23 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	var entries: HBoxContainer = bar.get_node("Margin/HBox")
 	assert_eq(entries.get_child_count(), 6, "the ability bar should create one button per configured ability")
 	assert_true(entries.get_child(0).text.contains("32 DMG"), "damage buttons should show their caster-scaled total damage")
-	assert_true(entries.get_child(1).text.contains("27 DMG"), "Dexterity-scaled damage should show on its button")
+	assert_true(entries.get_child(1).text.contains("Requires a Ranged weapon"), "the Ability Bar summary should show the incompatible weapon reason")
+	assert_true(entries.get_child(1).disabled, "Arrow should remain visible but disabled with a Melee weapon")
+	assert_true(entries.get_child(1).tooltip_text.contains("7 physical damage"), "the disabled tooltip should retain the type-aware damage preview")
+	assert_true(entries.get_child(1).tooltip_text.contains("Requires a Ranged weapon"), "disabled abilities should explain their weapon requirement")
 	assert_false(entries.get_child(2).text.contains("DMG"), "non-damaging ability buttons should remain uncluttered")
 	assert_true(entries.get_child(5).text.contains("27 DMG"), "Ice Shard should show its Intelligence-scaled damage")
 	assert_true(entries.get_child(5).tooltip_text.contains("Slow"), "Ice Shard's tooltip should include its direct status")
 	assert_false(entries.get_child(0).disabled, "ability buttons should be enabled while the action is available")
+	assert_false(entries.get_child(4).disabled, "Strike should be enabled by the starting Melee sword")
+
+	var ranger_bow := load("res://resources/items/ranger_bow.tres") as ItemDefinition
+	unit.equip_item(ranger_bow)
+	bar.rebuild(unit, true)
+	assert_true(entries.get_child(1).text.contains("17 DMG"), "Arrow should include Ranger Bow damage after a compatible swap")
+	assert_false(entries.get_child(1).disabled, "a Ranged weapon should enable Arrow")
+	assert_true(entries.get_child(4).disabled, "a Ranged weapon should disable Strike")
+	assert_true(entries.get_child(4).tooltip_text.contains("Requires a Melee weapon"), "Strike should explain its Melee requirement")
 	unit.spend_ability_action()
 	bar.rebuild(unit, true)
 	assert_true(entries.get_child(0).disabled, "ability buttons should disable after the action is spent")
@@ -877,6 +1035,13 @@ func _assert_status_effect_fields(
 				StatusEffectDefinition.Effect.keys()[selected_effect],
 			]
 		)
+
+
+func _has_editor_property(object: Object, property_name: StringName) -> bool:
+	for property_info in object.get_property_list():
+		if StringName(property_info.name) == property_name:
+			return bool(property_info.usage & PROPERTY_USAGE_EDITOR)
+	return false
 
 
 func _make_unit(friendly: bool, cell: Vector2i, movement: float, speed: int = 10) -> TacticalCharacter:

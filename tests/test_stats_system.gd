@@ -181,6 +181,7 @@ func test_central_physical_magical_damage_scaling_descriptions_and_ai_forecasts(
 	caster.equip_item(weapon)
 
 	var physical := AbilityDefinition.new()
+	physical.ability_type = AbilityDefinition.AbilityType.MELEE
 	physical.effect = AbilityDefinition.PrimaryEffect.DAMAGE
 	physical.innate_damage = 5
 	physical.scaling_stat = UnitStat.Type.STRENGTH
@@ -363,7 +364,7 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 		UnitStat.Type.STRENGTH,
 		UnitStat.Type.INTELLIGENCE,
 	]
-	var expected_amounts := [32, 27, 37, 22, 32, 27]
+	var expected_amounts := [32, 7, 37, 22, 32, 27]
 	for index in range(unit.get_abilities().size()):
 		var ability := unit.get_abilities()[index]
 		if index == 2:
@@ -378,6 +379,25 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	assert_eq(unit.get_abilities()[3].damage_type, DamageCalculator.Type.MAGICAL, "Beam should be magical")
 	assert_eq(unit.get_abilities()[4].damage_type, DamageCalculator.Type.PHYSICAL, "Strike should be physical")
 	assert_eq(unit.get_abilities()[5].damage_type, DamageCalculator.Type.MAGICAL, "Ice Shard should be magical")
+	var expected_ability_types := [
+		AbilityDefinition.AbilityType.MAGIC,
+		AbilityDefinition.AbilityType.RANGED,
+		AbilityDefinition.AbilityType.MAGIC,
+		AbilityDefinition.AbilityType.MAGIC,
+		AbilityDefinition.AbilityType.MELEE,
+		AbilityDefinition.AbilityType.MAGIC,
+	]
+	for index in range(expected_ability_types.size()):
+		assert_eq(unit.get_abilities()[index].ability_type, expected_ability_types[index], "sample ability type should match its migrated role")
+	assert_false(unit.get_abilities()[1].can_be_used_by(unit), "Arrow should be unavailable with the starting Melee sword")
+	assert_true(unit.get_abilities()[4].can_be_used_by(unit), "Strike should be available with the starting Melee sword")
+	var ranger_bow := load("res://resources/items/ranger_bow.tres") as ItemDefinition
+	unit.equip_item(ranger_bow)
+	assert_eq(unit.get_abilities()[1].calculate_damage(unit), 17, "Arrow should deal Ranger Bow 10 plus 60% of Dexterity 12")
+	assert_true(unit.get_abilities()[1].can_be_used_by(unit), "Arrow should become available with a Ranged weapon")
+	assert_eq(unit.get_abilities()[4].calculate_damage(unit), 10, "Strike preview should omit mismatched weapon damage and lost Sword Strength")
+	assert_false(unit.get_abilities()[4].can_be_used_by(unit), "Strike should become unavailable with a Ranged weapon")
+	assert_eq(unit.get_abilities()[0].calculate_damage(unit), 32, "Magic damage should remain unchanged across weapon types")
 	assert_eq(unit.get_abilities()[5].status_effect.status_id, &"slow", "Ice Shard should apply Slow")
 	var status_icon_paths: Array[String] = []
 	var unique_status_icon_paths: Dictionary = {}

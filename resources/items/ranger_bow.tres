@@ -5,4 +5,5 @@
 [resource]
 script = ExtResource("1_item")
 display_name = "Ranger Bow"
+weapon_type = 1
 weapon_damage = 10

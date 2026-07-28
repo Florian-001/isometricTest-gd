@@ -11,4 +11,5 @@ value = 2.0
 [resource]
 script = ExtResource("1_item")
 display_name = "Mage Staff"
+weapon_type = 0
 modifiers = Array[ExtResource("2_modifier")]([SubResource("IntelligenceBonus")])

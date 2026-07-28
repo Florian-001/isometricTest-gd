@@ -23,7 +23,11 @@ func rebuild(unit: TacticalCharacter, interaction_enabled: bool) -> void:
 		if ability == null:
 			continue
 		var button := _create_button(ability, unit)
-		button.disabled = not interaction_enabled or not unit.ability_available
+		button.disabled = (
+			not interaction_enabled
+			or not unit.ability_available
+			or not ability.can_be_used_by(unit)
+		)
 		entries.add_child(button)
 	set_selected(_selected_ability)
 
@@ -42,18 +46,23 @@ func _create_button(ability: AbilityDefinition, caster: TacticalCharacter) -> Bu
 	button.toggle_mode = true
 	var has_damage := ability.has_damage()
 	var damage_text := "%d DMG" % ability.calculate_damage(caster)
+	var unavailable_reason := ability.get_unavailable_reason(caster)
+	var summary_text := damage_text if has_damage else ""
+	if not unavailable_reason.is_empty():
+		summary_text = unavailable_reason
 	if ability.image == null:
 		button.text = (
-			"%s\n%s" % [ability.display_name, damage_text]
-			if has_damage
+			"%s\n%s" % [ability.display_name, summary_text]
+			if not summary_text.is_empty()
 			else ability.display_name
 		)
 	else:
-		button.text = damage_text if has_damage else ""
+		button.text = summary_text
 	button.icon = ability.image
 	button.expand_icon = true
 	button.tooltip_text = "%s\n%s" % [ability.display_name, ability.get_description(caster)]
 	button.set_meta("ability", ability)
+	button.set_meta("unavailable_reason", unavailable_reason)
 	button.pressed.connect(_on_ability_pressed.bind(ability))
 
 	var normal_style := StyleBoxFlat.new()

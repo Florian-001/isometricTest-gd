@@ -31,8 +31,17 @@ enum PrimaryEffect {
 	STATUS,
 }
 
+enum AbilityType {
+	MELEE,
+	RANGED,
+	MAGIC,
+}
+
 @export_category("Ability")
 @export var display_name: String = "New Ability"
+## Controls weapon requirements and weapon-damage contribution. Delivery and Damage Type
+## remain independent presentation and damage-classification settings.
+@export var ability_type: AbilityType = AbilityType.MAGIC
 ## Optional icon used by the ability bar and projectile. A colored fallback is generated when empty.
 @export var image: Texture2D
 
@@ -43,7 +52,7 @@ enum PrimaryEffect {
 		effect = value
 		if Engine.is_editor_hint():
 			notify_property_list_changed()
-## Physical damage includes equipped weapon damage. Magical damage ignores the weapon.
+## Classification used by defenses and status systems. Weapon use is controlled by Ability Type.
 @export var damage_type: DamageCalculator.Type = DamageCalculator.Type.PHYSICAL
 ## Innate damage contributes to both Physical and Magical damage.
 @export_range(0, 9999, 1, "or_greater") var innate_damage: int = 0
@@ -111,6 +120,40 @@ func has_target_flag(flag: TargetFlags) -> bool:
 	return (target_flags & int(flag)) != 0
 
 
+func get_required_weapon_type() -> int:
+	match ability_type:
+		AbilityType.MELEE:
+			return ItemDefinition.WeaponType.MELEE
+		AbilityType.RANGED:
+			return ItemDefinition.WeaponType.RANGED
+		_:
+			return DamageCalculator.NO_WEAPON_REQUIRED
+
+
+func can_be_used_by(caster: TacticalCharacter) -> bool:
+	if not is_instance_valid(caster) or caster.current_health <= 0:
+		return false
+	var required_weapon_type := get_required_weapon_type()
+	return (
+		required_weapon_type == DamageCalculator.NO_WEAPON_REQUIRED
+		or caster.has_equipped_weapon_type(required_weapon_type)
+	)
+
+
+func get_unavailable_reason(caster: TacticalCharacter) -> String:
+	if can_be_used_by(caster):
+		return ""
+	if ability_type == AbilityType.MELEE:
+		return "Requires a Melee weapon"
+	if ability_type == AbilityType.RANGED:
+		return "Requires a Ranged weapon"
+	return "Caster unavailable"
+
+
+func get_ability_type_name() -> String:
+	return AbilityType.keys()[ability_type].capitalize()
+
+
 func has_damage() -> bool:
 	if effect == PrimaryEffect.DAMAGE:
 		return true
@@ -126,7 +169,9 @@ func calculate_damage(caster: TacticalCharacter) -> int:
 	var total := 0
 	for additional_effect in effects:
 		if additional_effect is DamageEffectDefinition:
-			total += (additional_effect as DamageEffectDefinition).calculate_amount(caster)
+			total += (
+				additional_effect as DamageEffectDefinition
+			).calculate_amount(caster, self)
 	return total
 
 
@@ -139,7 +184,8 @@ func calculate_primary_effect_amount(caster: TacticalCharacter) -> int:
 				damage_type,
 				innate_damage,
 				scaling_stat,
-				scaling_amount
+				scaling_amount,
+				get_required_weapon_type()
 			)
 		PrimaryEffect.HEAL:
 			var total := float(maxi(0, effect_amount))
@@ -226,7 +272,15 @@ func get_description(caster: TacticalCharacter = null) -> String:
 		effect_descriptions.append(get_primary_effect_description(caster))
 	for additional_effect in effects:
 		if should_apply_additional_effect(additional_effect):
-			effect_descriptions.append(additional_effect.get_description(caster))
+			if additional_effect is DamageEffectDefinition:
+				effect_descriptions.append(
+					(additional_effect as DamageEffectDefinition).get_description_for_ability(
+						caster,
+						self
+					)
+				)
+			else:
+				effect_descriptions.append(additional_effect.get_description(caster))
 	var delivery := "Cast"
 	match delivery_type:
 		DeliveryType.PROJECTILE:
@@ -236,7 +290,17 @@ func get_description(caster: TacticalCharacter = null) -> String:
 	var description := ", ".join(effect_descriptions)
 	if description.is_empty():
 		description = "No effect"
-	return "%s | Range %.2f | %s" % [delivery, range, description]
+	var result := "%s ability | %s | Range %.2f | %s" % [
+		get_ability_type_name(),
+		delivery,
+		range,
+		description,
+	]
+	if is_instance_valid(caster):
+		var unavailable_reason := get_unavailable_reason(caster)
+		if not unavailable_reason.is_empty():
+			result += " | Unavailable: %s" % unavailable_reason
+	return result
 
 
 func get_primary_effect_description(caster: TacticalCharacter = null) -> String:
@@ -259,7 +323,7 @@ func _get_damage_description(caster: TacticalCharacter) -> String:
 	var parts: Array[String] = []
 	if innate_damage > 0:
 		parts.append("%d innate" % innate_damage)
-	if damage_type == DamageCalculator.Type.PHYSICAL:
+	if ability_type in [AbilityType.MELEE, AbilityType.RANGED]:
 		parts.append("weapon damage")
 	if scaling_stat != UnitStat.Type.NONE and scaling_amount > 0.0:
 		parts.append("%s x%d%%" % [UnitStat.get_display_name(scaling_stat), roundi(scaling_amount)])

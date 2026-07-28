@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1_ability")
 display_name = "Beam"
+ability_type = 2
 effect = 1
 damage_type = 1
 innate_damage = 10

@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1_ability")
 display_name = "Arrow"
+ability_type = 1
 effect = 1
 scaling_stat = 2
 scaling_amount = 60.0

@@ -58,7 +58,6 @@ func _ready() -> void:
 	ability_bar.ability_selected.connect(_on_ability_selected)
 	inventory_button.toggled.connect(_on_inventory_button_toggled)
 	inventory_screen.closed.connect(_on_inventory_screen_closed)
-	inventory_screen.equipment_updated.connect(_on_inventory_equipment_updated)
 	dev_button.pressed.connect(_on_dev_button_pressed)
 	terrain.terrain_changed.connect(_on_terrain_changed)
 
@@ -75,6 +74,9 @@ func _ready() -> void:
 			)
 			character.cell_entered.connect(_on_character_cell_entered)
 			character.defeated.connect(_on_character_defeated)
+			character.equipment_changed.connect(
+				_on_character_equipment_changed.bind(character)
+			)
 	inventory_screen.setup(general_inventory, _get_living_friendlies())
 	_initialize_walls()
 	terrain.initialize(grid, _get_wall_cells())
@@ -239,6 +241,7 @@ func _on_ability_selected(ability: AbilityDefinition) -> void:
 		or not is_instance_valid(caster)
 		or not caster.ability_available
 		or ability == null
+		or not ability.can_be_used_by(caster)
 		or not caster.get_abilities().has(ability)
 	):
 		return
@@ -544,11 +547,25 @@ func _on_inventory_screen_closed() -> void:
 
 
 func _on_inventory_equipment_updated(character: TacticalCharacter) -> void:
+	if (
+		character == _selected_character
+		and _selected_ability != null
+		and not _selected_ability.can_be_used_by(character)
+	):
+		_cancel_ability_targeting()
 	if character == turn_manager.current_unit:
 		_refresh_ability_bar()
 		_update_turn_hud()
 	if character == _selected_character and not _movement_locked:
 		_refresh_reachable_cells()
+
+
+func _on_character_equipment_changed(
+	_slot: ItemDefinition.EquipmentSlot,
+	_item: ItemDefinition,
+	character: TacticalCharacter
+) -> void:
+	_on_inventory_equipment_updated(character)
 
 
 func _refresh_ai_debug_history() -> void:

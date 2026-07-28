@@ -24,10 +24,39 @@ enum Shape {
 	LINE_FROM_CASTER,
 }
 
+enum PrimaryEffect {
+	NONE,
+	DAMAGE,
+	HEAL,
+	STATUS,
+}
+
 @export_category("Ability")
 @export var display_name: String = "New Ability"
 ## Optional icon used by the ability bar and projectile. A colored fallback is generated when empty.
 @export var image: Texture2D
+
+@export_category("Primary Effect")
+## Main result of the ability. Matching entries in Additional Effects are skipped to avoid duplicates.
+@export var effect: PrimaryEffect = PrimaryEffect.NONE:
+	set(value):
+		effect = value
+		if Engine.is_editor_hint():
+			notify_property_list_changed()
+## Physical damage includes equipped weapon damage. Magical damage ignores the weapon.
+@export var damage_type: DamageCalculator.Type = DamageCalculator.Type.PHYSICAL
+## Innate damage contributes to both Physical and Magical damage.
+@export_range(0, 9999, 1, "or_greater") var innate_damage: int = 0
+## Base healing for Heal.
+@export_range(0, 9999, 1, "or_greater") var effect_amount: int = 0
+## Effective stat used by Damage and Heal, including equipment and status buffs.
+@export var scaling_stat: UnitStat.Type = UnitStat.Type.STRENGTH
+## Percentage of the effective scaling stat added to Damage or Heal.
+@export_range(0.0, 10000.0, 5.0, "or_greater", "suffix:%") var scaling_amount: float = 100.0
+
+@export_category("Applied Status")
+## Optional reusable status applied after the primary effect if the target survives.
+@export var status_effect: StatusEffectDefinition
 
 @export_category("Targeting")
 ## Maximum weighted grid distance. Orthogonal steps cost 1 and diagonal steps cost 1.414.
@@ -43,9 +72,10 @@ enum Shape {
 @export_flags("Friend:1", "Enemy:2", "Self:4", "Cell:8") var target_flags: int = TargetFlags.ENEMY
 @export var shape: Shape = Shape.SQUARE
 
-@export_category("Effects")
+@export_category("Additional Effects")
 ## Resize the list, then choose New DamageEffectDefinition, New HealEffectDefinition,
-## or another AbilityEffectDefinition subclass. Effects execute from top to bottom.
+## or another AbilityEffectDefinition subclass. The primary effect executes first. An equivalent
+## nested effect is skipped while its matching primary effect is selected.
 @export var effects: Array[AbilityEffectDefinition] = []
 
 @export_group("Placeholder Presentation")
@@ -64,19 +94,185 @@ func get_effective_area_span() -> int:
 	return 1 if area_of_effect <= 1 else area_of_effect
 
 
+func _validate_property(property: Dictionary) -> void:
+	var property_name: StringName = property.name
+	var should_hide := false
+	if property_name in [&"damage_type", &"innate_damage"]:
+		should_hide = effect != PrimaryEffect.DAMAGE
+	elif property_name == &"effect_amount":
+		should_hide = effect != PrimaryEffect.HEAL
+	elif property_name in [&"scaling_stat", &"scaling_amount"]:
+		should_hide = effect not in [PrimaryEffect.DAMAGE, PrimaryEffect.HEAL]
+	if should_hide:
+		property.usage = property.usage & ~PROPERTY_USAGE_EDITOR
+
+
 func has_target_flag(flag: TargetFlags) -> bool:
 	return (target_flags & int(flag)) != 0
 
 
+func has_damage() -> bool:
+	if effect == PrimaryEffect.DAMAGE:
+		return true
+	for additional_effect in effects:
+		if additional_effect is DamageEffectDefinition:
+			return true
+	return false
+
+
+func calculate_damage(caster: TacticalCharacter) -> int:
+	if effect == PrimaryEffect.DAMAGE:
+		return calculate_primary_effect_amount(caster)
+	var total := 0
+	for additional_effect in effects:
+		if additional_effect is DamageEffectDefinition:
+			total += (additional_effect as DamageEffectDefinition).calculate_amount(caster)
+	return total
+
+
+## Returns the configured primary Damage or Heal amount. Status and None have no numeric result.
+func calculate_primary_effect_amount(caster: TacticalCharacter) -> int:
+	match effect:
+		PrimaryEffect.DAMAGE:
+			return DamageCalculator.calculate_amount(
+				caster,
+				damage_type,
+				innate_damage,
+				scaling_stat,
+				scaling_amount
+			)
+		PrimaryEffect.HEAL:
+			var total := float(maxi(0, effect_amount))
+			if is_instance_valid(caster) and scaling_stat != UnitStat.Type.NONE:
+				total += (
+					caster.get_effective_stat(scaling_stat)
+					* maxf(0.0, scaling_amount)
+					/ 100.0
+				)
+			return maxi(0, roundi(total))
+		_:
+			return 0
+
+
+func has_primary_effect() -> bool:
+	return effect != PrimaryEffect.NONE or status_effect != null
+
+
+## Applies the primary effect through the same calculation used by previews and AI forecasts.
+func apply_primary_effect(caster: TacticalCharacter, target: TacticalCharacter) -> void:
+	if not is_instance_valid(target) or target.current_health <= 0:
+		return
+	match effect:
+		PrimaryEffect.DAMAGE:
+			target.apply_damage(calculate_primary_effect_amount(caster))
+		PrimaryEffect.HEAL:
+			target.heal(calculate_primary_effect_amount(caster))
+	if status_effect != null and target.current_health > 0:
+		target.apply_status(status_effect, self, caster)
+
+
+## Side-effect-free primary-effect prediction shared by every tactical AI path.
+func estimate_primary_effect_for_ai(
+	caster: TacticalCharacter,
+	target: TacticalCharacter,
+	simulated_health: int
+) -> Dictionary:
+	var maximum := target.get_max_health() if is_instance_valid(target) else maxi(0, simulated_health)
+	var health := clampi(simulated_health, 0, maximum)
+	var utility := 0.0
+	match effect:
+		PrimaryEffect.DAMAGE:
+			health = maxi(0, health - calculate_primary_effect_amount(caster))
+		PrimaryEffect.HEAL:
+			health = mini(maximum, health + calculate_primary_effect_amount(caster))
+	if status_effect != null and health > 0:
+		var status_estimate := status_effect.estimate_for_ai(caster, target, health)
+		health = clampi(
+			health + int(status_estimate.get("health_delta", 0)),
+			0,
+			maximum
+		)
+		utility += float(status_estimate.get("utility_hint", 0.0))
+	return {
+		"health_delta": health - simulated_health,
+		"utility_hint": utility,
+	}
+
+
+## Returns false for a nested effect already represented by the selected primary effect.
+func should_apply_additional_effect(additional_effect: AbilityEffectDefinition) -> bool:
+	if additional_effect == null:
+		return false
+	if status_effect != null and additional_effect is ApplyStatusEffectDefinition:
+		var applied_status := (
+			additional_effect as ApplyStatusEffectDefinition
+		).status_effect
+		if (
+			applied_status != null
+			and applied_status.status_id == status_effect.status_id
+		):
+			return false
+	match effect:
+		PrimaryEffect.DAMAGE:
+			return not additional_effect is DamageEffectDefinition
+		PrimaryEffect.HEAL:
+			return not additional_effect is HealEffectDefinition
+	return true
+
+
 func get_description(caster: TacticalCharacter = null) -> String:
 	var effect_descriptions: Array[String] = []
-	for effect in effects:
-		if effect != null:
-			effect_descriptions.append(effect.get_description(caster))
+	if has_primary_effect():
+		effect_descriptions.append(get_primary_effect_description(caster))
+	for additional_effect in effects:
+		if should_apply_additional_effect(additional_effect):
+			effect_descriptions.append(additional_effect.get_description(caster))
 	var delivery := "Cast"
 	match delivery_type:
 		DeliveryType.PROJECTILE:
 			delivery = "Projectile"
 		DeliveryType.MELEE:
 			delivery = "Melee"
-	return "%s | Range %.2f | %s" % [delivery, range, ", ".join(effect_descriptions)]
+	var description := ", ".join(effect_descriptions)
+	if description.is_empty():
+		description = "No effect"
+	return "%s | Range %.2f | %s" % [delivery, range, description]
+
+
+func get_primary_effect_description(caster: TacticalCharacter = null) -> String:
+	var descriptions: Array[String] = []
+	match effect:
+		PrimaryEffect.DAMAGE:
+			descriptions.append(_get_damage_description(caster))
+		PrimaryEffect.HEAL:
+			descriptions.append(_get_heal_description(caster))
+	if status_effect != null:
+		descriptions.append(status_effect.get_description())
+	elif effect == PrimaryEffect.STATUS:
+		descriptions.append("No status configured")
+	return ", ".join(descriptions)
+
+
+func _get_damage_description(caster: TacticalCharacter) -> String:
+	var type_name := "physical" if damage_type == DamageCalculator.Type.PHYSICAL else "magical"
+	var total_prefix := "%d %s damage" % [calculate_damage(caster), type_name] if is_instance_valid(caster) else "%s damage" % type_name.capitalize()
+	var parts: Array[String] = []
+	if innate_damage > 0:
+		parts.append("%d innate" % innate_damage)
+	if damage_type == DamageCalculator.Type.PHYSICAL:
+		parts.append("weapon damage")
+	if scaling_stat != UnitStat.Type.NONE and scaling_amount > 0.0:
+		parts.append("%s x%d%%" % [UnitStat.get_display_name(scaling_stat), roundi(scaling_amount)])
+	return "%s (%s)" % [total_prefix, " + ".join(parts) if not parts.is_empty() else "0"]
+
+
+func _get_heal_description(caster: TacticalCharacter) -> String:
+	var total_prefix := (
+		"%d healing" % calculate_primary_effect_amount(caster)
+		if is_instance_valid(caster)
+		else "Healing"
+	)
+	var parts: Array[String] = ["%d base" % maxi(0, effect_amount)]
+	if scaling_stat != UnitStat.Type.NONE and scaling_amount > 0.0:
+		parts.append("%s x%d%%" % [UnitStat.get_display_name(scaling_stat), roundi(scaling_amount)])
+	return "%s (%s)" % [total_prefix, " + ".join(parts)]

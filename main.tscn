@@ -17,17 +17,18 @@
 [ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="15_palette"]
 [ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="16_mud"]
 [ext_resource type="Resource" uid="uid://bvb1c027wvf5u" path="res://resources/tiles/fire.tres" id="17_fire"]
-[ext_resource type="Script" path="res://scripts/general_inventory.gd" id="18_inventory"]
+[ext_resource type="Script" uid="uid://cjm17vhbiv2sb" path="res://scripts/general_inventory.gd" id="18_inventory"]
 [ext_resource type="PackedScene" path="res://scenes/inventory_screen.tscn" id="19_inventory_screen"]
-[ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="20_sword"]
-[ext_resource type="Resource" path="res://resources/items/ranger_armor.tres" id="21_armor"]
-[ext_resource type="Resource" path="res://resources/items/sage_charm.tres" id="22_charm"]
+[ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/iron_sword.tres" id="20_sword"]
+[ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/ranger_armor.tres" id="21_armor"]
+[ext_resource type="Resource" uid="uid://pghwydiamt0o" path="res://resources/items/sage_charm.tres" id="22_charm"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="23_item_type"]
+[ext_resource type="Resource" uid="uid://bj3yc0xg083b1" path="res://resources/tiles/ice.tres" id="24_ice"]
 
 [node name="Main" type="Node2D" unique_id=750848398]
 script = ExtResource("1_controller")
 
-[node name="GeneralInventory" type="Node" parent="."]
+[node name="GeneralInventory" type="Node" parent="." unique_id=178721775]
 script = ExtResource("18_inventory")
 starting_items = Array[ExtResource("23_item_type")]([ExtResource("20_sword"), ExtResource("21_armor"), ExtResource("22_charm")])
 
@@ -59,6 +60,16 @@ script = ExtResource("14_tile")
 definition = ExtResource("17_fire")
 grid_cell = Vector2i(7, 4)
 
+[node name="Ice_8_4" type="Node" parent="Terrain" unique_id=1800400001]
+script = ExtResource("14_tile")
+definition = ExtResource("24_ice")
+grid_cell = Vector2i(8, 4)
+
+[node name="Ice_9_4" type="Node" parent="Terrain" unique_id=1800400002]
+script = ExtResource("14_tile")
+definition = ExtResource("24_ice")
+grid_cell = Vector2i(9, 4)
+
 [node name="Walls" type="Node2D" parent="." unique_id=1102300341]
 
 [node name="Wall_5_4" type="Node2D" parent="Walls" unique_id=413103437]
@@ -85,22 +96,22 @@ wall_height = 20.0
 [node name="Characters" type="Node2D" parent="." unique_id=557259408]
 
 [node name="FriendA" type="Node2D" parent="Characters" unique_id=1740941279]
-z_index = 109
+z_index = 107
 script = ExtResource("3_character")
 definition = ExtResource("5_friendly")
 max_health_override = 100
 movement_range_override = 6.0
 speed_override = 12
-starting_grid_cell = Vector2i(1, 8)
+starting_grid_cell = Vector2i(5, 2)
 
 [node name="FriendB" type="Node2D" parent="Characters" unique_id=2129219972]
-z_index = 111
+z_index = 106
 script = ExtResource("3_character")
 definition = ExtResource("5_friendly")
 max_health_override = 100
 movement_range_override = 5.0
 speed_override = 8
-starting_grid_cell = Vector2i(0, 11)
+starting_grid_cell = Vector2i(2, 4)
 
 [node name="MeleeEnemy" type="Node2D" parent="Characters" unique_id=921107907]
 z_index = 111
@@ -218,7 +229,7 @@ tooltip_text = "Show AI decision score history"
 theme_override_font_sizes/font_size = 15
 text = "Dev"
 
-[node name="InventoryButton" type="Button" parent="HUD"]
+[node name="InventoryButton" type="Button" parent="HUD" unique_id=394779416]
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -228,8 +239,8 @@ offset_right = 226.0
 offset_bottom = -16.0
 grow_vertical = 0
 tooltip_text = "Open the general inventory and character equipment"
-toggle_mode = true
 theme_override_font_sizes/font_size = 15
+toggle_mode = true
 text = "Inventory"
 
 [node name="DevHistoryPanel" type="PanelContainer" parent="HUD" unique_id=2004355906]
@@ -287,7 +298,7 @@ theme_override_font_sizes/font_size = 12
 text = "No AI decisions recorded yet."
 autowrap_mode = 2
 
-[node name="InventoryScreen" parent="HUD" instance=ExtResource("19_inventory_screen")]
+[node name="InventoryScreen" parent="HUD" unique_id=807028159 instance=ExtResource("19_inventory_screen")]
 
 [node name="HelpText" type="Label" parent="HUD" unique_id=68517187]
 offset_left = 28.0

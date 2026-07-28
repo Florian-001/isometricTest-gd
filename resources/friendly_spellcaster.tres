@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=11 format=3 uid="uid://clbeyhlog2wbi"]
+[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=12 format=3 uid="uid://clbeyhlog2wbi"]
 
 [ext_resource type="Script" uid="uid://bb43sfxia744r" path="res://scripts/unit_definition.gd" id="1_definition"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
@@ -11,6 +11,7 @@
 [ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="9_sword"]
 [ext_resource type="Resource" path="res://resources/items/ranger_armor.tres" id="10_armor"]
 [ext_resource type="Resource" path="res://resources/items/sage_charm.tres" id="11_charm"]
+[ext_resource type="Resource" uid="uid://fbimwcq8pc21" path="res://resources/abilities/ice_shard.tres" id="12_ice_shard"]
 
 [resource]
 script = ExtResource("1_definition")
@@ -18,4 +19,4 @@ display_name = "Friendly Adventurer"
 body_color = Color(0.16, 0.53, 1, 1)
 health_bar_color = Color(0.2, 0.92, 0.42, 1)
 starting_equipment = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("10_armor"), ExtResource("11_charm")])
-abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_fireball"), ExtResource("4_arrow"), ExtResource("5_heal"), ExtResource("6_beam"), ExtResource("7_strike")])
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_fireball"), ExtResource("4_arrow"), ExtResource("5_heal"), ExtResource("6_beam"), ExtResource("7_strike"), ExtResource("12_ice_shard")])

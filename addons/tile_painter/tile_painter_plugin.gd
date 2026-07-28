@@ -2,6 +2,7 @@
 extends EditorPlugin
 
 const TileScript = preload("res://scripts/tactical_tile.gd")
+const TileStatusInspector = preload("res://addons/tile_painter/tile_status_inspector.gd")
 
 var _paint_button: Button
 var _palette_picker: OptionButton
@@ -11,9 +12,14 @@ var _stroke_cells: Dictionary = {}
 var _hover_cell := Vector2i(-1, -1)
 var _hover_valid := false
 var _palette_tiles: Array[TileDefinition] = []
+var _tile_status_inspector: EditorInspectorPlugin
 
 
 func _enter_tree() -> void:
+	_tile_status_inspector = TileStatusInspector.new()
+	_tile_status_inspector.setup(get_editor_interface().get_resource_filesystem())
+	add_inspector_plugin(_tile_status_inspector)
+
 	_palette_picker = OptionButton.new()
 	_palette_picker.tooltip_text = "Terrain template used by Tile Paint"
 	add_control_to_container(CONTAINER_CANVAS_EDITOR_MENU, _palette_picker)
@@ -28,6 +34,9 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	if _tile_status_inspector != null:
+		remove_inspector_plugin(_tile_status_inspector)
+		_tile_status_inspector = null
 	if is_instance_valid(_palette_picker):
 		remove_control_from_container(CONTAINER_CANVAS_EDITOR_MENU, _palette_picker)
 		_palette_picker.queue_free()

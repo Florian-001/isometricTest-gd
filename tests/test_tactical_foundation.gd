@@ -214,13 +214,64 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_eq(ability.get_effective_area_span(), 5, "normalized area span should be exposed to targeting")
 
 	var friendly_definition = load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
-	assert_eq(friendly_definition.abilities.size(), 5, "the friendly template should expose five sample abilities")
+	assert_eq(friendly_definition.abilities.size(), 6, "the friendly template should expose six sample abilities")
 	var names: Array[String] = []
 	for sample in friendly_definition.abilities:
 		names.append(sample.display_name)
-	assert_eq(names, ["Fireball", "Arrow", "Heal", "Beam", "Strike"], "sample abilities should retain their configured order")
-	assert_eq(friendly_definition.abilities[0].effects[0].amount, 30, "Fireball damage should be editable through its effect resource")
-	assert_eq(friendly_definition.abilities[4].effects[0].amount, 30, "Strike damage should be editable through its effect resource")
+	assert_eq(names, ["Fireball", "Arrow", "Heal", "Beam", "Strike", "Ice Shard"], "Ice Shard should be the final sample ability")
+	assert_eq(friendly_definition.abilities[0].innate_damage, 20, "Fireball innate damage should be editable directly on the ability")
+	assert_eq(friendly_definition.abilities[4].innate_damage, 0, "Strike should expose zero innate damage directly on the ability")
+	var ice_shard := friendly_definition.abilities[5] as AbilityDefinition
+	assert_eq(ice_shard.delivery_type, AbilityDefinition.DeliveryType.PROJECTILE, "Ice Shard should use projectile delivery")
+	assert_eq(ice_shard.damage_type, DamageCalculator.Type.MAGICAL, "Ice Shard should deal magical damage")
+	assert_eq(ice_shard.innate_damage, 15, "Ice Shard should expose 15 innate damage")
+	assert_eq(ice_shard.scaling_stat, UnitStat.Type.INTELLIGENCE, "Ice Shard should scale with Intelligence")
+	assert_true(is_equal_approx(ice_shard.scaling_amount, 100.0), "Ice Shard should use 100% scaling")
+	assert_true(is_equal_approx(ice_shard.range, 5.0), "Ice Shard should have range 5")
+	assert_eq(ice_shard.area_of_effect, 0, "Ice Shard should affect one cell")
+	assert_eq(ice_shard.target_flags, AbilityDefinition.TargetFlags.ENEMY, "Ice Shard should target one enemy")
+	assert_eq(ice_shard.status_effect.status_id, &"slow", "Ice Shard should expose Slow directly")
+	_assert_primary_effect_fields(
+		ability,
+		AbilityDefinition.PrimaryEffect.NONE,
+		["status_effect"]
+	)
+	_assert_primary_effect_fields(
+		ability,
+		AbilityDefinition.PrimaryEffect.DAMAGE,
+		["damage_type", "innate_damage", "scaling_stat", "scaling_amount", "status_effect"]
+	)
+	_assert_primary_effect_fields(
+		ability,
+		AbilityDefinition.PrimaryEffect.HEAL,
+		["effect_amount", "scaling_stat", "scaling_amount", "status_effect"]
+	)
+	_assert_primary_effect_fields(
+		ability,
+		AbilityDefinition.PrimaryEffect.STATUS,
+		["status_effect"]
+	)
+
+	var status := StatusEffectDefinition.new()
+	_assert_status_effect_fields(status, StatusEffectDefinition.Effect.NONE, null, [])
+	_assert_status_effect_fields(
+		status,
+		StatusEffectDefinition.Effect.DAMAGE_EACH_TURN,
+		null,
+		["damage_type", "damage_per_turn"]
+	)
+	_assert_status_effect_fields(
+		status,
+		StatusEffectDefinition.Effect.STAT_MODIFIER,
+		StatusEffectDefinition.ModifierValueType.FLAT,
+		["affected_stat", "modifier_direction", "modifier_value_type", "flat_amount", "affected_unit_ai_utility"]
+	)
+	_assert_status_effect_fields(
+		status,
+		StatusEffectDefinition.Effect.STAT_MODIFIER,
+		StatusEffectDefinition.ModifierValueType.PERCENTAGE,
+		["affected_stat", "modifier_direction", "modifier_value_type", "percentage_amount", "affected_unit_ai_utility"]
+	)
 
 
 func test_unit_ability_loadout_override() -> void:
@@ -399,7 +450,9 @@ func test_melee_delivery_values_targeting_and_corner_walls() -> void:
 	assert_eq(strike.delivery_type, AbilityDefinition.DeliveryType.MELEE, "Strike should use melee delivery")
 	assert_true(is_equal_approx(strike.range, 1.414), "Strike should reach all adjacent cells")
 	assert_true(strike.has_target_flag(AbilityDefinition.TargetFlags.ENEMY), "Strike should retain enemy targeting")
-	assert_eq(strike.effects[0].amount, 30, "Strike should deal its editable 30 damage")
+	assert_eq(strike.effect, AbilityDefinition.PrimaryEffect.DAMAGE, "Strike should use the primary Damage effect")
+	assert_eq(strike.damage_type, DamageCalculator.Type.PHYSICAL, "Strike should deal physical damage")
+	assert_eq(strike.innate_damage, 0, "Strike should have zero innate damage")
 
 	var caster := _make_unit(true, Vector2i(2, 2), 6.0)
 	var orthogonal_enemy := _make_unit(false, Vector2i(3, 2), 6.0)
@@ -465,7 +518,9 @@ func test_damage_heal_effects_and_no_revive() -> void:
 	var target := _make_unit(false, Vector2i.ONE, 6.0)
 	var damage = DamageEffectScript.new()
 	var healing = HealEffectScript.new()
-	damage.amount = 30
+	damage.damage_type = DamageEffectDefinition.DamageType.MAGICAL
+	damage.innate_damage = 30
+	damage.scaling_stat = UnitStat.Type.NONE
 	healing.amount = 10
 	damage.apply(caster, target)
 	healing.apply(caster, target)
@@ -473,6 +528,118 @@ func test_damage_heal_effects_and_no_revive() -> void:
 	target.apply_damage(1000)
 	healing.apply(caster, target)
 	assert_eq(target.current_health, 0, "ability healing should not revive defeated units")
+
+
+func test_top_level_damage_executes_once_and_legacy_damage_remains_compatible() -> void:
+	var caster := _make_unit(true, Vector2i.ZERO, 6.0)
+	var target := _make_unit(false, Vector2i.ONE, 6.0)
+	var ability := AbilityDefinitionScript.new() as AbilityDefinition
+	ability.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	ability.damage_type = DamageCalculator.Type.MAGICAL
+	ability.innate_damage = 10
+	ability.scaling_stat = UnitStat.Type.NONE
+	var legacy_damage := DamageEffectScript.new() as DamageEffectDefinition
+	legacy_damage.damage_type = DamageEffectDefinition.DamageType.MAGICAL
+	legacy_damage.innate_damage = 90
+	legacy_damage.scaling_stat = UnitStat.Type.NONE
+	var effects: Array[AbilityEffectDefinition] = [legacy_damage]
+	ability.effects = effects
+	var targeting := AbilityTargetingScript.new(Vector2i(4, 4))
+	var executor := track(AbilityExecutorScript.new()) as AbilityExecutor
+	var units: Array[TacticalCharacter] = [caster, target]
+	executor._apply_effects(caster, target.grid_cell, ability, units, targeting, {})
+	assert_eq(target.current_health, 90, "top-level damage should execute once and skip a nested legacy damage effect")
+
+	target.current_health = 100
+	ability.effect = AbilityDefinition.PrimaryEffect.NONE
+	executor._apply_effects(caster, target.grid_cell, ability, units, targeting, {})
+	assert_eq(target.current_health, 10, "legacy nested damage should still execute when top-level damage is disabled")
+
+
+func test_ice_shard_damage_status_refresh_and_lethal_ordering() -> void:
+	var caster := _make_unit(true, Vector2i.ZERO, 6.0)
+	caster.intelligence_override = 12
+	var target := _make_unit(false, Vector2i.ONE, 6.0)
+	var ice_shard := load("res://resources/abilities/ice_shard.tres") as AbilityDefinition
+	var targeting := AbilityTargetingScript.new(Vector2i(4, 4))
+	var executor := track(AbilityExecutorScript.new()) as AbilityExecutor
+	var units: Array[TacticalCharacter] = [caster, target]
+	assert_eq(ice_shard.calculate_damage(caster), 27, "Ice Shard should deal 15 + 100% of Intelligence 12")
+	executor._apply_effects(caster, target.grid_cell, ice_shard, units, targeting, {})
+	assert_eq(target.current_health, 73, "Ice Shard execution should use its centralized 27 damage")
+	assert_eq(target.get_active_statuses().size(), 1, "a surviving Ice Shard target should receive Slow")
+	assert_eq(target.get_active_statuses()[0].source, ice_shard, "Ice Shard should be recorded as the status source")
+	assert_eq(target.get_active_statuses()[0].source_unit, caster, "the Ice Shard caster should be recorded as the source unit")
+	assert_true(is_equal_approx(target.get_movement_range(), 4.2), "Ice Shard's Slow should reduce movement to 4.2")
+	target.get_active_statuses()[0].remaining_turns = 1
+	executor._apply_effects(caster, target.grid_cell, ice_shard, units, targeting, {})
+	assert_eq(target.get_active_statuses().size(), 1, "repeated Ice Shards should refresh rather than stack Slow")
+	assert_eq(target.get_active_statuses()[0].remaining_turns, 2, "repeated Ice Shards should refresh Slow's full duration")
+
+	var lethal_target := _make_unit(false, Vector2i(2, 1), 6.0)
+	lethal_target.current_health = 27
+	var lethal_units: Array[TacticalCharacter] = [caster, lethal_target]
+	executor._apply_effects(caster, lethal_target.grid_cell, ice_shard, lethal_units, targeting, {})
+	assert_eq(lethal_target.current_health, 0, "Ice Shard should defeat a target at 27 health")
+	assert_true(lethal_target.get_active_statuses().is_empty(), "a target defeated by damage should not receive Slow")
+
+
+func test_primary_heal_and_direct_slow_skip_only_matching_legacy_effects() -> void:
+	var caster := _make_unit(true, Vector2i.ZERO, 6.0)
+	var target := _make_unit(false, Vector2i.ONE, 6.0)
+	var targeting := AbilityTargetingScript.new(Vector2i(4, 4))
+	var executor := track(AbilityExecutorScript.new()) as AbilityExecutor
+	var units: Array[TacticalCharacter] = [caster, target]
+
+	var heal_ability := AbilityDefinitionScript.new() as AbilityDefinition
+	heal_ability.effect = AbilityDefinition.PrimaryEffect.HEAL
+	heal_ability.effect_amount = 10
+	heal_ability.scaling_stat = UnitStat.Type.NONE
+	var legacy_heal := HealEffectScript.new() as HealEffectDefinition
+	legacy_heal.amount = 90
+	var heal_effects: Array[AbilityEffectDefinition] = [legacy_heal]
+	heal_ability.effects = heal_effects
+	target.current_health = 50
+	executor._apply_effects(caster, target.grid_cell, heal_ability, units, targeting, {})
+	assert_eq(target.current_health, 60, "primary Heal should execute once and skip a nested legacy Heal")
+	target.current_health = 50
+	heal_ability.effect = AbilityDefinition.PrimaryEffect.NONE
+	executor._apply_effects(caster, target.grid_cell, heal_ability, units, targeting, {})
+	assert_eq(target.current_health, 100, "legacy nested Heal should remain active when the primary effect is None")
+
+	var legacy_slow_status := StatusEffectDefinition.new()
+	legacy_slow_status.status_id = &"slow"
+	legacy_slow_status.display_name = "Legacy Slow"
+	legacy_slow_status.duration_turns = 9
+	var legacy_penalty := StatModifierDefinition.new()
+	legacy_penalty.stat = UnitStat.Type.SPEED
+	legacy_penalty.value = -9.0
+	var legacy_modifiers: Array[StatModifierDefinition] = [legacy_penalty]
+	legacy_slow_status.modifiers = legacy_modifiers
+	var legacy_slow := ApplyStatusEffectDefinition.new()
+	legacy_slow.status_effect = legacy_slow_status
+	var slow_ability := AbilityDefinitionScript.new() as AbilityDefinition
+	slow_ability.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	slow_ability.damage_type = DamageCalculator.Type.MAGICAL
+	slow_ability.innate_damage = 1
+	slow_ability.scaling_stat = UnitStat.Type.NONE
+	slow_ability.status_effect = load("res://resources/statuses/slow.tres") as StatusEffectDefinition
+	var unrelated_heal := HealEffectScript.new() as HealEffectDefinition
+	unrelated_heal.amount = 1
+	var slow_effects: Array[AbilityEffectDefinition] = [legacy_slow, unrelated_heal]
+	slow_ability.effects = slow_effects
+	executor._apply_effects(caster, target.grid_cell, slow_ability, units, targeting, {})
+	assert_eq(target.current_health, 100, "an unrelated additional Heal should execute after damage and direct Slow")
+	assert_eq(target.get_active_statuses().size(), 1, "direct Slow should create one stable status alongside damage")
+	assert_eq(target.get_active_statuses()[0].remaining_turns, 2, "matching nested Slow should not replace the direct duration")
+	assert_true(is_equal_approx(target.get_movement_range(), 4.2), "matching nested Slow should not replace the direct Movement Range penalty")
+	assert_eq(target.get_initiative(), 10, "direct Slow should leave initiative unchanged")
+	target.remove_status(&"slow")
+	slow_ability.effect = AbilityDefinition.PrimaryEffect.NONE
+	slow_ability.status_effect = null
+	executor._apply_effects(caster, target.grid_cell, slow_ability, units, targeting, {})
+	assert_eq(target.get_active_statuses()[0].remaining_turns, 9, "legacy nested Slow should remain active under None")
+	assert_eq(target.get_initiative(), 1, "legacy nested Slow should preserve its own Speed penalty")
 
 
 func test_ability_action_resets_only_on_active_turn() -> void:
@@ -506,10 +673,12 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	var bar = track(AbilityBarScene.instantiate())
 	bar.rebuild(unit, true)
 	var entries: HBoxContainer = bar.get_node("Margin/HBox")
-	assert_eq(entries.get_child_count(), 5, "the ability bar should create one button per configured ability")
+	assert_eq(entries.get_child_count(), 6, "the ability bar should create one button per configured ability")
 	assert_true(entries.get_child(0).text.contains("32 DMG"), "damage buttons should show their caster-scaled total damage")
 	assert_true(entries.get_child(1).text.contains("27 DMG"), "Dexterity-scaled damage should show on its button")
 	assert_false(entries.get_child(2).text.contains("DMG"), "non-damaging ability buttons should remain uncluttered")
+	assert_true(entries.get_child(5).text.contains("27 DMG"), "Ice Shard should show its Intelligence-scaled damage")
+	assert_true(entries.get_child(5).tooltip_text.contains("Slow"), "Ice Shard's tooltip should include its direct status")
 	assert_false(entries.get_child(0).disabled, "ability buttons should be enabled while the action is available")
 	unit.spend_ability_action()
 	bar.rebuild(unit, true)
@@ -641,6 +810,73 @@ func test_sample_scene_contains_editable_wall_barrier() -> void:
 		assert_true(child is TacticalWall, "sample wall children should use the reusable TacticalWall type")
 		cells.append((child as TacticalWall).grid_cell)
 	assert_eq(cells, [Vector2i(5, 4), Vector2i(5, 5), Vector2i(5, 6)], "the sample should include the planned three-cell barrier")
+
+
+func _assert_primary_effect_fields(
+	ability: AbilityDefinition,
+	selected_effect: AbilityDefinition.PrimaryEffect,
+	expected_visible: Array
+) -> void:
+	ability.effect = selected_effect
+	var configurable_fields := [
+		&"damage_type",
+		&"innate_damage",
+		&"effect_amount",
+		&"scaling_stat",
+		&"scaling_amount",
+		&"status_effect",
+	]
+	var visible_fields: Dictionary = {}
+	for property_info in ability.get_property_list():
+		var property_name: StringName = property_info.name
+		if property_name in configurable_fields and bool(property_info.usage & PROPERTY_USAGE_EDITOR):
+			visible_fields[property_name] = true
+	for property_name in configurable_fields:
+		assert_eq(
+			visible_fields.has(property_name),
+			String(property_name) in expected_visible,
+			"%s visibility should match primary effect %s" % [
+				property_name,
+				AbilityDefinition.PrimaryEffect.keys()[selected_effect],
+			]
+		)
+
+
+func _assert_status_effect_fields(
+	status: StatusEffectDefinition,
+	selected_effect: StatusEffectDefinition.Effect,
+	selected_value_type,
+	expected_visible: Array
+) -> void:
+	status.effect = selected_effect
+	if selected_value_type != null:
+		status.modifier_value_type = selected_value_type
+	var configurable_fields := [
+		&"damage_type",
+		&"damage_per_turn",
+		&"affected_stat",
+		&"modifier_direction",
+		&"modifier_value_type",
+		&"flat_amount",
+		&"percentage_amount",
+		&"affected_unit_ai_utility",
+	]
+	var visible_fields: Dictionary = {}
+	for property_info in status.get_property_list():
+		var property_name: StringName = property_info.name
+		if bool(property_info.usage & PROPERTY_USAGE_EDITOR):
+			visible_fields[property_name] = true
+	for always_visible in [&"status_id", &"display_name", &"duration_turns", &"icon", &"color", &"modifiers"]:
+		assert_true(visible_fields.has(always_visible), "%s should always remain visible in the Status Inspector" % always_visible)
+	for property_name in configurable_fields:
+		assert_eq(
+			visible_fields.has(property_name),
+			String(property_name) in expected_visible,
+			"%s visibility should match status effect %s" % [
+				property_name,
+				StatusEffectDefinition.Effect.keys()[selected_effect],
+			]
+		)
 
 
 func _make_unit(friendly: bool, cell: Vector2i, movement: float, speed: int = 10) -> TacticalCharacter:

@@ -23,8 +23,10 @@ func _run() -> void:
 	_check(screen.visible, "the Inventory button should open the inventory screen")
 	_check(screen.general_entries.get_child_count() == 3, "the screen should list every unused item")
 	_check(equipment_entries.get_child_count() == 3, "the character inventory should show all equipment slots")
+	_check((screen.general_entries.get_child(0) as Button).text.contains("20 DMG"), "unused weapons should show their damage")
 
 	var weapon_button := equipment_entries.get_child(0) as Button
+	_check(weapon_button.text.contains("20 DMG"), "equipped weapons should show their damage")
 	weapon_button.pressed.emit()
 	_check(friend_a.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON) == null, "clicking equipped gear should unequip it")
 	_check(inventory.get_items().size() == 4, "unequipped gear should return to the general inventory")

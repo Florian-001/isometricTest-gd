@@ -2,6 +2,8 @@ class_name TurnManager
 extends Node
 
 signal turn_started(unit: TacticalCharacter)
+## Emitted before status ticks and action resets so terrain can apply turn-start statuses first.
+signal turn_starting(unit: TacticalCharacter)
 signal turn_ended(unit: TacticalCharacter)
 signal turn_order_changed(order: Array[TacticalCharacter])
 signal round_started(round_number: int)
@@ -101,9 +103,19 @@ func notify_unit_state_changed() -> void:
 func _start_current_turn() -> void:
 	if not _is_living(current_unit):
 		return
+	turn_starting.emit(current_unit)
+	current_unit.process_status_turn_start()
+	if not _is_living(current_unit):
+		call_deferred("_advance_defeated_current_unit", current_unit)
+		return
 	current_unit.reset_movement()
 	current_unit.reset_ability_action()
 	turn_started.emit(current_unit)
+
+
+func _advance_defeated_current_unit(unit: TacticalCharacter) -> void:
+	if current_unit == unit and not _is_living(unit):
+		end_current_turn()
 
 
 func _is_living(unit: TacticalCharacter) -> bool:

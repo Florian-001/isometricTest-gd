@@ -22,6 +22,9 @@ func _run() -> void:
 	battlefield.add_child(target)
 	caster.initialize(grid)
 	target.initialize(grid)
+	var weapon := ItemDefinition.new()
+	weapon.weapon_damage = 20
+	caster.equip_item(weapon)
 	caster.reset_movement()
 	caster.reset_ability_action()
 
@@ -92,7 +95,8 @@ func _run() -> void:
 	)
 	_check(slow_succeeded, "Slow should execute through the normal ability pipeline")
 	_check(target.get_active_statuses().size() == 1, "Slow should add one active status")
-	_check(target.get_initiative() == 6, "Slow should reduce effective Speed")
+	_check(is_equal_approx(target.get_movement_range(), 4.2), "Slow should reduce Movement Range by 30%")
+	_check(target.get_initiative() == 10, "Slow should leave initiative unchanged")
 
 	battlefield.queue_free()
 	if _failures.is_empty():

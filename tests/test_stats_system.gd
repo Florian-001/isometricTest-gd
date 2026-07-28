@@ -87,7 +87,20 @@ func test_status_refresh_stacking_expiration_removal_and_dead_rejection() -> voi
 
 	assert_true(unit.apply_status(focus, unit), "a living unit should accept a configured status")
 	assert_eq(unit.get_active_statuses().size(), 1, "first application should create one runtime status")
+	assert_eq(unit.get_active_statuses()[0].source, unit, "direct status application should retain its source object")
+	assert_eq(unit.get_active_statuses()[0].source_unit, unit, "a unit source should be inferred as the source unit")
+	var one_icon := unit._get_status_icon_entries()
+	assert_eq(one_icon.size(), 1, "one active status should create one health-bar icon entry")
+	assert_true(
+		(one_icon[0].rect as Rect2).end.y < -57.0,
+		"status icons should sit above the health bar"
+	)
+	assert_true(
+		is_zero_approx((one_icon[0].rect as Rect2).get_center().x),
+		"a single status icon should be centered over the unit"
+	)
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.STRENGTH), 12.0), "Focus should modify effective Strength")
+	unit.process_status_turn_start()
 	unit.advance_status_durations()
 	assert_eq(unit.get_active_statuses()[0].remaining_turns, 1, "the owner turn end should decrement duration")
 	assert_true(unit.apply_status(focus, unit), "reapplying Focus should succeed")
@@ -96,12 +109,24 @@ func test_status_refresh_stacking_expiration_removal_and_dead_rejection() -> voi
 
 	assert_true(unit.apply_status(blessing, unit), "a different status id should stack")
 	assert_eq(unit.get_active_statuses().size(), 2, "different status ids should coexist")
+	var two_icons := unit._get_status_icon_entries()
+	assert_eq(two_icons.size(), 2, "different active statuses should each receive an icon entry")
+	assert_true(
+		is_zero_approx(
+			(two_icons[0].rect as Rect2).get_center().x
+			+ (two_icons[1].rect as Rect2).get_center().x
+		),
+		"multiple status icons should remain centered as a row"
+	)
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.STRENGTH), 15.0), "different statuses should combine")
 	assert_true(unit.remove_status(&"blessing"), "explicit status removal should report success")
 	assert_false(unit.remove_status(&"missing"), "removing an absent status should report failure")
+	unit.process_status_turn_start()
 	unit.advance_status_durations()
+	unit.process_status_turn_start()
 	unit.advance_status_durations()
 	assert_true(unit.get_active_statuses().is_empty(), "Focus should expire after two owner turn endings")
+	assert_true(unit._get_status_icon_entries().is_empty(), "expired statuses should disappear from the icon row")
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.STRENGTH), 10.0), "expiration should restore the base stat")
 	assert_true(status_events[0] >= 6, "application, refresh, duration changes, removal, and expiry should notify observers")
 
@@ -109,40 +134,131 @@ func test_status_refresh_stacking_expiration_removal_and_dead_rejection() -> voi
 	assert_false(unit.apply_status(focus, unit), "defeated units should reject new statuses")
 
 
-func test_neutral_ten_scaling_damage_healing_descriptions_and_ai_forecasts() -> void:
+func test_central_physical_magical_damage_scaling_descriptions_and_ai_forecasts() -> void:
 	var caster := _make_unit(CharacterDefinitionScript.new())
 	var target := _make_unit(CharacterDefinitionScript.new())
-	var damage := DamageEffectScript.new() as DamageEffectDefinition
-	damage.amount = 30
+	var strength_buff := _make_modifier(
+		UnitStat.Type.STRENGTH,
+		StatModifierDefinition.Operation.FLAT,
+		2.0
+	)
+	var weapon := ItemDefinitionScript.new() as ItemDefinition
+	weapon.weapon_damage = 10
+	var weapon_modifiers: Array[StatModifierDefinition] = [strength_buff]
+	weapon.modifiers = weapon_modifiers
+	caster.strength_override = 14
+	caster.equip_item(weapon)
+
+	var physical := AbilityDefinition.new()
+	physical.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	physical.innate_damage = 5
+	physical.scaling_stat = UnitStat.Type.STRENGTH
+	physical.scaling_amount = 150.0
+	assert_eq(physical.calculate_damage(caster), 39, "physical damage should be innate 5 + weapon 10 + 150% of buffed Strength 16")
+	assert_true(physical.get_description(caster).contains("39 physical damage"), "the tooltip should show centralized physical damage")
+	assert_true(physical.get_description(caster).contains("Strength x150%"), "the tooltip should show the configured scaling")
+
+	var damage := AbilityDefinition.new()
+	damage.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	damage.damage_type = DamageCalculator.Type.MAGICAL
+	damage.innate_damage = 30
 	damage.scaling_stat = UnitStat.Type.INTELLIGENCE
-	damage.scaling_ratio = 1.0
-
+	damage.scaling_amount = 150.0
 	caster.intelligence_override = 14
-	assert_eq(damage.calculate_amount(caster), 34, "four Intelligence above neutral should add four damage")
-	assert_true(damage.get_description(caster).contains("34 damage"), "the caster tooltip should show calculated damage")
-	assert_true(damage.get_description(caster).contains("Intelligence"), "the tooltip should name its scaling stat")
-	var estimate := damage.estimate_for_ai(caster, target, 20)
+	assert_eq(damage.calculate_damage(caster), 51, "magical damage should be innate 30 + 150% of Intelligence 14")
+	assert_true(damage.get_description(caster).contains("51 magical damage"), "the caster tooltip should show centralized magical damage")
+	assert_true(damage.get_description(caster).contains("Intelligence x150%"), "the tooltip should name magical scaling")
+	var legacy_damage := DamageEffectScript.new() as DamageEffectDefinition
+	legacy_damage.damage_type = DamageEffectDefinition.DamageType.MAGICAL
+	legacy_damage.innate_damage = 30
+	legacy_damage.scaling_stat = UnitStat.Type.INTELLIGENCE
+	legacy_damage.scaling_percentage = 150.0
+	assert_eq(legacy_damage.calculate_amount(caster), damage.calculate_damage(caster), "legacy effects and direct abilities should share one calculator")
+	var estimate := legacy_damage.estimate_for_ai(caster, target, 20)
 	assert_eq(estimate["health_delta"], -20, "AI forecast should use scaled damage and clamp overkill")
-	damage.apply(caster, target)
-	assert_eq(target.current_health, 66, "applied damage should use the same scaled amount as forecasting")
+	legacy_damage.apply(caster, target)
+	assert_eq(target.current_health, 49, "applied damage should use the same centralized amount as forecasting")
 
-	caster.intelligence_override = 6
-	assert_eq(damage.calculate_amount(caster), 26, "four Intelligence below neutral should subtract four damage")
-	caster.intelligence_override = 0
-	damage.amount = 5
-	damage.scaling_ratio = 2.0
-	assert_eq(damage.calculate_amount(caster), 0, "large negative scaling must clamp damage to zero")
-
-	var healing := HealEffectScript.new() as HealEffectDefinition
-	healing.amount = 25
+	var healing := AbilityDefinition.new()
+	healing.effect = AbilityDefinition.PrimaryEffect.HEAL
+	healing.effect_amount = 25
 	healing.scaling_stat = UnitStat.Type.INTELLIGENCE
-	healing.scaling_ratio = 1.0
+	healing.scaling_amount = 150.0
 	caster.intelligence_override = 14
 	target.current_health = 50
-	var heal_estimate := healing.estimate_for_ai(caster, target, target.current_health)
-	assert_eq(heal_estimate["health_delta"], 29, "AI forecast should include Intelligence-scaled healing")
-	healing.apply(caster, target)
-	assert_eq(target.current_health, 79, "applied healing should match the forecast")
+	assert_eq(healing.calculate_primary_effect_amount(caster), 46, "healing should be base 25 + 150% of effective Intelligence 14")
+	assert_true(healing.get_description(caster).contains("46 healing"), "the tooltip should use the centralized healing amount")
+	assert_true(healing.get_description(caster).contains("Intelligence x150%"), "the tooltip should show healing scaling")
+	var heal_estimate := healing.estimate_primary_effect_for_ai(caster, target, target.current_health)
+	assert_eq(heal_estimate["health_delta"], 46, "AI forecast should include full effective-stat healing")
+	healing.apply_primary_effect(caster, target)
+	assert_eq(target.current_health, 96, "applied healing should match the forecast")
+
+	var slow_status := load("res://resources/statuses/slow.tres") as StatusEffectDefinition
+	var slow := AbilityDefinition.new()
+	slow.effect = AbilityDefinition.PrimaryEffect.STATUS
+	slow.status_effect = slow_status
+	assert_true(slow.get_description(caster).contains("Reduce Movement Range by 30%"), "the tooltip should describe the reusable Slow status")
+	var slow_estimate := slow.estimate_primary_effect_for_ai(caster, target, target.current_health)
+	assert_eq(slow_estimate["health_delta"], 0, "Slow forecasting should not invent a health change")
+	assert_true(is_equal_approx(slow_estimate["utility_hint"], -8.0), "a harmful status should be negative from an allied target's perspective")
+	slow.apply_primary_effect(caster, target)
+	assert_eq(target.get_active_statuses().size(), 1, "primary Slow should create one status")
+	assert_eq(target.get_active_statuses()[0].source, slow, "an ability-applied status should retain the ability as its source")
+	assert_eq(target.get_active_statuses()[0].source_unit, caster, "an ability-applied status should retain its caster")
+	assert_true(is_equal_approx(target.get_movement_range(), 4.2), "Slow should reduce final Movement Range by 30%")
+	assert_true(is_equal_approx(target.get_effective_stat(UnitStat.Type.SPEED), 10.0), "Slow should not change Speed")
+	assert_eq(target.get_initiative(), 10, "Slow should not change initiative")
+	target.process_status_turn_start()
+	target.advance_status_durations()
+	slow.apply_primary_effect(caster, target)
+	assert_eq(target.get_active_statuses().size(), 1, "reapplying primary Slow should refresh instead of stacking")
+	assert_eq(target.get_active_statuses()[0].remaining_turns, 2, "refreshing primary Slow should restore its duration")
+	target.advance_status_durations()
+	assert_eq(target.get_active_statuses()[0].remaining_turns, 2, "a refreshed mid-turn status should not immediately lose duration")
+	target.process_status_turn_start()
+	target.advance_status_durations()
+	target.process_status_turn_start()
+	target.advance_status_durations()
+	assert_true(target.get_active_statuses().is_empty(), "primary Slow should expire after its configured duration")
+	assert_true(is_equal_approx(target.get_movement_range(), 6.0), "Slow expiration should restore Movement Range")
+
+	var burning := load("res://resources/statuses/burning.tres") as StatusEffectDefinition
+	var burning_ability := AbilityDefinition.new()
+	burning_ability.effect = AbilityDefinition.PrimaryEffect.STATUS
+	burning_ability.status_effect = burning
+	target.current_health = 100
+	var burning_estimate := burning_ability.estimate_primary_effect_for_ai(caster, target, 100)
+	assert_eq(burning_estimate["health_delta"], -2, "Burning should forecast its two fixed future damage ticks")
+	burning_ability.apply_primary_effect(caster, target)
+	target.process_status_turn_start()
+	assert_eq(target.current_health, 99, "status damage should ignore the caster's weapon and stats")
+
+
+func test_status_flat_percentage_direction_and_different_id_stacking() -> void:
+	var unit := _make_unit(CharacterDefinitionScript.new())
+	var flat_reduction := StatusEffectScript.new() as StatusEffectDefinition
+	flat_reduction.status_id = &"flat_reduction"
+	flat_reduction.effect = StatusEffectDefinition.Effect.STAT_MODIFIER
+	flat_reduction.affected_stat = UnitStat.Type.MOVEMENT_RANGE
+	flat_reduction.modifier_direction = StatusEffectDefinition.ModifierDirection.REDUCE
+	flat_reduction.modifier_value_type = StatusEffectDefinition.ModifierValueType.FLAT
+	flat_reduction.flat_amount = 1.0
+	var percentage_increase := StatusEffectScript.new() as StatusEffectDefinition
+	percentage_increase.status_id = &"percentage_increase"
+	percentage_increase.effect = StatusEffectDefinition.Effect.STAT_MODIFIER
+	percentage_increase.affected_stat = UnitStat.Type.MOVEMENT_RANGE
+	percentage_increase.modifier_direction = StatusEffectDefinition.ModifierDirection.INCREASE
+	percentage_increase.modifier_value_type = StatusEffectDefinition.ModifierValueType.PERCENTAGE
+	percentage_increase.percentage_amount = 20.0
+
+	unit.apply_status(flat_reduction, unit)
+	assert_true(is_equal_approx(unit.get_movement_range(), 5.0), "a positive Reduce flat amount should subtract from Movement Range")
+	unit.apply_status(percentage_increase, unit)
+	assert_eq(unit.get_active_statuses().size(), 2, "different status IDs should stack")
+	assert_true(is_equal_approx(unit.get_movement_range(), 6.0), "flat modifiers should apply before additive percentage modifiers")
+	unit.remove_status(&"flat_reduction")
+	assert_true(is_equal_approx(unit.get_movement_range(), 7.2), "a positive Increase percentage should raise Movement Range")
 
 
 func test_speed_movement_reconciliation_and_next_round_resort() -> void:
@@ -205,7 +321,8 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.STRENGTH), 12.0), "Iron Sword should grant Strength")
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.DEXTERITY), 12.0), "Ranger Armor should grant Dexterity")
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.INTELLIGENCE), 12.0), "Sage Charm should grant Intelligence")
-	assert_eq(unit.get_abilities().size(), 5, "sample statuses must not expand the existing five-button loadout")
+	assert_eq(unit.get_weapon_damage(), 20, "Iron Sword should provide the physical weapon-damage contribution")
+	assert_eq(unit.get_abilities().size(), 6, "Ice Shard should expand the sample loadout to six abilities")
 
 	var expected_stats := [
 		UnitStat.Type.INTELLIGENCE,
@@ -213,12 +330,36 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 		UnitStat.Type.INTELLIGENCE,
 		UnitStat.Type.INTELLIGENCE,
 		UnitStat.Type.STRENGTH,
+		UnitStat.Type.INTELLIGENCE,
 	]
-	var expected_amounts := [32, 27, 27, 22, 32]
+	var expected_amounts := [32, 27, 37, 22, 32, 27]
 	for index in range(unit.get_abilities().size()):
-		var effect = unit.get_abilities()[index].effects[0]
-		assert_eq(effect.scaling_stat, expected_stats[index], "sample ability should use its configured primary stat")
-		assert_eq(effect.calculate_amount(unit), expected_amounts[index], "starting equipment should add two to the relevant amount")
+		var ability := unit.get_abilities()[index]
+		if index == 2:
+			assert_eq(ability.effect, AbilityDefinition.PrimaryEffect.HEAL, "Heal should expose its primary effect directly")
+			assert_eq(ability.scaling_stat, expected_stats[index], "Heal should expose its scaling stat directly")
+			assert_eq(ability.calculate_primary_effect_amount(unit), 37, "Heal should be 25 base + the full equipped Intelligence 12")
+		else:
+			assert_eq(ability.scaling_stat, expected_stats[index], "sample damage should expose its scaling stat directly")
+			assert_eq(ability.calculate_damage(unit), expected_amounts[index], "top-level damage should preserve the expected amount")
+	assert_eq(unit.get_abilities()[0].damage_type, DamageCalculator.Type.MAGICAL, "Fireball should be magical")
+	assert_eq(unit.get_abilities()[1].damage_type, DamageCalculator.Type.PHYSICAL, "Arrow should be physical")
+	assert_eq(unit.get_abilities()[3].damage_type, DamageCalculator.Type.MAGICAL, "Beam should be magical")
+	assert_eq(unit.get_abilities()[4].damage_type, DamageCalculator.Type.PHYSICAL, "Strike should be physical")
+	assert_eq(unit.get_abilities()[5].damage_type, DamageCalculator.Type.MAGICAL, "Ice Shard should be magical")
+	assert_eq(unit.get_abilities()[5].status_effect.status_id, &"slow", "Ice Shard should apply Slow")
+	var status_icon_paths: Array[String] = []
+	var unique_status_icon_paths: Dictionary = {}
+	for status_path in [
+		"res://resources/statuses/burning.tres",
+		"res://resources/statuses/slow.tres",
+		"res://resources/statuses/focus.tres",
+	]:
+		var status := load(status_path) as StatusEffectDefinition
+		assert_true(status.icon != null, "%s should provide its own status icon" % status.display_name)
+		status_icon_paths.append(status.icon.resource_path)
+		unique_status_icon_paths[status.icon.resource_path] = true
+	assert_eq(unique_status_icon_paths.size(), status_icon_paths.size(), "Burning, Slow, and Focus should use distinct icon assets")
 
 	var focus := load("res://resources/abilities/focus.tres") as AbilityDefinition
 	var slow := load("res://resources/abilities/slow.tres") as AbilityDefinition

@@ -1,15 +1,15 @@
-[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3 uid="uid://coxj05o5g75fi"]
 
-[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_ability"]
-[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect_base"]
-[ext_resource type="Script" path="res://scripts/apply_status_effect_definition.gd" id="3_apply_status"]
-[ext_resource type="Resource" path="res://resources/statuses/focus.tres" id="4_focus"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="1_ability"]
+[ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="2_effect_base"]
+[ext_resource type="Script" uid="uid://bgd3xmco57y45" path="res://scripts/apply_status_effect_definition.gd" id="3_apply_status"]
+[ext_resource type="Resource" uid="uid://b01jqdoylmg7x" path="res://resources/statuses/focus.tres" id="4_focus"]
 
 [sub_resource type="Resource" id="ApplyFocus"]
 script = ExtResource("3_apply_status")
 status_effect = ExtResource("4_focus")
-ai_utility_hint = 12.0
 display_name = "Apply Status"
+ai_utility_hint = 12.0
 
 [resource]
 script = ExtResource("1_ability")

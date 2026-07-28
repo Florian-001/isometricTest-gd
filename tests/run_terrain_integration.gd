@@ -42,13 +42,42 @@ func _run() -> void:
 		Vector2i(1, 0),
 		Vector2i(2, 0),
 	])
-	_check(mover.grid_cell == Vector2i(1, 0), "lethal entry damage must stop movement on the Fire cell")
-	_check(mover.current_health == 0, "Fire entry must apply damage during animated movement")
+	_check(mover.grid_cell == Vector2i(2, 0), "Fire should no longer interrupt movement with immediate damage")
+	_check(mover.current_health == 1, "entering Fire should apply Burning without immediate damage")
+	_check(mover.get_active_statuses().size() == 1, "animated Fire entry should apply one Burning status")
+	mover.process_status_turn_start()
+	_check(mover.current_health == 0, "Burning should deal lethal damage at the next turn start")
 
 	var starter := _make_unit(Vector2i(0, 1), grid)
 	terrain.apply_trigger(starter, TileTriggeredEffectDefinition.Trigger.TURN_START)
+	starter.process_status_turn_start()
 	_check(starter.current_health == 99, "Fire must damage a unit that starts its turn on the tile")
+	_check(starter.get_active_statuses()[0].source == fire, "turn-start terrain should be recorded as the status source")
 	_check(grid.get_terrain_definition(Vector2i(1, 0)) == fire, "terrain must register with the grid renderer")
+
+	var ice := load("res://resources/tiles/ice.tres") as TileDefinition
+	var slowed := _make_unit(Vector2i(2, 1), grid)
+	slowed.movement_range_override = 6.0
+	ice.apply_trigger(slowed, TileTriggeredEffectDefinition.Trigger.ENTER)
+	_check(is_equal_approx(slowed.get_movement_range(), 4.2), "Ice should reduce movement from 6 to 4.2")
+	_check(slowed.get_active_statuses()[0].source == ice, "Ice should be recorded as the Slow source")
+
+	var doomed := _make_unit(Vector2i(0, 1), grid)
+	var survivor := _make_unit(Vector2i(2, 0), grid)
+	doomed.current_health = 1
+	var manager := TurnManager.new()
+	battle.add_child(manager)
+	var started_units: Array[TacticalCharacter] = []
+	manager.turn_starting.connect(func(unit: TacticalCharacter):
+		terrain.apply_trigger(unit, TileTriggeredEffectDefinition.Trigger.TURN_START)
+	)
+	manager.turn_started.connect(func(unit: TacticalCharacter): started_units.append(unit))
+	var ordered_units: Array[TacticalCharacter] = [doomed, survivor]
+	manager.start_combat(ordered_units)
+	await process_frame
+	_check(doomed.current_health == 0, "lethal turn-start Burning should defeat the unit before it acts")
+	_check(manager.current_unit == survivor, "combat should advance past a unit defeated by turn-start status damage")
+	_check(started_units == [survivor], "a unit defeated during turn-start processing should not emit an actionable turn")
 
 	var main_scene := load("res://main.tscn") as PackedScene
 	var main := main_scene.instantiate()

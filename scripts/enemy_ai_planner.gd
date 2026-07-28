@@ -386,39 +386,67 @@ func _forecast_ability(
 
 	var score := 0.0
 	if recipients.is_empty():
-		for effect in ability.effects:
-			if effect != null:
-				score += effect.ai_utility_hint * profile.custom_effect_weight
+		for additional_effect in ability.effects:
+			if ability.should_apply_additional_effect(additional_effect):
+				score += additional_effect.ai_utility_hint * profile.custom_effect_weight
 		return score
 
 	for recipient in recipients:
-		for effect in ability.effects:
-			if effect == null or not snapshot.is_living(recipient):
+		if ability.has_primary_effect() and snapshot.is_living(recipient):
+			score += _score_effect_estimate(
+				caster,
+				recipient,
+				ability.estimate_primary_effect_for_ai(
+					caster,
+					recipient,
+					snapshot.get_health(recipient)
+				),
+				profile,
+				snapshot
+			)
+		for additional_effect in ability.effects:
+			if (
+				not snapshot.is_living(recipient)
+				or not ability.should_apply_additional_effect(additional_effect)
+			):
 				continue
 			var before := snapshot.get_health(recipient)
-			var estimate := effect.estimate_for_ai(caster, recipient, before)
-			var requested_delta := int(estimate.get("health_delta", 0))
-			var after := clampi(before + requested_delta, 0, recipient.get_max_health())
-			var actual_delta := after - before
-			var is_opponent := recipient.is_friendly() != caster.is_friendly()
-			if actual_delta < 0:
-				var damage := float(-actual_delta)
-				if is_opponent:
-					score += damage * profile.damage_reward
-					if after == 0 and before > 0:
-						score += profile.defeat_reward
-				else:
-					score -= damage * profile.friendly_damage_penalty
-					if after == 0 and before > 0:
-						score -= profile.defeat_reward
-			elif actual_delta > 0:
-				var healing := float(actual_delta)
-				if is_opponent:
-					score -= healing * profile.enemy_healing_penalty
-				else:
-					score += healing * profile.healing_reward
-			score += float(estimate.get("utility_hint", 0.0)) * profile.custom_effect_weight
-			snapshot.set_health(recipient, after)
+			var estimate := additional_effect.estimate_for_ai(caster, recipient, before)
+			score += _score_effect_estimate(caster, recipient, estimate, profile, snapshot)
+	return score
+
+
+func _score_effect_estimate(
+	caster: TacticalCharacter,
+	recipient: TacticalCharacter,
+	estimate: Dictionary,
+	profile: EnemyAIProfile,
+	snapshot: AIBoardSnapshot
+) -> float:
+	var before := snapshot.get_health(recipient)
+	var requested_delta := int(estimate.get("health_delta", 0))
+	var after := clampi(before + requested_delta, 0, recipient.get_max_health())
+	var actual_delta := after - before
+	var is_opponent := recipient.is_friendly() != caster.is_friendly()
+	var score := 0.0
+	if actual_delta < 0:
+		var damage := float(-actual_delta)
+		if is_opponent:
+			score += damage * profile.damage_reward
+			if after == 0 and before > 0:
+				score += profile.defeat_reward
+		else:
+			score -= damage * profile.friendly_damage_penalty
+			if after == 0 and before > 0:
+				score -= profile.defeat_reward
+	elif actual_delta > 0:
+		var healing := float(actual_delta)
+		if is_opponent:
+			score -= healing * profile.enemy_healing_penalty
+		else:
+			score += healing * profile.healing_reward
+	score += float(estimate.get("utility_hint", 0.0)) * profile.custom_effect_weight
+	snapshot.set_health(recipient, after)
 	return score
 
 

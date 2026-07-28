@@ -12,7 +12,7 @@ enum Trigger {
 
 @export_category("Effect")
 ## Reuses the same editable effect resources as abilities. Terrain has no caster,
-## so stat-scaled effects use their unscaled base value.
+## so magical damage uses only Innate Damage and physical damage has no weapon/stat contribution.
 @export var effect: AbilityEffectDefinition
 ## Signed utility from the occupant's perspective. Positive values attract AI;
 ## negative values discourage it. Health changes are scored automatically.
@@ -23,9 +23,13 @@ func applies_on(trigger: Trigger) -> bool:
 	return (triggers & int(trigger)) != 0
 
 
-func apply(unit: TacticalCharacter, trigger: Trigger) -> void:
+func apply(
+	unit: TacticalCharacter,
+	trigger: Trigger,
+	source: Object = null
+) -> void:
 	if applies_on(trigger) and effect != null and is_instance_valid(unit) and unit.current_health > 0:
-		effect.apply(null, unit)
+		effect.apply(null, unit, source)
 
 
 func estimate_for_ai(

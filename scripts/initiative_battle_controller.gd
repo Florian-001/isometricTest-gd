@@ -49,6 +49,7 @@ func _ready() -> void:
 	_ability_targeting = AbilityTargeting.new(grid.grid_size)
 	_ability_executor = AbilityExecutor.new()
 	add_child(_ability_executor)
+	turn_manager.turn_starting.connect(_on_turn_starting)
 	turn_manager.turn_started.connect(_on_turn_started)
 	turn_manager.turn_ended.connect(_on_turn_ended)
 	turn_manager.turn_order_changed.connect(_on_turn_order_changed)
@@ -565,17 +566,15 @@ func _refresh_ai_debug_history() -> void:
 	ai_debug_label.text = "\n\n────────────────────────────────────────\n\n".join(newest_first)
 
 
+func _on_turn_starting(unit: TacticalCharacter) -> void:
+	terrain.apply_trigger(unit, TileTriggeredEffectDefinition.Trigger.TURN_START)
+
+
 func _on_turn_started(unit: TacticalCharacter) -> void:
 	_selected_ability = null
 	_ability_range_cells.clear()
 	_ability_target_cells.clear()
 	turn_order_bar.rebuild(turn_manager.get_rotating_order(), unit)
-	terrain.apply_trigger(unit, TileTriggeredEffectDefinition.Trigger.TURN_START)
-	if unit.current_health <= 0:
-		_set_movement_locked(true)
-		clear_selection()
-		grid.clear_overlays()
-		return
 	if unit.is_friendly():
 		_set_movement_locked(false)
 		_select_character(unit)

@@ -40,8 +40,8 @@ func _create_button(ability: AbilityDefinition, caster: TacticalCharacter) -> Bu
 	var button := Button.new()
 	button.custom_minimum_size = Vector2(button_width, button_height)
 	button.toggle_mode = true
-	var has_damage := _has_damage_effect(ability)
-	var damage_text := "%d DMG" % _get_total_damage(ability, caster)
+	var has_damage := ability.has_damage()
+	var damage_text := "%d DMG" % ability.calculate_damage(caster)
 	if ability.image == null:
 		button.text = (
 			"%s\n%s" % [ability.display_name, damage_text]
@@ -69,21 +69,6 @@ func _create_button(ability: AbilityDefinition, caster: TacticalCharacter) -> Bu
 	button.add_theme_color_override("font_disabled_color", Color(0.45, 0.49, 0.54))
 	button.add_theme_font_size_override("font_size", 13)
 	return button
-
-
-func _has_damage_effect(ability: AbilityDefinition) -> bool:
-	for effect in ability.effects:
-		if effect is DamageEffectDefinition:
-			return true
-	return false
-
-
-func _get_total_damage(ability: AbilityDefinition, caster: TacticalCharacter) -> int:
-	var total := 0
-	for effect in ability.effects:
-		if effect is DamageEffectDefinition:
-			total += (effect as DamageEffectDefinition).calculate_amount(caster)
-	return total
 
 
 func _make_style(background: Color, border: Color, border_width: int) -> StyleBoxFlat:

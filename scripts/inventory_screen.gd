@@ -112,9 +112,12 @@ func _build_equipment_slots() -> void:
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(0.0, 64.0)
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.text = "%s\n%s" % [_get_slot_name(slot), item.display_name if item != null else "Empty"]
+		button.text = "%s\n%s" % [
+			_get_slot_name(slot),
+			_get_item_name_with_damage(item) if item != null else "Empty",
+		]
 		button.tooltip_text = (
-			"Click to unequip %s" % item.display_name
+			_get_item_tooltip(item, "unequip")
 			if item != null
 			else "%s slot" % _get_slot_name(slot)
 		)
@@ -153,11 +156,8 @@ func _make_item_button(item: ItemDefinition, equipped: bool) -> Button:
 	var button := Button.new()
 	button.custom_minimum_size = Vector2(0.0, 56.0)
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.text = "%s\n%s" % [item.display_name, _get_slot_name(item.slot)]
-	button.tooltip_text = "%s\nClick to %s" % [
-		item.display_name,
-		"unequip" if equipped else "equip",
-	]
+	button.text = "%s\n%s" % [item.display_name, _get_item_slot_summary(item)]
+	button.tooltip_text = _get_item_tooltip(item, "unequip" if equipped else "equip")
 	button.icon = item.icon
 	button.expand_icon = true
 	return button
@@ -184,3 +184,24 @@ func _get_character_display_name(character: TacticalCharacter) -> String:
 
 func _get_slot_name(slot: ItemDefinition.EquipmentSlot) -> String:
 	return ItemDefinition.EquipmentSlot.keys()[slot].capitalize()
+
+
+func _get_item_name_with_damage(item: ItemDefinition) -> String:
+	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
+		return "%s · %d DMG" % [item.display_name, item.weapon_damage]
+	return item.display_name
+
+
+func _get_item_slot_summary(item: ItemDefinition) -> String:
+	var summary := _get_slot_name(item.slot)
+	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
+		summary += " · %d DMG" % item.weapon_damage
+	return summary
+
+
+func _get_item_tooltip(item: ItemDefinition, action: String) -> String:
+	var lines: Array[String] = [item.display_name]
+	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
+		lines.append("Weapon damage: %d" % item.weapon_damage)
+	lines.append("Click to %s" % action)
+	return "\n".join(lines)

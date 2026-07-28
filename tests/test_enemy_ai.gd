@@ -42,7 +42,9 @@ func test_effect_forecasts_clamp_health_and_support_custom_utility() -> void:
 	var caster := _make_unit(false, Vector2i.ZERO, 4.0, [])
 	var target := _make_unit(true, Vector2i.ONE, 4.0, [])
 	var damage := DamageEffectScript.new() as DamageEffectDefinition
-	damage.amount = 30
+	damage.damage_type = DamageEffectDefinition.DamageType.MAGICAL
+	damage.innate_damage = 30
+	damage.scaling_stat = UnitStat.Type.NONE
 	var damage_estimate := damage.estimate_for_ai(caster, target, 20)
 	assert_eq(damage_estimate["health_delta"], -20, "forecast damage should clamp overkill")
 
@@ -56,6 +58,67 @@ func test_effect_forecasts_clamp_health_and_support_custom_utility() -> void:
 	var custom_estimate := custom.estimate_for_ai(caster, target, 100)
 	assert_true(is_equal_approx(custom_estimate["utility_hint"], 7.5), "custom effects should expose editable AI utility")
 	assert_eq(custom_estimate["health_delta"], 0, "unknown effects should not invent health changes")
+
+
+func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void:
+	var caster := _make_unit(false, Vector2i.ZERO, 4.0, [])
+	var ally := _make_unit(false, Vector2i(1, 0), 4.0, [])
+	var opponent := _make_unit(true, Vector2i(0, 1), 4.0, [])
+	ally.current_health = 50
+	var units: Array[TacticalCharacter] = [caster, ally, opponent]
+	var targeting := AbilityTargetingScript.new(Vector2i(4, 4)) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
+
+	var heal := AbilityDefinitionScript.new() as AbilityDefinition
+	heal.effect = AbilityDefinition.PrimaryEffect.HEAL
+	heal.effect_amount = 25
+	heal.scaling_stat = UnitStat.Type.NONE
+	heal.target_flags = AbilityDefinition.TargetFlags.FRIEND
+	var heal_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
+	var heal_score := planner._forecast_ability(
+		caster,
+		heal,
+		ally.grid_cell,
+		heal_snapshot,
+		targeting,
+		profile
+	)
+	assert_true(is_equal_approx(heal_score, 18.75), "planner healing score should use the primary Heal forecast")
+	assert_eq(heal_snapshot.get_health(ally), 75, "planner simulation should apply the forecasted primary healing")
+
+	var slow := AbilityDefinitionScript.new() as AbilityDefinition
+	slow.effect = AbilityDefinition.PrimaryEffect.STATUS
+	slow.status_effect = load("res://resources/statuses/slow.tres") as StatusEffectDefinition
+	slow.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var slow_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
+	var slow_score := planner._forecast_ability(
+		caster,
+		slow,
+		opponent.grid_cell,
+		slow_snapshot,
+		targeting,
+		profile
+	)
+	assert_true(is_equal_approx(slow_score, 8.0), "planner utility should use the primary Slow forecast")
+	assert_eq(slow_snapshot.get_health(opponent), 100, "Slow forecasting should leave simulated health unchanged")
+
+	caster.intelligence_override = 12
+	var ice_shard := load("res://resources/abilities/ice_shard.tres") as AbilityDefinition
+	var ice_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
+	var ice_score := planner._forecast_ability(
+		caster,
+		ice_shard,
+		opponent.grid_cell,
+		ice_snapshot,
+		targeting,
+		profile
+	)
+	assert_true(is_equal_approx(ice_score, 35.0), "Ice Shard AI value should combine 27 damage with Slow's utility 8")
+	assert_eq(ice_snapshot.get_health(opponent), 73, "Ice Shard forecasting should apply the exact centralized damage")
+	var lethal_estimate := ice_shard.estimate_primary_effect_for_ai(caster, opponent, 27)
+	assert_eq(lethal_estimate.health_delta, -27, "lethal Ice Shard forecasting should clamp damage to remaining health")
+	assert_true(is_zero_approx(lethal_estimate.utility_hint), "lethal damage should not forecast applying Slow afterward")
 
 
 func test_virtual_origin_targeting_does_not_move_live_unit() -> void:
@@ -218,6 +281,11 @@ func _make_unit(
 	for ability in abilities_value:
 		abilities.append(ability as AbilityDefinition)
 	definition.abilities = abilities
+	if not friendly:
+		var weapon := ItemDefinition.new()
+		weapon.weapon_damage = 10
+		var equipment: Array[ItemDefinition] = [weapon]
+		definition.starting_equipment = equipment
 	var unit := track(TacticalCharacterScript.new()) as TacticalCharacter
 	unit.definition = definition
 	unit.enemy_ai_profile = profile
@@ -240,10 +308,10 @@ func _make_damage_ability(
 	ability.delivery_type = delivery
 	ability.range = range_value
 	ability.target_flags = AbilityDefinition.TargetFlags.ENEMY
-	var damage := DamageEffectScript.new() as DamageEffectDefinition
-	damage.amount = amount
-	var effects: Array[AbilityEffectDefinition] = [damage]
-	ability.effects = effects
+	ability.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	ability.damage_type = DamageCalculator.Type.MAGICAL
+	ability.innate_damage = amount
+	ability.scaling_stat = UnitStat.Type.NONE
 	return ability
 
 

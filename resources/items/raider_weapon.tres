@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3]
+
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+display_name = "Raider Weapon"
+weapon_damage = 10

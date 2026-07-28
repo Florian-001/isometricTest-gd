@@ -2,6 +2,10 @@
 class_name TacticalCharacter
 extends Node2D
 
+const STATUS_ICON_SIZE := 18.0
+const STATUS_ICON_GAP := 3.0
+const STATUS_ICON_TOP := -79.0
+
 signal health_changed(current_health: int, max_health: int)
 signal movement_started(character)
 signal movement_finished(character)
@@ -175,9 +179,7 @@ func is_friendly() -> bool:
 
 
 func get_movement_range() -> float:
-	var base_movement := _get_base_movement_range()
-	var speed_adjustment := (get_effective_stat(UnitStat.Type.SPEED) - 10.0) * 0.25
-	return clampf(base_movement + speed_adjustment, 2.0, 10.0)
+	return clampf(get_effective_stat(UnitStat.Type.MOVEMENT_RANGE), 0.0, 10.0)
 
 
 func _get_base_movement_range() -> float:
@@ -208,6 +210,11 @@ func get_base_stat(stat: UnitStat.Type) -> float:
 			if speed_override >= 0:
 				return float(speed_override)
 			return float(definition.speed) if definition != null else 0.0
+		UnitStat.Type.MOVEMENT_RANGE:
+			var speed_adjustment := (
+				get_effective_stat(UnitStat.Type.SPEED) - 10.0
+			) * 0.25
+			return clampf(_get_base_movement_range() + speed_adjustment, 2.0, 10.0)
 		_:
 			return 0.0
 
@@ -277,9 +284,17 @@ func get_equipped_items() -> Array[ItemDefinition]:
 	return result
 
 
+func get_weapon_damage() -> int:
+	var weapon := get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON)
+	if weapon == null:
+		return 0
+	return maxi(0, weapon.weapon_damage)
+
+
 func apply_status(
 	status_definition: StatusEffectDefinition,
-	source: TacticalCharacter = null
+	source: Object = null,
+	source_unit: TacticalCharacter = null
 ) -> bool:
 	if (
 		status_definition == null
@@ -296,13 +311,15 @@ func apply_status(
 		):
 			active_status.definition = status_definition
 			active_status.source = source
+			active_status.source_unit = source_unit
+			if active_status.source_unit == null and source is TacticalCharacter:
+				active_status.source_unit = source as TacticalCharacter
 			active_status.remaining_turns = status_definition.duration_turns
-			statuses_changed.emit()
-			_notify_stats_changed(previous_movement)
+			active_status.processed_this_turn = false
+			_notify_statuses_changed(previous_movement)
 			return true
-	_active_statuses.append(ActiveStatus.new(status_definition, source))
-	statuses_changed.emit()
-	_notify_stats_changed(previous_movement)
+	_active_statuses.append(ActiveStatus.new(status_definition, source, source_unit))
+	_notify_statuses_changed(previous_movement)
 	return true
 
 
@@ -313,8 +330,7 @@ func remove_status(status_id: StringName) -> bool:
 		if active_status.definition != null and active_status.definition.status_id == status_id:
 			var previous_movement := get_movement_range()
 			_active_statuses.remove_at(index)
-			statuses_changed.emit()
-			_notify_stats_changed(previous_movement)
+			_notify_statuses_changed(previous_movement)
 			return true
 	return false
 
@@ -326,18 +342,34 @@ func get_active_statuses() -> Array[ActiveStatus]:
 	return result
 
 
+func process_status_turn_start() -> void:
+	_initialize_runtime_stats()
+	for active_status in _active_statuses:
+		if active_status.definition == null:
+			continue
+		active_status.processed_this_turn = true
+		active_status.definition.apply_turn_start(self)
+		if current_health <= 0:
+			break
+
+
 func advance_status_durations() -> void:
 	_initialize_runtime_stats()
 	if _active_statuses.is_empty():
 		return
 	var previous_movement := get_movement_range()
+	var changed := false
 	for index in range(_active_statuses.size() - 1, -1, -1):
 		var active_status := _active_statuses[index]
+		if not active_status.processed_this_turn:
+			continue
+		active_status.processed_this_turn = false
 		active_status.remaining_turns -= 1
+		changed = true
 		if active_status.remaining_turns <= 0:
 			_active_statuses.remove_at(index)
-	statuses_changed.emit()
-	_notify_stats_changed(previous_movement)
+	if changed:
+		_notify_statuses_changed(previous_movement)
 
 
 func get_abilities() -> Array[AbilityDefinition]:
@@ -489,7 +521,7 @@ func _get_all_modifiers() -> Array[StatModifierDefinition]:
 	for active_status in _active_statuses:
 		if active_status.definition == null:
 			continue
-		for modifier in active_status.definition.modifiers:
+		for modifier in active_status.definition.get_stat_modifiers():
 			if modifier != null:
 				result.append(modifier)
 	return result
@@ -502,6 +534,12 @@ func _notify_stats_changed(previous_movement: float) -> void:
 	if not is_equal_approx(previous_movement, new_movement):
 		movement_remaining_changed.emit(_remaining_movement, new_movement)
 	stats_changed.emit()
+
+
+func _notify_statuses_changed(previous_movement: float) -> void:
+	statuses_changed.emit()
+	queue_redraw()
+	_notify_stats_changed(previous_movement)
 
 
 func _show_damage_number(amount: int) -> void:
@@ -572,3 +610,56 @@ func _draw() -> void:
 		12,
 		Color.WHITE
 	)
+	_draw_status_icons()
+
+
+func _draw_status_icons() -> void:
+	for entry in _get_status_icon_entries():
+		var status := entry.definition as StatusEffectDefinition
+		var icon_rect := entry.rect as Rect2
+		var accent := status.color
+		accent.a = 1.0
+		draw_rect(icon_rect, Color(0.025, 0.035, 0.05, 0.96), true)
+		draw_rect(icon_rect, accent, false, 1.5)
+		if status.icon != null:
+			draw_texture_rect(status.icon, icon_rect.grow(-2.0), false)
+			continue
+		var fallback_name := status.display_name
+		if fallback_name.strip_edges().is_empty():
+			fallback_name = String(status.status_id)
+		var fallback_text := fallback_name.left(1).to_upper()
+		draw_string(
+			ThemeDB.fallback_font,
+			Vector2(icon_rect.position.x, icon_rect.position.y + 13.0),
+			fallback_text,
+			HORIZONTAL_ALIGNMENT_CENTER,
+			icon_rect.size.x,
+			11,
+			Color.WHITE
+		)
+
+
+func _get_status_icon_entries() -> Array[Dictionary]:
+	var definitions: Array[StatusEffectDefinition] = []
+	for active_status in _active_statuses:
+		if active_status.definition != null:
+			definitions.append(active_status.definition)
+	var result: Array[Dictionary] = []
+	if definitions.is_empty():
+		return result
+	var total_width := (
+		float(definitions.size()) * STATUS_ICON_SIZE
+		+ float(definitions.size() - 1) * STATUS_ICON_GAP
+	)
+	var start_x := -total_width * 0.5
+	for index in range(definitions.size()):
+		result.append({
+			"definition": definitions[index],
+			"rect": Rect2(
+				start_x + float(index) * (STATUS_ICON_SIZE + STATUS_ICON_GAP),
+				STATUS_ICON_TOP,
+				STATUS_ICON_SIZE,
+				STATUS_ICON_SIZE
+			),
+		})
+	return result

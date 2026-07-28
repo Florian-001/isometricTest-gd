@@ -7,6 +7,7 @@ enum Type {
 	DEXTERITY,
 	INTELLIGENCE,
 	SPEED,
+	MOVEMENT_RANGE,
 }
 
 
@@ -20,5 +21,7 @@ static func get_display_name(stat: Type) -> String:
 			return "Intelligence"
 		Type.SPEED:
 			return "Speed"
+		Type.MOVEMENT_RANGE:
+			return "Movement Range"
 		_:
 			return "None"

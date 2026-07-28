@@ -2,10 +2,20 @@
 class_name DamageEffectDefinition
 extends AbilityEffectDefinition
 
-@export_category("Damage")
-@export_range(0, 9999, 1, "or_greater") var amount: int = 10
-@export var scaling_stat: UnitStat.Type = UnitStat.Type.NONE
-@export_range(0.0, 100.0, 0.05, "or_greater") var scaling_ratio: float = 1.0
+enum DamageType {
+	PHYSICAL,
+	MAGICAL,
+}
+
+@export_category("Damage Formula")
+## Physical damage includes equipped weapon damage. Magical damage ignores the weapon.
+@export var damage_type: DamageType = DamageType.PHYSICAL
+## Innate damage contributes to both Physical and Magical damage.
+@export_range(0, 9999, 1, "or_greater") var innate_damage: int = 0
+## The effective stat includes equipment and status-effect buffs.
+@export var scaling_stat: UnitStat.Type = UnitStat.Type.STRENGTH
+## Percentage of the effective scaling stat added to damage. Values above 100% are supported.
+@export_range(0.0, 10000.0, 5.0, "or_greater", "suffix:%") var scaling_percentage: float = 100.0
 
 
 func _init() -> void:
@@ -13,13 +23,20 @@ func _init() -> void:
 
 
 func calculate_amount(caster: TacticalCharacter) -> int:
-	if scaling_stat == UnitStat.Type.NONE or not is_instance_valid(caster):
-		return amount
-	var stat_bonus := (caster.get_effective_stat(scaling_stat) - 10.0) * scaling_ratio
-	return maxi(0, amount + roundi(stat_bonus))
+	return DamageCalculator.calculate_amount(
+		caster,
+		int(damage_type),
+		innate_damage,
+		scaling_stat,
+		scaling_percentage
+	)
 
 
-func apply(caster: TacticalCharacter, target: TacticalCharacter) -> void:
+func apply(
+	caster: TacticalCharacter,
+	target: TacticalCharacter,
+	_source: Object = null
+) -> void:
 	if is_instance_valid(target) and target.current_health > 0:
 		target.apply_damage(calculate_amount(caster))
 
@@ -37,17 +54,25 @@ func estimate_for_ai(
 
 
 func get_description(caster: TacticalCharacter = null) -> String:
-	if scaling_stat == UnitStat.Type.NONE:
-		return "%d damage" % amount
+	var type_name := "Physical" if damage_type == DamageType.PHYSICAL else "Magical"
 	if is_instance_valid(caster):
-		return "%d damage (%d base, %s x%.2f)" % [
+		return "%d %s damage (%s)" % [
 			calculate_amount(caster),
-			amount,
-			UnitStat.get_display_name(scaling_stat),
-			scaling_ratio,
+			type_name.to_lower(),
+			_get_formula_description(),
 		]
-	return "%d base damage + %s scaling x%.2f" % [
-		amount,
-		UnitStat.get_display_name(scaling_stat),
-		scaling_ratio,
-	]
+	return "%s damage: %s" % [type_name, _get_formula_description()]
+
+
+func _get_formula_description() -> String:
+	var parts: Array[String] = []
+	if damage_type == DamageType.PHYSICAL:
+		parts.append("weapon damage")
+	elif innate_damage > 0:
+		parts.append("%d innate" % innate_damage)
+	if scaling_stat != UnitStat.Type.NONE and scaling_percentage > 0.0:
+		parts.append("%s x%d%%" % [
+			UnitStat.get_display_name(scaling_stat),
+			roundi(scaling_percentage),
+		])
+	return " + ".join(parts) if not parts.is_empty() else "0"

@@ -10,4 +10,5 @@ value = 2.0
 [resource]
 script = ExtResource("1_item")
 display_name = "Iron Sword"
+weapon_damage = 20
 modifiers = Array[ExtResource("2_modifier")]([SubResource("StrengthBonus")])

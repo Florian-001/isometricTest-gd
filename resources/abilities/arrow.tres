@@ -1,20 +1,15 @@
 [gd_resource type="Resource" script_class="AbilityDefinition" format=3 uid="uid://7m35u3ondco3"]
 
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="1_ability"]
-[ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
-[ext_resource type="Script" uid="uid://c4xa2b7als0dv" path="res://scripts/damage_effect_definition.gd" id="3_damage"]
-
-[sub_resource type="Resource" id="Damage_arrow"]
-script = ExtResource("3_damage")
-amount = 25
-scaling_stat = 2
-display_name = "Damage"
+[ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="1_e8hip"]
 
 [resource]
 script = ExtResource("1_ability")
 display_name = "Arrow"
+effect = 1
+scaling_stat = 2
+scaling_amount = 60.0
 delivery_type = 0
 target_flags = 10
-effects = Array[ExtResource("2_effect")]([SubResource("Damage_arrow")])
 placeholder_color = Color(0.72, 0.48, 0.22, 1)
 projectile_speed = 760.0

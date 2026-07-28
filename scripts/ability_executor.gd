@@ -120,6 +120,11 @@ func _apply_effects(
 		wall_cells
 	)
 	for recipient in recipients:
-		for effect in ability.effects:
-			if effect != null and recipient.current_health > 0:
-				effect.apply(caster, recipient)
+		if ability.has_primary_effect() and recipient.current_health > 0:
+			ability.apply_primary_effect(caster, recipient)
+		for additional_effect in ability.effects:
+			if (
+				recipient.current_health > 0
+				and ability.should_apply_additional_effect(additional_effect)
+			):
+				additional_effect.apply(caster, recipient, ability)

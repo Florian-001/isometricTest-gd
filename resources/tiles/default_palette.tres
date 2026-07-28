@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="TilePalette" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="TilePalette" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/tile_palette.gd" id="1_palette"]
 [ext_resource type="Script" path="res://scripts/tile_definition.gd" id="2_tile_type"]
 [ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="2_mud"]
 [ext_resource type="Resource" path="res://resources/tiles/fire.tres" id="3_fire"]
+[ext_resource type="Resource" uid="uid://bj3yc0xg083b1" path="res://resources/tiles/ice.tres" id="4_ice"]
 
 [resource]
 script = ExtResource("1_palette")
-tiles = Array[ExtResource("2_tile_type")]([ExtResource("2_mud"), ExtResource("3_fire")])
+tiles = Array[ExtResource("2_tile_type")]([ExtResource("2_mud"), ExtResource("3_fire"), ExtResource("4_ice")])

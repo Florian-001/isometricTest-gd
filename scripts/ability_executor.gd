@@ -129,3 +129,5 @@ func _apply_effects(
 				and ability.should_apply_additional_effect(additional_effect)
 			):
 				additional_effect.apply(caster, recipient, ability)
+		if recipient.current_health > 0:
+			ability.apply_weapon_status(caster, recipient)

@@ -422,6 +422,18 @@ func _forecast_ability(
 				else additional_effect.estimate_for_ai(caster, recipient, before)
 			)
 			score += _score_effect_estimate(caster, recipient, estimate, profile, snapshot)
+		if snapshot.is_living(recipient) and ability.get_weapon_status_effect(caster) != null:
+			score += _score_effect_estimate(
+				caster,
+				recipient,
+				ability.estimate_weapon_status_for_ai(
+					caster,
+					recipient,
+					snapshot.get_health(recipient)
+				),
+				profile,
+				snapshot
+			)
 	return score
 
 

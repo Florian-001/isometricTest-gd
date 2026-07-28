@@ -47,7 +47,7 @@ func _rebuild_options() -> void:
 	_picker.clear()
 	_statuses = [null]
 	_picker.add_item("None")
-	_picker.set_item_tooltip(0, "This tile does not apply a direct status.")
+	_picker.set_item_tooltip(0, "This resource does not apply a direct status.")
 	var discovered := StatusCatalog.get_statuses()
 	var labels := StatusCatalog.get_labels(discovered)
 	for index in range(discovered.size()):

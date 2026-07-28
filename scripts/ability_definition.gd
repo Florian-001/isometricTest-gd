@@ -154,6 +154,53 @@ func get_ability_type_name() -> String:
 	return AbilityType.keys()[ability_type].capitalize()
 
 
+func uses_weapon_damage(caster: TacticalCharacter) -> bool:
+	return (
+		has_damage()
+		and can_be_used_by(caster)
+		and get_required_weapon_type() >= 0
+		and caster.get_weapon_for_ability(self) != null
+	)
+
+
+func get_weapon_status_effect(caster: TacticalCharacter) -> StatusEffectDefinition:
+	if not uses_weapon_damage(caster):
+		return null
+	var weapon := caster.get_weapon_for_ability(self)
+	if weapon == null or weapon.status_effect == null:
+		return null
+	var weapon_status := weapon.status_effect
+	if weapon_status.status_id == &"" or _has_configured_status_id(weapon_status.status_id):
+		return null
+	return weapon_status
+
+
+func apply_weapon_status(caster: TacticalCharacter, target: TacticalCharacter) -> bool:
+	if not is_instance_valid(target) or target.current_health <= 0:
+		return false
+	var weapon_status := get_weapon_status_effect(caster)
+	var weapon := caster.get_weapon_for_ability(self) if is_instance_valid(caster) else null
+	if weapon_status == null or weapon == null:
+		return false
+	return target.apply_status(weapon_status, weapon, caster)
+
+
+func estimate_weapon_status_for_ai(
+	caster: TacticalCharacter,
+	target: TacticalCharacter,
+	simulated_health: int
+) -> Dictionary:
+	var weapon_status := get_weapon_status_effect(caster)
+	if weapon_status == null or simulated_health <= 0:
+		return {"health_delta": 0, "utility_hint": 0.0}
+	return weapon_status.estimate_for_ai(caster, target, simulated_health)
+
+
+func get_weapon_status_description(caster: TacticalCharacter) -> String:
+	var weapon_status := get_weapon_status_effect(caster)
+	return "Weapon applies %s" % weapon_status.get_description() if weapon_status != null else ""
+
+
 func has_damage() -> bool:
 	if effect == PrimaryEffect.DAMAGE:
 		return true
@@ -266,6 +313,21 @@ func should_apply_additional_effect(additional_effect: AbilityEffectDefinition) 
 	return true
 
 
+func _has_configured_status_id(status_id: StringName) -> bool:
+	if status_id == &"":
+		return false
+	if status_effect != null and status_effect.status_id == status_id:
+		return true
+	for additional_effect in effects:
+		if additional_effect is ApplyStatusEffectDefinition:
+			var configured_status := (
+				additional_effect as ApplyStatusEffectDefinition
+			).status_effect
+			if configured_status != null and configured_status.status_id == status_id:
+				return true
+	return false
+
+
 func get_description(caster: TacticalCharacter = null) -> String:
 	var effect_descriptions: Array[String] = []
 	if has_primary_effect():
@@ -281,6 +343,10 @@ func get_description(caster: TacticalCharacter = null) -> String:
 				)
 			else:
 				effect_descriptions.append(additional_effect.get_description(caster))
+	if is_instance_valid(caster):
+		var weapon_status_description := get_weapon_status_description(caster)
+		if not weapon_status_description.is_empty():
+			effect_descriptions.append(weapon_status_description)
 	var delivery := "Cast"
 	match delivery_type:
 		DeliveryType.PROJECTILE:

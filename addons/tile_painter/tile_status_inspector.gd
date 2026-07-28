@@ -11,7 +11,7 @@ func setup(filesystem: EditorFileSystem) -> void:
 
 
 func _can_handle(object: Object) -> bool:
-	return object is TileDefinition or object is AbilityDefinition
+	return object is TileDefinition or object is AbilityDefinition or object is ItemDefinition
 
 
 func _parse_property(

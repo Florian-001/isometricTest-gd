@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=8 format=3 uid="uid://c1auyu2505whv"]
+[gd_resource type="Resource" script_class="EnemyDefinition" format=3 uid="uid://c1auyu2505whv"]
 
 [ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
@@ -10,10 +10,10 @@
 
 [resource]
 script = ExtResource("1_enemy")
+ai_profile = ExtResource("4_ai")
 display_name = "Goblin Archer"
 faction = 1
 max_health = 75
-movement_range = 6.0
 strength = 7
 dexterity = 11
 intelligence = 6
@@ -22,4 +22,3 @@ starting_equipment = Array[ExtResource("3_item_type")]([ExtResource("7_bow")])
 body_color = Color(0.56, 0.68, 0.25, 1)
 health_bar_color = Color(0.96, 0.62, 0.18, 1)
 abilities = Array[ExtResource("2_ability_type")]([ExtResource("5_shot"), ExtResource("6_slow")])
-ai_profile = ExtResource("4_ai")

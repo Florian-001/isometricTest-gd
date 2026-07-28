@@ -127,6 +127,54 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 	assert_eq(lethal_estimate.health_delta, -27, "lethal Ice Shard forecasting should clamp damage to remaining health")
 	assert_true(is_zero_approx(lethal_estimate.utility_hint), "lethal damage should not forecast applying Slow afterward")
 
+	var frost_bow := load("res://resources/items/frost_bow.tres") as ItemDefinition
+	caster.equip_item(frost_bow)
+	var frost_arrow := AbilityDefinitionScript.new() as AbilityDefinition
+	frost_arrow.ability_type = AbilityDefinition.AbilityType.RANGED
+	frost_arrow.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	frost_arrow.scaling_stat = UnitStat.Type.NONE
+	frost_arrow.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var frost_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
+	var frost_score := planner._forecast_ability(
+		caster,
+		frost_arrow,
+		opponent.grid_cell,
+		frost_snapshot,
+		targeting,
+		profile
+	)
+	assert_true(is_equal_approx(frost_score, 18.0), "Frost Bow AI value should combine 10 weapon damage with Slow utility 8")
+	assert_eq(frost_snapshot.get_health(opponent), 90, "weapon status forecasting should preserve the exact damage result")
+
+	frost_arrow.status_effect = load("res://resources/statuses/slow.tres") as StatusEffectDefinition
+	var duplicate_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
+	var duplicate_score := planner._forecast_ability(
+		caster,
+		frost_arrow,
+		opponent.grid_cell,
+		duplicate_snapshot,
+		targeting,
+		profile
+	)
+	assert_true(is_equal_approx(duplicate_score, 18.0), "matching ability and weapon statuses should contribute AI utility only once")
+
+	var magic_damage := AbilityDefinitionScript.new() as AbilityDefinition
+	magic_damage.ability_type = AbilityDefinition.AbilityType.MAGIC
+	magic_damage.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	magic_damage.innate_damage = 10
+	magic_damage.scaling_stat = UnitStat.Type.NONE
+	magic_damage.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var magic_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
+	var magic_score := planner._forecast_ability(
+		caster,
+		magic_damage,
+		opponent.grid_cell,
+		magic_snapshot,
+		targeting,
+		profile
+	)
+	assert_true(is_equal_approx(magic_score, 10.0), "Magic AI forecasts should ignore equipped weapon statuses")
+
 
 func test_virtual_origin_targeting_does_not_move_live_unit() -> void:
 	var caster := _make_unit(false, Vector2i.ZERO, 4.0, [])

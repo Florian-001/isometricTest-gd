@@ -314,6 +314,18 @@ func get_equipped_weapon() -> ItemDefinition:
 	return get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON)
 
 
+func get_weapon_for_ability(ability: AbilityDefinition) -> ItemDefinition:
+	if ability == null:
+		return null
+	var required_weapon_type := ability.get_required_weapon_type()
+	if required_weapon_type < 0:
+		return null
+	var weapon := get_equipped_weapon()
+	if weapon == null or int(weapon.weapon_type) != required_weapon_type:
+		return null
+	return weapon
+
+
 func has_equipped_weapon_type(weapon_type: ItemDefinition.WeaponType) -> bool:
 	var weapon := get_equipped_weapon()
 	return weapon != null and weapon.weapon_type == weapon_type

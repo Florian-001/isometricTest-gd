@@ -421,11 +421,14 @@ func _get_slot_name(slot: ItemDefinition.EquipmentSlot) -> String:
 
 func _get_item_name_with_damage(item: ItemDefinition) -> String:
 	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
-		return "%s · %s · %d DMG" % [
+		var result := "%s · %s · %d DMG" % [
 			item.display_name,
 			_get_weapon_type_name(item),
 			item.weapon_damage,
 		]
+		if item.status_effect != null:
+			result += " · %s" % item.status_effect.display_name
+		return result
 	return item.display_name
 
 
@@ -433,6 +436,8 @@ func _get_item_slot_summary(item: ItemDefinition) -> String:
 	var summary := _get_slot_name(item.slot)
 	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
 		summary += " · %s · %d DMG" % [_get_weapon_type_name(item), item.weapon_damage]
+		if item.status_effect != null:
+			summary += " · %s" % item.status_effect.display_name
 	return summary
 
 
@@ -441,6 +446,8 @@ func _get_item_tooltip(item: ItemDefinition, action: String) -> String:
 	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
 		lines.append("Weapon type: %s" % _get_weapon_type_name(item))
 		lines.append("Weapon damage: %d" % item.weapon_damage)
+		if item.status_effect != null:
+			lines.append("Applies: %s" % item.status_effect.get_description())
 	lines.append("Click to %s" % action)
 	return "\n".join(lines)
 

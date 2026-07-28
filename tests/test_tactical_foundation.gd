@@ -19,6 +19,9 @@ const WallPainterPluginScript = preload("res://addons/wall_painter/wall_painter_
 const ProjectileDeliveryScript = preload("res://scripts/projectile_delivery.gd")
 const AbilityExecutorScript = preload("res://scripts/ability_executor.gd")
 const MeleeDeliveryScript = preload("res://scripts/melee_delivery.gd")
+const StatusCatalogScript = preload("res://addons/tile_painter/status_effect_catalog.gd")
+const ItemCatalogScript = preload("res://addons/tile_painter/item_definition_catalog.gd")
+const ItemArrayModelScript = preload("res://addons/tile_painter/item_array_editor_model.gd")
 
 
 func suite_name() -> String:
@@ -277,11 +280,22 @@ func test_ability_resources_and_sample_assignment() -> void:
 
 	var item := ItemDefinition.new()
 	assert_eq(item.weapon_type, ItemDefinition.WeaponType.MELEE, "new weapons should default to Melee")
+	assert_eq(item.status_effect, null, "new weapons should default to no Status Effect")
 	assert_true(_has_editor_property(item, &"weapon_type"), "Weapon Type should be visible for Weapon items")
+	assert_true(_has_editor_property(item, &"status_effect"), "Status Effect should be visible for Weapon items")
+	var status_inspector_source := FileAccess.get_file_as_string("res://addons/tile_painter/tile_status_inspector.gd")
+	assert_true(status_inspector_source.contains("object is ItemDefinition"), "the saved-status dropdown should handle ItemDefinition resources")
+	assert_eq(
+		StatusCatalogScript.get_statuses().map(func(saved_status: StatusEffectDefinition): return saved_status.display_name),
+		["Burning", "Focus", "Slow"],
+		"the weapon status dropdown should discover every saved status deterministically"
+	)
 	item.slot = ItemDefinition.EquipmentSlot.ARMOR
 	assert_false(_has_editor_property(item, &"weapon_type"), "Weapon Type should be hidden for Armor items")
+	assert_false(_has_editor_property(item, &"status_effect"), "Status Effect should be hidden for Armor items")
 	item.slot = ItemDefinition.EquipmentSlot.ACCESSORY
 	assert_false(_has_editor_property(item, &"weapon_type"), "Weapon Type should be hidden for Accessory items")
+	assert_false(_has_editor_property(item, &"status_effect"), "Status Effect should be hidden for Accessory items")
 
 
 func test_weapon_compatibility_is_independent_from_damage_type_and_delivery() -> void:
@@ -405,6 +419,7 @@ func test_sample_weapon_and_ability_type_migration() -> void:
 		ItemDefinition.WeaponType.RANGED: [
 			"res://resources/items/ranger_bow.tres",
 			"res://resources/items/goblin_bow.tres",
+			"res://resources/items/frost_bow.tres",
 		],
 	}
 	for expected_type in weapon_paths:
@@ -412,6 +427,200 @@ func test_sample_weapon_and_ability_type_migration() -> void:
 			var weapon := load(path) as ItemDefinition
 			assert_eq(weapon.slot, ItemDefinition.EquipmentSlot.WEAPON, "%s should remain a Weapon-slot item" % weapon.display_name)
 			assert_eq(weapon.weapon_type, expected_type, "%s should use its migrated Weapon Type" % weapon.display_name)
+
+
+func test_automatic_item_catalog_and_typed_array_editor_model() -> void:
+	var catalog := ItemCatalogScript.get_items()
+	var names: Array[String] = []
+	for item in catalog:
+		names.append(item.display_name)
+		assert_true(item.resource_path.begins_with("res://resources/items/"), "the item catalog should include only saved item resources")
+	assert_eq(names, [
+		"Frost Bow",
+		"Goblin Bow",
+		"Goblin Club",
+		"Goblin Sword",
+		"Iron Sword",
+		"Mage Staff",
+		"Raider Weapon",
+		"Ranger Armor",
+		"Ranger Bow",
+		"Sage Charm",
+		"Wolf Claws",
+		"Wooden Sword",
+	], "the automatic item catalog should discover and sort every saved item deterministically")
+	assert_eq(ItemCatalogScript.get_labels(catalog), names, "unique item names should appear directly in selector rows")
+	var external := ItemDefinition.new()
+	external.display_name = "External Relic"
+	assert_eq(ItemCatalogScript.get_external_label(external), "External Relic (external)", "out-of-catalog selections should remain visible")
+
+	var iron_sword := load("res://resources/items/iron_sword.tres") as ItemDefinition
+	var frost_bow := load("res://resources/items/frost_bow.tres") as ItemDefinition
+	var ranger_bow := load("res://resources/items/ranger_bow.tres") as ItemDefinition
+	var initial: Array[ItemDefinition] = [iron_sword, null, frost_bow, frost_bow]
+	var selected := ItemArrayModelScript.replace_entry(initial, 1, ranger_bow)
+	assert_true(selected.is_typed(), "selector edits should preserve a typed array")
+	assert_eq(selected.get_typed_script(), load("res://scripts/item_definition.gd"), "selector arrays should retain their ItemDefinition element type")
+	assert_eq(selected, [iron_sword, ranger_bow, frost_bow, frost_bow], "selecting an item should replace only its row")
+	assert_eq(initial[1], null, "selector operations should not mutate the Inspector source array in place")
+	var cleared := ItemArrayModelScript.replace_entry(selected, 1, null)
+	assert_eq(cleared[1], null, "the None option should preserve explicit empty entries")
+	var appended := ItemArrayModelScript.append_empty(cleared)
+	assert_eq(appended.size(), 5, "Add Item should append one empty selector row")
+	var moved := ItemArrayModelScript.move_entry(appended, 3, -1)
+	assert_eq(moved[2], frost_bow, "reordering should preserve repeated item resources")
+	var removed := ItemArrayModelScript.remove_entry(moved, 4)
+	assert_eq(removed.size(), 4, "Remove should delete only the selected row")
+
+	var inspector_source := FileAccess.get_file_as_string("res://addons/tile_painter/item_array_inspector.gd")
+	for property_name in ["starting_equipment", "starting_equipment_overrides", "starting_items"]:
+		assert_true(inspector_source.contains(property_name), "%s should use the automatic item selector" % property_name)
+	var editor_source := FileAccess.get_file_as_string("res://addons/tile_painter/item_array_editor_property.gd")
+	assert_true(editor_source.contains("filesystem_changed.connect"), "visible item selectors should refresh after filesystem changes")
+	assert_true(editor_source.contains("emit_changed"), "selector edits should use Godot Inspector undo/redo changes")
+
+
+func test_weapon_status_applies_to_every_surviving_weapon_damage_target() -> void:
+	var frost_bow := load("res://resources/items/frost_bow.tres") as ItemDefinition
+	var slow := load("res://resources/statuses/slow.tres") as StatusEffectDefinition
+	assert_eq(frost_bow.display_name, "Frost Bow", "Frost Bow should be reusable")
+	assert_eq(frost_bow.weapon_type, ItemDefinition.WeaponType.RANGED, "Frost Bow should be Ranged")
+	assert_eq(frost_bow.weapon_damage, 10, "Frost Bow should provide 10 weapon damage")
+	assert_eq(frost_bow.status_effect, slow, "Frost Bow should expose reusable Slow in the Inspector")
+
+	var caster := _make_unit(true, Vector2i(1, 1), 6.0)
+	caster.equip_item(frost_bow)
+	var target_a := _make_unit(false, Vector2i(2, 1), 6.0)
+	var target_b := _make_unit(false, Vector2i(2, 2), 6.0)
+	var units: Array[TacticalCharacter] = [caster, target_a, target_b]
+	var targeting := AbilityTargetingScript.new(Vector2i(6, 6)) as AbilityTargeting
+	var executor := track(AbilityExecutorScript.new()) as AbilityExecutor
+	var sample_caster := track(TacticalCharacterScript.new()) as TacticalCharacter
+	sample_caster.definition = load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
+	sample_caster._ready()
+	sample_caster.equip_item(frost_bow)
+	var sample_target := _make_unit(false, Vector2i(1, 0), 6.0)
+	var sample_arrow := load("res://resources/abilities/arrow.tres") as AbilityDefinition
+	var sample_units: Array[TacticalCharacter] = [sample_caster, sample_target]
+	assert_eq(sample_arrow.calculate_damage(sample_caster), 17, "sample Arrow should deal Frost Bow 10 plus 60% of Dexterity 12")
+	executor._apply_effects(sample_caster, sample_target.grid_cell, sample_arrow, sample_units, targeting, {})
+	assert_eq(sample_target.current_health, 83, "sample Arrow execution should use its displayed 17 damage")
+	assert_eq(sample_target.get_active_statuses()[0].definition, slow, "sample Arrow should apply Frost Bow Slow")
+	assert_eq(sample_target.get_active_statuses()[0].source, frost_bow, "sample Arrow Slow should retain Frost Bow as source")
+	var volley := AbilityDefinition.new()
+	volley.display_name = "Frost Volley"
+	volley.ability_type = AbilityDefinition.AbilityType.RANGED
+	volley.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	volley.scaling_stat = UnitStat.Type.NONE
+	volley.area_of_effect = 3
+	volley.target_flags = AbilityDefinition.TargetFlags.ENEMY
+
+	assert_true(volley.uses_weapon_damage(caster), "a damaging Ranged ability should use the matching Frost Bow")
+	assert_eq(volley.calculate_damage(caster), 10, "Frost Bow should contribute its exact weapon damage")
+	assert_eq(volley.get_weapon_status_effect(caster), slow, "the centralized ability API should expose Frost Bow Slow")
+	assert_true(volley.get_description(caster).contains("Weapon applies Slow"), "live ability tooltips should describe the weapon status")
+	executor._apply_effects(caster, target_a.grid_cell, volley, units, targeting, {})
+	for target in [target_a, target_b]:
+		assert_eq(target.current_health, 90, "every affected enemy should take Frost Bow damage")
+		assert_eq(target.get_active_statuses().size(), 1, "every surviving damaged enemy should receive Slow once")
+		assert_eq(target.get_active_statuses()[0].definition, slow, "Frost Bow should apply the reusable Slow definition")
+		assert_eq(target.get_active_statuses()[0].source, frost_bow, "weapon-applied statuses should record the weapon as source")
+		assert_eq(target.get_active_statuses()[0].source_unit, caster, "weapon-applied statuses should record the caster")
+
+	executor._apply_effects(caster, target_a.grid_cell, volley, units, targeting, {})
+	assert_eq(target_a.get_active_statuses().size(), 1, "repeated Frost Bow hits should refresh rather than stack Slow")
+	assert_eq(target_a.get_active_statuses()[0].remaining_turns, 2, "a repeated hit should restore Slow's full duration")
+
+	var lethal_target := _make_unit(false, Vector2i(3, 1), 6.0)
+	lethal_target.current_health = 10
+	var lethal_units: Array[TacticalCharacter] = [caster, lethal_target]
+	executor._apply_effects(caster, lethal_target.grid_cell, volley, lethal_units, targeting, {})
+	assert_eq(lethal_target.current_health, 0, "Frost Bow damage should still defeat a low-health target")
+	assert_true(lethal_target.get_active_statuses().is_empty(), "lethal weapon damage should not apply its status")
+
+	var duplicate_target := _make_unit(false, Vector2i(3, 2), 6.0)
+	var duplicate_units: Array[TacticalCharacter] = [caster, duplicate_target]
+	var duplicate_slow := AbilityDefinition.new()
+	duplicate_slow.ability_type = AbilityDefinition.AbilityType.RANGED
+	duplicate_slow.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	duplicate_slow.scaling_stat = UnitStat.Type.NONE
+	duplicate_slow.status_effect = slow
+	duplicate_slow.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	executor._apply_effects(caster, duplicate_target.grid_cell, duplicate_slow, duplicate_units, targeting, {})
+	assert_eq(duplicate_target.get_active_statuses().size(), 1, "matching ability and weapon statuses should not duplicate")
+	assert_eq(duplicate_target.get_active_statuses()[0].source, duplicate_slow, "the ability-owned copy should keep source precedence")
+	var nested_target := _make_unit(false, Vector2i(3, 3), 6.0)
+	var nested_units: Array[TacticalCharacter] = [caster, nested_target]
+	var nested_slow := AbilityDefinition.new()
+	nested_slow.ability_type = AbilityDefinition.AbilityType.RANGED
+	nested_slow.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	nested_slow.scaling_stat = UnitStat.Type.NONE
+	nested_slow.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var apply_slow := ApplyStatusEffectDefinition.new()
+	apply_slow.status_effect = slow
+	var nested_effects: Array[AbilityEffectDefinition] = [apply_slow]
+	nested_slow.effects = nested_effects
+	executor._apply_effects(caster, nested_target.grid_cell, nested_slow, nested_units, targeting, {})
+	assert_eq(nested_target.get_active_statuses().size(), 1, "matching Additional Effects and weapon statuses should not duplicate")
+	assert_eq(nested_target.get_active_statuses()[0].source, nested_slow, "the Additional Effect copy should keep source precedence")
+
+	var burning_target := _make_unit(false, Vector2i(4, 1), 6.0)
+	var burning_units: Array[TacticalCharacter] = [caster, burning_target]
+	var burning_shot := AbilityDefinition.new()
+	burning_shot.ability_type = AbilityDefinition.AbilityType.RANGED
+	burning_shot.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	burning_shot.scaling_stat = UnitStat.Type.NONE
+	burning_shot.status_effect = load("res://resources/statuses/burning.tres") as StatusEffectDefinition
+	burning_shot.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	executor._apply_effects(caster, burning_target.grid_cell, burning_shot, burning_units, targeting, {})
+	var applied_ids: Dictionary = {}
+	for active_status in burning_target.get_active_statuses():
+		applied_ids[active_status.definition.status_id] = true
+	assert_true(applied_ids.has(&"burning") and applied_ids.has(&"slow"), "different ability and weapon statuses should both apply")
+
+	var legacy_target := _make_unit(false, Vector2i(4, 2), 6.0)
+	var legacy_damage := DamageEffectScript.new() as DamageEffectDefinition
+	legacy_damage.innate_damage = 1
+	legacy_damage.scaling_stat = UnitStat.Type.NONE
+	legacy_damage.apply(caster, legacy_target)
+	assert_true(legacy_target.get_active_statuses().is_empty(), "standalone legacy damage should not trigger weapon statuses")
+	var legacy_ability := AbilityDefinition.new()
+	legacy_ability.ability_type = AbilityDefinition.AbilityType.RANGED
+	legacy_ability.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var legacy_effects: Array[AbilityEffectDefinition] = [legacy_damage]
+	legacy_ability.effects = legacy_effects
+	var ability_legacy_target := _make_unit(false, Vector2i(4, 3), 6.0)
+	var legacy_units: Array[TacticalCharacter] = [caster, ability_legacy_target]
+	executor._apply_effects(caster, ability_legacy_target.grid_cell, legacy_ability, legacy_units, targeting, {})
+	assert_eq(ability_legacy_target.get_active_statuses()[0].definition, slow, "ability-owned legacy damage should trigger its weapon status")
+
+	for ability_type in [AbilityDefinition.AbilityType.MAGIC, AbilityDefinition.AbilityType.MELEE]:
+		var excluded_target := _make_unit(false, Vector2i(5, ability_type), 6.0)
+		var excluded := AbilityDefinition.new()
+		excluded.ability_type = ability_type
+		excluded.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+		excluded.innate_damage = 5
+		excluded.scaling_stat = UnitStat.Type.NONE
+		excluded.target_flags = AbilityDefinition.TargetFlags.ENEMY
+		var excluded_units: Array[TacticalCharacter] = [caster, excluded_target]
+		executor._apply_effects(caster, excluded_target.grid_cell, excluded, excluded_units, targeting, {})
+		assert_true(excluded_target.get_active_statuses().is_empty(), "Magic and mismatched Melee abilities should not apply Frost Bow Slow")
+
+	var utility_target := _make_unit(false, Vector2i(5, 3), 6.0)
+	var ranged_utility := AbilityDefinition.new()
+	ranged_utility.ability_type = AbilityDefinition.AbilityType.RANGED
+	ranged_utility.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var utility_units: Array[TacticalCharacter] = [caster, utility_target]
+	executor._apply_effects(caster, utility_target.grid_cell, ranged_utility, utility_units, targeting, {})
+	assert_true(utility_target.get_active_statuses().is_empty(), "non-damaging weapon abilities should not apply weapon statuses")
+
+	var unarmed_caster := _make_unit(true, Vector2i.ZERO, 6.0)
+	var unarmed_target := _make_unit(false, Vector2i(1, 0), 6.0)
+	var unarmed_units: Array[TacticalCharacter] = [unarmed_caster, unarmed_target]
+	assert_false(volley.uses_weapon_damage(unarmed_caster), "a missing weapon should not count as weapon damage")
+	executor._apply_effects(unarmed_caster, unarmed_target.grid_cell, volley, unarmed_units, targeting, {})
+	assert_eq(unarmed_target.current_health, 100, "an unavailable weapon ability should not damage an unarmed target")
+	assert_true(unarmed_target.get_active_statuses().is_empty(), "a missing weapon should not apply a weapon status")
 
 
 func test_unit_ability_loadout_override() -> void:

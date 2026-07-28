@@ -3,13 +3,26 @@ extends Node
 
 signal items_changed
 
+@export_category("Starting Inventory")
+## Unused items available when the battle begins. Each entry represents one copy.
+## Repeat an ItemDefinition in this list to start with multiple copies.
 @export var starting_items: Array[ItemDefinition] = []
 
 var _items: Array[ItemDefinition] = []
 
 
 func _ready() -> void:
-	_items.assign(starting_items)
+	initialize_starting_items(starting_items)
+
+
+## Replaces the runtime contents with a copy of the scene's configured unused items.
+## Empty Inspector array entries are ignored so partially authored lists remain safe.
+func initialize_starting_items(items: Array[ItemDefinition]) -> void:
+	_items.clear()
+	for item in items:
+		if item != null:
+			_items.append(item)
+	items_changed.emit()
 
 
 func get_items() -> Array[ItemDefinition]:

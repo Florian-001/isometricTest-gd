@@ -19,6 +19,18 @@ func _run() -> void:
 	var friend_b := main.get_node("Characters/FriendB") as TacticalCharacter
 	var equipment_entries := screen.equipment_entries
 
+	var starting_property := _get_property_info(inventory, &"starting_items")
+	_check(not starting_property.is_empty(), "GeneralInventory should expose Starting Items in the Inspector")
+	_check(starting_property.get("type") == TYPE_ARRAY, "GeneralInventory Starting Items should be an array")
+	_check(bool(int(starting_property.get("usage", 0)) & PROPERTY_USAGE_EDITOR), "GeneralInventory Starting Items should be Inspector-editable")
+	_check(String(starting_property.get("hint_string", "")).contains("ItemDefinition"), "GeneralInventory Starting Items should accept only ItemDefinition resources")
+	_check(_get_property_info(main, &"starting_items").is_empty(), "Main should not duplicate the inventory-owned starting-item field")
+	_check(inventory.starting_items.size() == 3, "GeneralInventory should expose the three configured unused sample items")
+	_check(
+		inventory.starting_items.map(func(item: ItemDefinition): return item.display_name)
+		== ["Iron Sword", "Ranger Armor", "Sage Charm"],
+		"the existing unused sample items should remain on GeneralInventory without changing order"
+	)
 	_check(inventory.get_items().size() == 3, "the general inventory should start with three unused sample items")
 	main._on_inventory_button_toggled(true)
 	_check(screen.visible, "the Inventory button should open the inventory screen")
@@ -66,6 +78,7 @@ func _run() -> void:
 	_check(inventory.get_items().size() == 3, "equipping an item should remove it from the general inventory")
 	_check(_stat_value(screen, "strength") == "12", "re-equipping should restore the Strength total")
 	_check(_ability_summary(screen, "Strike") == "32 DMG", "re-equipping should restore the live physical ability total")
+	_check(inventory.starting_items.size() == 3, "runtime equipment transfers must not mutate GeneralInventory's configured starting array")
 
 	friend_a.apply_damage(5)
 	_check(_stat_value(screen, "health") == "95 / 100", "health signals should refresh an open character-details panel")
@@ -92,6 +105,13 @@ func _run() -> void:
 	root.add_child(utility_screen)
 	var utility_inventory := GeneralInventory.new()
 	root.add_child(utility_inventory)
+	var repeated_item := load("res://resources/items/iron_sword.tres") as ItemDefinition
+	var repeated_start: Array[ItemDefinition] = [repeated_item, repeated_item]
+	utility_inventory.initialize_starting_items(repeated_start)
+	_check(utility_inventory.get_items().size() == 2, "repeating an Inspector item should create two runtime entries")
+	_check(utility_inventory.take_item(repeated_item), "one repeated item should be removable independently")
+	_check(utility_inventory.get_items().size() == 1, "removing one repeated item should retain the second copy")
+	_check(repeated_start.size() == 2, "runtime inventory changes should not mutate the configured source array")
 	var utility_characters: Array[TacticalCharacter] = [utility_character]
 	utility_screen.setup(utility_inventory, utility_characters)
 	_check(_ability_summary(utility_screen, "Focus") == "Focus", "additional status abilities should show their status name")
@@ -121,6 +141,22 @@ func _run() -> void:
 	utility_inventory.queue_free()
 	main.queue_free()
 	await process_frame
+
+	var empty_main := main_scene.instantiate()
+	var empty_starting_items: Array[ItemDefinition] = []
+	(empty_main.get_node("GeneralInventory") as GeneralInventory).starting_items = empty_starting_items
+	root.add_child(empty_main)
+	await process_frame
+	_check(
+		(empty_main.get_node("GeneralInventory") as GeneralInventory).get_items().is_empty(),
+		"an empty GeneralInventory Starting Items array should create an empty unused inventory"
+	)
+	_check(
+		(empty_main.get_node("Characters/FriendA") as TacticalCharacter).get_equipped_items().size() == 3,
+		"an empty unused inventory should not change character starting equipment"
+	)
+	empty_main.queue_free()
+	await process_frame
 	if _failed:
 		quit(1)
 	else:
@@ -133,6 +169,13 @@ func _check(condition: bool, message: String) -> void:
 		return
 	_failed = true
 	push_error(message)
+
+
+func _get_property_info(object: Object, property_name: StringName) -> Dictionary:
+	for property_info in object.get_property_list():
+		if StringName(property_info.name) == property_name:
+			return property_info
+	return {}
 
 
 func _find_stat_row(screen: InventoryScreen, key: String) -> Control:

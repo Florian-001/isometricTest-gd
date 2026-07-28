@@ -1,6 +1,10 @@
 class_name InventoryScreen
 extends Control
 
+const POSITIVE_CHANGE_COLOR := Color(0.34, 0.9, 0.5)
+const NEGATIVE_CHANGE_COLOR := Color(1.0, 0.38, 0.36)
+const MUTED_TEXT_COLOR := Color(0.58, 0.66, 0.74)
+
 signal closed
 signal equipment_updated(character: TacticalCharacter)
 
@@ -12,6 +16,8 @@ var _character: TacticalCharacter
 @onready var character_name: Label = $Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/CharacterName
 @onready var general_entries: VBoxContainer = $Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries
 @onready var equipment_entries: VBoxContainer = $Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries
+@onready var stats_entries: VBoxContainer = $Dim/Panel/Margin/VBox/Columns/DetailsPanel/Margin/VBox/StatsEntries
+@onready var ability_entries: VBoxContainer = $Dim/Panel/Margin/VBox/Columns/DetailsPanel/Margin/VBox/AbilitiesScroll/AbilityEntries
 @onready var close_button: Button = $Dim/Panel/Margin/VBox/Header/CloseButton
 
 
@@ -25,17 +31,19 @@ func setup(inventory: GeneralInventory, characters: Array[TacticalCharacter]) ->
 	_characters.assign(characters)
 	if not _inventory.items_changed.is_connected(_refresh):
 		_inventory.items_changed.connect(_refresh)
+	var next_character := _character
+	if not is_instance_valid(next_character) or not _characters.has(next_character):
+		next_character = _characters[0] if not _characters.is_empty() else null
+	_set_character(next_character)
 	_rebuild_character_picker()
-	if _character == null and not _characters.is_empty():
-		_character = _characters[0]
 	_refresh()
 
 
 func open_for(preferred_character: TacticalCharacter = null) -> void:
 	if is_instance_valid(preferred_character) and _characters.has(preferred_character):
-		_character = preferred_character
+		_set_character(preferred_character)
 	elif not is_instance_valid(_character) and not _characters.is_empty():
-		_character = _characters[0]
+		_set_character(_characters[0])
 	_sync_character_picker()
 	_refresh()
 	show()
@@ -71,7 +79,7 @@ func _sync_character_picker() -> void:
 func _on_character_selected(index: int) -> void:
 	if index < 0 or index >= _characters.size():
 		return
-	_character = _characters[index]
+	_set_character(_characters[index])
 	_refresh()
 
 
@@ -82,6 +90,227 @@ func _refresh() -> void:
 	_clear_entries(equipment_entries)
 	_build_general_inventory()
 	_build_equipment_slots()
+	_refresh_character_details()
+
+
+func _set_character(character: TacticalCharacter) -> void:
+	if _character == character:
+		_connect_character_signals()
+		return
+	_disconnect_character_signals()
+	_character = character
+	_connect_character_signals()
+
+
+func _connect_character_signals() -> void:
+	if not is_instance_valid(_character):
+		return
+	if not _character.stats_changed.is_connected(_on_selected_character_stats_changed):
+		_character.stats_changed.connect(_on_selected_character_stats_changed)
+	if not _character.health_changed.is_connected(_on_selected_character_health_changed):
+		_character.health_changed.connect(_on_selected_character_health_changed)
+	if not _character.equipment_changed.is_connected(_on_selected_character_equipment_changed):
+		_character.equipment_changed.connect(_on_selected_character_equipment_changed)
+
+
+func _disconnect_character_signals() -> void:
+	if not is_instance_valid(_character):
+		return
+	if _character.stats_changed.is_connected(_on_selected_character_stats_changed):
+		_character.stats_changed.disconnect(_on_selected_character_stats_changed)
+	if _character.health_changed.is_connected(_on_selected_character_health_changed):
+		_character.health_changed.disconnect(_on_selected_character_health_changed)
+	if _character.equipment_changed.is_connected(_on_selected_character_equipment_changed):
+		_character.equipment_changed.disconnect(_on_selected_character_equipment_changed)
+
+
+func _on_selected_character_stats_changed() -> void:
+	_refresh_character_details()
+
+
+func _on_selected_character_health_changed(_current: int, _maximum: int) -> void:
+	_refresh_character_details()
+
+
+func _on_selected_character_equipment_changed(
+	_slot: ItemDefinition.EquipmentSlot,
+	_item: ItemDefinition
+) -> void:
+	_refresh()
+
+
+func _refresh_character_details() -> void:
+	if not is_node_ready():
+		return
+	_clear_entries(stats_entries)
+	_clear_entries(ability_entries)
+	if not is_instance_valid(_character):
+		_add_empty_label(stats_entries, "No character selected")
+		_add_empty_label(ability_entries, "No abilities available")
+		return
+	_build_stat_entries()
+	_build_ability_entries()
+
+
+func _build_stat_entries() -> void:
+	_add_stat_row(
+		"health",
+		"Health",
+		"%d / %d" % [_character.current_health, _character.get_max_health()]
+	)
+	_add_effective_stat_row("movement", "Movement", UnitStat.Type.MOVEMENT_RANGE)
+	_add_effective_stat_row("strength", "Strength", UnitStat.Type.STRENGTH)
+	_add_effective_stat_row("dexterity", "Dexterity", UnitStat.Type.DEXTERITY)
+	_add_effective_stat_row("intelligence", "Intelligence", UnitStat.Type.INTELLIGENCE)
+	_add_effective_stat_row("speed", "Speed", UnitStat.Type.SPEED)
+	_add_stat_row(
+		"weapon_damage",
+		"Weapon Damage",
+		str(_character.get_weapon_damage()),
+		float(_character.get_weapon_damage())
+	)
+
+
+func _add_effective_stat_row(key: String, label_text: String, stat: UnitStat.Type) -> void:
+	var total := _character.get_effective_stat(stat)
+	var without_equipment := _character.get_effective_stat_without_equipment(stat)
+	_add_stat_row(key, label_text, _format_stat_value(total), total - without_equipment)
+
+
+func _add_stat_row(
+	key: String,
+	label_text: String,
+	value_text: String,
+	equipment_change: float = 0.0
+) -> void:
+	var row := HBoxContainer.new()
+	row.name = key.to_pascal_case()
+	row.set_meta("stat_key", key)
+	row.set_meta("value_text", value_text)
+	row.custom_minimum_size = Vector2(0.0, 22.0)
+
+	var name_label := Label.new()
+	name_label.name = "Name"
+	name_label.text = label_text
+	name_label.custom_minimum_size.x = 126.0
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_label)
+
+	var value_label := Label.new()
+	value_label.name = "Value"
+	value_label.text = value_text
+	value_label.custom_minimum_size.x = 72.0
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(value_label)
+
+	var change_label := Label.new()
+	change_label.name = "Change"
+	change_label.custom_minimum_size.x = 58.0
+	change_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	if not is_zero_approx(equipment_change):
+		change_label.text = "(%s%s)" % ["+" if equipment_change > 0.0 else "", _format_stat_value(equipment_change)]
+		change_label.add_theme_color_override(
+			"font_color",
+			POSITIVE_CHANGE_COLOR if equipment_change > 0.0 else NEGATIVE_CHANGE_COLOR
+		)
+	row.set_meta("change_text", change_label.text)
+	row.add_child(change_label)
+	stats_entries.add_child(row)
+
+
+func _build_ability_entries() -> void:
+	var abilities := _character.get_abilities()
+	if abilities.is_empty():
+		_add_empty_label(ability_entries, "No abilities configured")
+		return
+	for ability in abilities:
+		if ability != null:
+			ability_entries.add_child(_make_ability_entry(ability))
+
+
+func _make_ability_entry(ability: AbilityDefinition) -> PanelContainer:
+	var entry := PanelContainer.new()
+	entry.custom_minimum_size = Vector2(0.0, 54.0)
+	entry.mouse_filter = Control.MOUSE_FILTER_STOP
+	entry.tooltip_text = "%s\n%s" % [ability.display_name, ability.get_description(_character)]
+	entry.set_meta("ability", ability)
+	var summary := _get_ability_summary(ability)
+	entry.set_meta("summary_text", summary)
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = ability.placeholder_color.darkened(0.78)
+	style.border_color = ability.placeholder_color.darkened(0.18)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	entry.add_theme_stylebox_override("panel", style)
+
+	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_theme_constant_override("margin_left", 7)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_bottom", 6)
+	entry.add_child(margin)
+
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 9)
+	margin.add_child(row)
+
+	var visual: Control
+	if ability.image != null:
+		var icon := TextureRect.new()
+		icon.texture = ability.image
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		visual = icon
+	else:
+		var swatch := ColorRect.new()
+		swatch.color = ability.placeholder_color
+		visual = swatch
+	visual.custom_minimum_size = Vector2(38.0, 38.0)
+	visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(visual)
+
+	var labels := VBoxContainer.new()
+	labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	labels.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	labels.add_theme_constant_override("separation", 0)
+	row.add_child(labels)
+	var name_label := Label.new()
+	name_label.text = ability.display_name
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	labels.add_child(name_label)
+	var summary_label := Label.new()
+	summary_label.name = "Summary"
+	summary_label.text = summary
+	summary_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	summary_label.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
+	labels.add_child(summary_label)
+	return entry
+
+
+func _get_ability_summary(ability: AbilityDefinition) -> String:
+	if ability.has_damage():
+		return "%d DMG" % ability.calculate_damage(_character)
+	if ability.effect == AbilityDefinition.PrimaryEffect.HEAL:
+		return "%d HEAL" % ability.calculate_primary_effect_amount(_character)
+	var applied_status := ability.status_effect
+	if applied_status == null:
+		for additional_effect in ability.effects:
+			if additional_effect is ApplyStatusEffectDefinition:
+				applied_status = (additional_effect as ApplyStatusEffectDefinition).status_effect
+				if applied_status != null:
+					break
+	if applied_status != null:
+		return applied_status.display_name
+	return "Utility"
+
+
+func _format_stat_value(value: float) -> String:
+	if is_equal_approx(value, roundf(value)):
+		return str(roundi(value))
+	return "%.1f" % value
 
 
 func _build_general_inventory() -> void:
@@ -172,7 +401,7 @@ func _clear_entries(container: VBoxContainer) -> void:
 func _add_empty_label(container: VBoxContainer, text: String) -> void:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_color_override("font_color", Color(0.58, 0.66, 0.74))
+	label.add_theme_color_override("font_color", MUTED_TEXT_COLOR)
 	container.add_child(label)
 
 

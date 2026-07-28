@@ -205,6 +205,10 @@ func get_initiative() -> int:
 
 
 func get_base_stat(stat: UnitStat.Type) -> float:
+	return _get_base_stat_for_sources(stat, true)
+
+
+func _get_base_stat_for_sources(stat: UnitStat.Type, include_equipment: bool) -> float:
 	match stat:
 		UnitStat.Type.STRENGTH:
 			if strength_override >= 0:
@@ -224,7 +228,7 @@ func get_base_stat(stat: UnitStat.Type) -> float:
 			return float(definition.speed) if definition != null else 0.0
 		UnitStat.Type.MOVEMENT_RANGE:
 			var speed_adjustment := (
-				get_effective_stat(UnitStat.Type.SPEED) - 10.0
+				_calculate_effective_stat(UnitStat.Type.SPEED, include_equipment) - 10.0
 			) * 0.25
 			return clampf(_get_base_movement_range() + speed_adjustment, 2.0, 10.0)
 		_:
@@ -232,13 +236,23 @@ func get_base_stat(stat: UnitStat.Type) -> float:
 
 
 func get_effective_stat(stat: UnitStat.Type) -> float:
+	return _calculate_effective_stat(stat, true)
+
+
+## Returns the same live stat calculation with item modifiers omitted. Active statuses,
+## definition values, and per-instance overrides remain included for equipment comparisons.
+func get_effective_stat_without_equipment(stat: UnitStat.Type) -> float:
+	return _calculate_effective_stat(stat, false)
+
+
+func _calculate_effective_stat(stat: UnitStat.Type, include_equipment: bool) -> float:
 	if stat == UnitStat.Type.NONE:
 		return 0.0
 	_initialize_runtime_stats()
 	var flat_total := 0.0
 	var percent_add_total := 0.0
 	var percent_multiplier := 1.0
-	for modifier in _get_all_modifiers():
+	for modifier in _get_all_modifiers(include_equipment):
 		if modifier == null or modifier.stat != stat:
 			continue
 		match modifier.operation:
@@ -248,7 +262,7 @@ func get_effective_stat(stat: UnitStat.Type) -> float:
 				percent_add_total += modifier.value
 			StatModifierDefinition.Operation.PERCENT_MULTIPLY:
 				percent_multiplier *= maxf(0.0, 1.0 + modifier.value)
-	var subtotal := get_base_stat(stat) + flat_total
+	var subtotal := _get_base_stat_for_sources(stat, include_equipment) + flat_total
 	var percent_add_multiplier := maxf(0.0, 1.0 + percent_add_total)
 	return maxf(0.0, subtotal * percent_add_multiplier * percent_multiplier)
 
@@ -537,12 +551,13 @@ func _initialize_runtime_stats() -> void:
 			_equipped_items[item.slot] = item
 
 
-func _get_all_modifiers() -> Array[StatModifierDefinition]:
+func _get_all_modifiers(include_equipment: bool = true) -> Array[StatModifierDefinition]:
 	var result: Array[StatModifierDefinition] = []
-	for item in get_equipped_items():
-		for modifier in item.modifiers:
-			if modifier != null:
-				result.append(modifier)
+	if include_equipment:
+		for item in get_equipped_items():
+			for modifier in item.modifiers:
+				if modifier != null:
+					result.append(modifier)
 	for active_status in _active_statuses:
 		if active_status.definition == null:
 			continue

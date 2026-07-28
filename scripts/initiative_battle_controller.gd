@@ -598,6 +598,8 @@ func _on_round_started(_round_number: int) -> void:
 
 func _on_character_defeated(character: TacticalCharacter) -> void:
 	turn_manager.notify_unit_state_changed()
+	if character.is_friendly():
+		inventory_screen.setup(general_inventory, _get_living_friendlies())
 	if character == turn_manager.current_unit:
 		call_deferred("_end_defeated_current_unit", character)
 

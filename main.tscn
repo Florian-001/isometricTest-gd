@@ -101,6 +101,7 @@ definition = ExtResource("5_friendly")
 max_health_override = 100
 movement_range_override = 6.0
 speed_override = 12
+starting_equipment_overrides = Array[ExtResource("23_item_type")]([ExtResource("20_sword")])
 starting_grid_cell = Vector2i(5, 2)
 
 [node name="FriendB" type="Node2D" parent="Characters" unique_id=2129219972]

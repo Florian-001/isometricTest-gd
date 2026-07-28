@@ -70,6 +70,37 @@ func test_equipment_modifier_order_replacement_and_shared_template_isolation() -
 	assert_eq(stats_events[0], 3, "every equipment change should emit stats_changed")
 
 
+func test_effective_stats_without_equipment_keep_statuses_and_speed_movement_rules() -> void:
+	var definition := CharacterDefinitionScript.new() as CharacterDefinition
+	definition.movement_range = 6.0
+	definition.strength = 10
+	definition.speed = 10
+	var unit := _make_unit(definition)
+	var equipment := ItemDefinitionScript.new() as ItemDefinition
+	var equipment_modifiers: Array[StatModifierDefinition] = [
+		_make_modifier(UnitStat.Type.STRENGTH, StatModifierDefinition.Operation.FLAT, 2.0),
+		_make_modifier(UnitStat.Type.SPEED, StatModifierDefinition.Operation.FLAT, -2.0),
+	]
+	equipment.modifiers = equipment_modifiers
+	unit.equip_item(equipment)
+	var status := _make_status(
+		&"comparison_buff",
+		2,
+		[
+			_make_modifier(UnitStat.Type.STRENGTH, StatModifierDefinition.Operation.FLAT, 3.0),
+			_make_modifier(UnitStat.Type.SPEED, StatModifierDefinition.Operation.FLAT, 4.0),
+		]
+	)
+	unit.apply_status(status, unit)
+
+	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.STRENGTH), 15.0), "live totals should include equipment and statuses")
+	assert_true(is_equal_approx(unit.get_effective_stat_without_equipment(UnitStat.Type.STRENGTH), 13.0), "equipment-free totals should retain status Strength")
+	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.SPEED), 12.0), "live Speed should combine equipment and status modifiers")
+	assert_true(is_equal_approx(unit.get_effective_stat_without_equipment(UnitStat.Type.SPEED), 14.0), "equipment-free Speed should remove only the item penalty")
+	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.MOVEMENT_RANGE), 6.5), "live Movement should use fully effective Speed")
+	assert_true(is_equal_approx(unit.get_effective_stat_without_equipment(UnitStat.Type.MOVEMENT_RANGE), 7.0), "equipment-free Movement should recalculate from Speed without equipment")
+
+
 func test_status_refresh_stacking_expiration_removal_and_dead_rejection() -> void:
 	var unit := _make_unit(CharacterDefinitionScript.new())
 	var focus := _make_status(

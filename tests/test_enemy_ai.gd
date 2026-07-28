@@ -36,6 +36,13 @@ func test_profile_defaults_resources_and_configuration_warnings() -> void:
 	var friendly := _make_unit(true, Vector2i.ONE, 4.0, [])
 	friendly.enemy_ai_profile = melee_profile
 	assert_true(friendly._get_configuration_warnings().size() > 0, "friendly units should warn that enemy AI is ignored")
+	var bundled_definition := EnemyDefinition.new()
+	bundled_definition.ai_profile = melee_profile
+	var bundled_enemy := track(TacticalCharacterScript.new()) as TacticalCharacter
+	bundled_enemy.definition = bundled_definition
+	assert_true(bundled_enemy._get_configuration_warnings().is_empty(), "a bundled archetype AI should satisfy enemy configuration")
+	bundled_definition.faction = CharacterDefinition.Faction.FRIENDLY
+	assert_true(bundled_enemy._get_configuration_warnings().size() > 0, "warnings should also recognize a bundled AI on an incorrectly friendly archetype")
 
 
 func test_effect_forecasts_clamp_health_and_support_custom_utility() -> void:
@@ -220,23 +227,181 @@ func test_walls_block_ai_ability_targeting() -> void:
 	assert_eq(plan.ability, null, "AI should not select a projectile through a wall")
 
 
-func test_sample_scene_has_two_profiles_shared_loadout_and_dev_history() -> void:
-	ResourceLoader.load("res://resources/enemy_raider.tres", "", ResourceLoader.CACHE_MODE_REPLACE)
+func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> void:
+	var ranger := _assert_enemy_definition(
+		"res://resources/enemies/ranger.tres",
+		"Ranger", 90, 6.0, [8, 14, 8, 12],
+		EnemyAIProfile.BehaviorStyle.RANGED,
+		["Ranger Bow", "Ranger Armor"],
+		["Enemy Shot", "Focus"]
+	)
+	var warrior := _assert_enemy_definition(
+		"res://resources/enemies/goblin_warrior.tres",
+		"Goblin Warrior", 115, 5.0, [12, 8, 5, 9],
+		EnemyAIProfile.BehaviorStyle.MELEE,
+		["Goblin Sword"],
+		["Enemy Slash"]
+	)
+	var archer := _assert_enemy_definition(
+		"res://resources/enemies/goblin_archer.tres",
+		"Goblin Archer", 75, 6.0, [7, 11, 6, 11],
+		EnemyAIProfile.BehaviorStyle.RANGED,
+		["Goblin Bow"],
+		["Enemy Shot", "Slow"]
+	)
+	var wolf := _assert_enemy_definition(
+		"res://resources/enemies/wolf.tres",
+		"Wolf", 85, 7.0, [14, 10, 4, 14],
+		EnemyAIProfile.BehaviorStyle.MELEE,
+		[],
+		["Strike"]
+	)
+	var mage := _assert_enemy_definition(
+		"res://resources/enemies/mage.tres",
+		"Mage", 70, 5.0, [5, 8, 15, 9],
+		EnemyAIProfile.BehaviorStyle.RANGED,
+		["Mage Staff"],
+		["Fireball", "Ice Shard", "Heal", "Slow"]
+	)
+	var body_colors := {
+		ranger.body_color: true,
+		warrior.body_color: true,
+		archer.body_color: true,
+		wolf.body_color: true,
+		mage.body_color: true,
+	}
+	assert_eq(body_colors.size(), 5, "every starter archetype should have a distinct body color")
+	for definition in [ranger, warrior, archer, wolf, mage]:
+		assert_eq(definition.health_bar_color, Color(0.96, 0.62, 0.18, 1), "%s should use the standard enemy health-bar color" % definition.display_name)
+
+	var scene_expectations := {
+		"res://scenes/enemies/ranger.tscn": "Ranger",
+		"res://scenes/enemies/goblin_warrior.tscn": "Goblin Warrior",
+		"res://scenes/enemies/goblin_warrior_club.tscn": "Goblin Warrior",
+		"res://scenes/enemies/goblin_archer.tscn": "Goblin Archer",
+		"res://scenes/enemies/wolf.tscn": "Wolf",
+		"res://scenes/enemies/mage.tscn": "Mage",
+	}
+	for scene_path in scene_expectations:
+		var enemy_scene := load(scene_path) as PackedScene
+		assert_true(enemy_scene != null, "%s should be a reusable enemy scene" % scene_path)
+		var enemy := track(enemy_scene.instantiate()) as TacticalCharacter
+		assert_eq(enemy.definition.display_name, scene_expectations[scene_path], "thin scenes should reference their shared archetype")
+		assert_eq(enemy.enemy_ai_profile, null, "thin scenes should inherit AI instead of duplicating it")
+		assert_true(enemy.get_enemy_ai_profile() != null, "thin scenes should resolve their bundled AI")
+
+	var sword_scene := load("res://scenes/enemies/goblin_warrior.tscn") as PackedScene
+	var sword_goblin := track(sword_scene.instantiate()) as TacticalCharacter
+	var second_sword_goblin := track(sword_scene.instantiate()) as TacticalCharacter
+	sword_goblin._ready()
+	second_sword_goblin._ready()
+	assert_eq(sword_goblin.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON).display_name, "Goblin Sword", "the base Goblin Warrior should inherit its Sword")
+	assert_eq(sword_goblin.get_weapon_damage(), 8, "Goblin Sword should provide 8 weapon damage")
+	assert_true(is_equal_approx(sword_goblin.get_effective_stat(UnitStat.Type.STRENGTH), 13.0), "Goblin Sword should add one Strength")
+	assert_eq(sword_goblin.get_abilities()[0].calculate_damage(sword_goblin), 34, "Sword Goblin Slash should deal 8 + 200% of Strength 13")
+	assert_eq(sword_goblin.get_initiative(), 9, "Sword Goblin should keep Speed 9")
+	sword_goblin.apply_damage(20)
+	sword_goblin.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
+	assert_eq(second_sword_goblin.current_health, 115, "repeated scene instances should have independent health")
+	assert_eq(second_sword_goblin.get_weapon_damage(), 8, "runtime equipment changes should not affect another instance")
+	assert_eq(sword_goblin.definition.starting_equipment[0].display_name, "Goblin Sword", "runtime changes should not mutate the shared definition")
+
+	var club_scene := load("res://scenes/enemies/goblin_warrior_club.tscn") as PackedScene
+	var club_goblin := track(club_scene.instantiate()) as TacticalCharacter
+	club_goblin._ready()
+	assert_eq(club_goblin.definition, second_sword_goblin.definition, "Sword and Club Goblins should share one archetype")
+	assert_eq(club_goblin.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON).display_name, "Goblin Club", "the Club variant should replace only its inherited weapon")
+	assert_eq(club_goblin.get_weapon_damage(), 12, "Goblin Club should provide 12 weapon damage")
+	assert_eq(club_goblin.get_abilities()[0].calculate_damage(club_goblin), 36, "Club Goblin Slash should deal 12 + 200% of Strength 12")
+	assert_eq(club_goblin.get_initiative(), 8, "Goblin Club should reduce Speed by one")
+
+	var ranger_unit := track((load("res://scenes/enemies/ranger.tscn") as PackedScene).instantiate()) as TacticalCharacter
+	ranger_unit._ready()
+	assert_eq(ranger_unit.get_weapon_damage(), 10, "Ranger Bow should provide 10 weapon damage")
+	assert_true(is_equal_approx(ranger_unit.get_effective_stat(UnitStat.Type.DEXTERITY), 16.0), "Ranger Armor should add two Dexterity")
+	assert_eq(ranger_unit.get_abilities()[0].calculate_damage(ranger_unit), 26, "Ranger Shot should use Bow damage and equipped Dexterity")
+	var archer_unit := track((load("res://scenes/enemies/goblin_archer.tscn") as PackedScene).instantiate()) as TacticalCharacter
+	archer_unit._ready()
+	assert_eq(archer_unit.get_weapon_damage(), 7, "Goblin Bow should provide 7 weapon damage")
+	assert_true(is_equal_approx(archer_unit.get_effective_stat(UnitStat.Type.DEXTERITY), 12.0), "Goblin Bow should add one Dexterity")
+	assert_eq(archer_unit.get_abilities()[0].calculate_damage(archer_unit), 19, "Goblin Archer Shot should use Bow damage and equipped Dexterity")
+	var wolf_unit := track((load("res://scenes/enemies/wolf.tscn") as PackedScene).instantiate()) as TacticalCharacter
+	wolf_unit._ready()
+	assert_true(wolf_unit.get_equipped_items().is_empty(), "Wolf should start without equipment")
+	assert_eq(wolf_unit.get_abilities()[0].calculate_damage(wolf_unit), 14, "Wolf Strike should scale from Strength without weapon damage")
+	var mage_unit := track((load("res://scenes/enemies/mage.tscn") as PackedScene).instantiate()) as TacticalCharacter
+	mage_unit._ready()
+	assert_true(is_equal_approx(mage_unit.get_effective_stat(UnitStat.Type.INTELLIGENCE), 17.0), "Mage Staff should add two Intelligence")
+	assert_eq(mage_unit.get_abilities()[0].calculate_damage(mage_unit), 37, "Mage Fireball should deal 20 plus effective Intelligence")
+	assert_eq(mage_unit.get_abilities()[1].calculate_damage(mage_unit), 32, "Mage Ice Shard should deal 15 plus effective Intelligence")
+	assert_eq(mage_unit.get_abilities()[2].calculate_primary_effect_amount(mage_unit), 42, "Mage Heal should restore 25 plus effective Intelligence")
+
+	var ranger_variant := track(TacticalCharacterScript.new()) as TacticalCharacter
+	ranger_variant.definition = ranger
+	var club := load("res://resources/items/goblin_club.tres") as ItemDefinition
+	var equipment_overrides: Array[ItemDefinition] = [club]
+	ranger_variant.starting_equipment_overrides = equipment_overrides
+	ranger_variant._ready()
+	assert_eq(ranger_variant.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON), club, "an override should replace the inherited item in the same slot")
+	assert_eq(ranger_variant.get_equipped_item(ItemDefinition.EquipmentSlot.ARMOR).display_name, "Ranger Armor", "an override should retain inherited items in other slots")
+	assert_eq(ranger.starting_equipment[0].display_name, "Ranger Bow", "an instance override should leave the shared Ranger equipment unchanged")
+
+	var explicit_ai := load("res://resources/ai/melee_ai.tres") as EnemyAIProfile
+	ranger_variant.enemy_ai_profile = explicit_ai
+	assert_eq(ranger_variant.get_enemy_ai_profile(), explicit_ai, "an explicit per-instance AI profile should override the bundled profile")
+	var legacy := load("res://resources/enemy_raider.tres") as CharacterDefinition
+	assert_true(legacy != null, "the legacy Enemy Raider resource should remain loadable")
+
+
+func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
 	var scene := ResourceLoader.load("res://main.tscn", "", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
 	var root: Node = track(scene.instantiate())
 	var melee := root.get_node("Characters/MeleeEnemy") as TacticalCharacter
 	var ranged := root.get_node("Characters/RangedEnemy") as TacticalCharacter
-	assert_eq(melee.enemy_ai_profile.behavior_style, EnemyAIProfile.BehaviorStyle.MELEE, "sample melee enemy should use the melee template")
-	assert_eq(ranged.enemy_ai_profile.behavior_style, EnemyAIProfile.BehaviorStyle.RANGED, "sample ranged enemy should use the ranged template")
-	assert_eq(melee.definition, ranged.definition, "both samples should share the same mixed character loadout")
-	assert_eq(melee.get_abilities().size(), 2, "the enemy template should expose slash and shot in the Inspector")
-	assert_eq(melee.speed_override, 10, "sample melee Speed should remain 10")
-	assert_eq(ranged.speed_override, 9, "sample ranged Speed should be 9")
+	assert_eq(melee.definition.display_name, "Goblin Warrior", "the sample melee enemy should use the Sword Goblin Warrior")
+	assert_eq(ranged.definition.display_name, "Goblin Archer", "the sample ranged enemy should use the Goblin Archer")
+	assert_eq(melee.enemy_ai_profile, null, "the sample melee enemy should inherit its bundled AI")
+	assert_eq(ranged.enemy_ai_profile, null, "the sample ranged enemy should inherit its bundled AI")
+	assert_eq(melee.get_enemy_ai_profile().behavior_style, EnemyAIProfile.BehaviorStyle.MELEE, "the sample melee enemy should resolve the bundled melee profile")
+	assert_eq(ranged.get_enemy_ai_profile().behavior_style, EnemyAIProfile.BehaviorStyle.RANGED, "the sample ranged enemy should resolve the bundled ranged profile")
+	assert_eq(melee.get_abilities().size(), 1, "the Goblin Warrior should expose only Enemy Slash")
+	assert_eq(ranged.get_abilities().size(), 2, "the Goblin Archer should expose Enemy Shot and Slow")
+	assert_eq(melee.starting_grid_cell, Vector2i(3, 8), "sample melee placement should stay unchanged")
 	assert_eq(ranged.starting_grid_cell, Vector2i(9, 3), "sample ranged placement should match the design")
 	assert_true(root.has_node("HUD/DevButton"), "the sample HUD should expose the Dev button")
 	assert_eq(root.get_node("HUD/DevButton").text, "Dev", "the developer history button should have a clear compact label")
 	assert_true(root.has_node("HUD/DevHistoryPanel"), "the sample HUD should contain an AI score history panel")
 	assert_false(root.get_node("HUD/DevHistoryPanel").visible, "AI scores should stay off the battlefield until Dev is pressed")
+
+
+func _assert_enemy_definition(
+	path: String,
+	expected_name: String,
+	expected_health: int,
+	expected_movement: float,
+	expected_stats: Array,
+	expected_style: EnemyAIProfile.BehaviorStyle,
+	expected_items: Array,
+	expected_abilities: Array
+) -> EnemyDefinition:
+	var definition := load(path) as EnemyDefinition
+	assert_true(definition != null, "%s should load as an EnemyDefinition" % expected_name)
+	assert_eq(definition.display_name, expected_name, "the archetype should keep its display name")
+	assert_eq(definition.faction, CharacterDefinition.Faction.ENEMY, "%s should default to the Enemy faction" % expected_name)
+	assert_eq(definition.max_health, expected_health, "%s should keep its configured HP" % expected_name)
+	assert_true(is_equal_approx(definition.movement_range, expected_movement), "%s should keep its configured base movement" % expected_name)
+	assert_eq([definition.strength, definition.dexterity, definition.intelligence, definition.speed], expected_stats, "%s should keep its configured core stats" % expected_name)
+	assert_true(definition.ai_profile != null, "%s should bundle an AI profile" % expected_name)
+	assert_eq(definition.ai_profile.behavior_style, expected_style, "%s should bundle the expected AI style" % expected_name)
+	var item_names: Array[String] = []
+	for item in definition.starting_equipment:
+		item_names.append(item.display_name)
+	assert_eq(item_names, expected_items, "%s should bundle the expected equipment" % expected_name)
+	var ability_names: Array[String] = []
+	for ability in definition.abilities:
+		ability_names.append(ability.display_name)
+	assert_eq(ability_names, expected_abilities, "%s should bundle the expected abilities" % expected_name)
+	return definition
 
 
 func test_enemy_controller_has_no_planning_or_preview_delays() -> void:

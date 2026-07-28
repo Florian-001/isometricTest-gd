@@ -21,7 +21,7 @@ signal statuses_changed
 @export var definition: CharacterDefinition
 
 @export_category("Enemy AI")
-## Attach an EnemyAIProfile resource to enemy units. Friendly units ignore this setting.
+## Optional per-unit override. EnemyDefinition resources provide the normal bundled profile.
 @export var enemy_ai_profile: EnemyAIProfile:
 	set(value):
 		enemy_ai_profile = value
@@ -55,6 +55,10 @@ signal statuses_changed
 ## Resize this list and choose New AbilityDefinition to author an inline, unit-specific ability.
 ## You can also drag existing ability .tres files here from the FileSystem dock.
 @export var ability_overrides: Array[AbilityDefinition] = []
+
+@export_category("Starting Equipment Overrides")
+## Applied after the Character Template equipment. Matching slots replace inherited items.
+@export var starting_equipment_overrides: Array[ItemDefinition] = []
 
 @export_category("Placement and Presentation")
 @export var starting_grid_cell: Vector2i = Vector2i.ZERO:
@@ -176,6 +180,14 @@ func initialize(grid: IsometricGrid) -> void:
 
 func is_friendly() -> bool:
 	return definition != null and definition.faction == CharacterDefinition.Faction.FRIENDLY
+
+
+func get_enemy_ai_profile() -> EnemyAIProfile:
+	if enemy_ai_profile != null:
+		return enemy_ai_profile
+	if definition is EnemyDefinition:
+		return (definition as EnemyDefinition).ai_profile
+	return null
 
 
 func get_movement_range() -> float:
@@ -482,9 +494,9 @@ func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
 	if definition == null:
 		warnings.append("Assign a Character Template before running the battle.")
-	elif definition.faction == CharacterDefinition.Faction.ENEMY and enemy_ai_profile == null:
+	elif definition.faction == CharacterDefinition.Faction.ENEMY and get_enemy_ai_profile() == null:
 		warnings.append("Enemy units need an Enemy AI Profile to take tactical actions.")
-	elif definition.faction == CharacterDefinition.Faction.FRIENDLY and enemy_ai_profile != null:
+	elif definition.faction == CharacterDefinition.Faction.FRIENDLY and get_enemy_ai_profile() != null:
 		warnings.append("Enemy AI Profile is ignored because this unit is friendly.")
 	if definition != null:
 		var occupied_slots: Dictionary = {}
@@ -497,6 +509,16 @@ func _get_configuration_warnings() -> PackedStringArray:
 					% ItemDefinition.EquipmentSlot.keys()[item.slot]
 				)
 			occupied_slots[item.slot] = true
+	var override_slots: Dictionary = {}
+	for item in starting_equipment_overrides:
+		if item == null:
+			continue
+		if override_slots.has(item.slot):
+			warnings.append(
+				"Starting Equipment Overrides contains more than one item for the %s slot; the last item wins."
+				% ItemDefinition.EquipmentSlot.keys()[item.slot]
+			)
+		override_slots[item.slot] = true
 	return warnings
 
 
@@ -508,6 +530,9 @@ func _initialize_runtime_stats() -> void:
 	if definition == null:
 		return
 	for item in definition.starting_equipment:
+		if item != null:
+			_equipped_items[item.slot] = item
+	for item in starting_equipment_overrides:
 		if item != null:
 			_equipped_items[item.slot] = item
 

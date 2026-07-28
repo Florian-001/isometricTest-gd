@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=9 format=3 uid="uid://pxm11jluseg1"]
+
+[ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
+[ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="4_ai"]
+[ext_resource type="Resource" uid="uid://b0ygs6jbuindl" path="res://resources/abilities/enemy_shot.tres" id="5_shot"]
+[ext_resource type="Resource" uid="uid://coxj05o5g75fi" path="res://resources/abilities/focus.tres" id="6_focus"]
+[ext_resource type="Resource" uid="uid://cgq7lrwo26syh" path="res://resources/items/ranger_bow.tres" id="7_bow"]
+[ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/ranger_armor.tres" id="8_armor"]
+
+[resource]
+script = ExtResource("1_enemy")
+display_name = "Ranger"
+faction = 1
+max_health = 90
+movement_range = 6.0
+strength = 8
+dexterity = 14
+intelligence = 8
+speed = 12
+starting_equipment = Array[ExtResource("3_item_type")]([ExtResource("7_bow"), ExtResource("8_armor")])
+body_color = Color(0.25, 0.68, 0.45, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("5_shot"), ExtResource("6_focus")])
+ai_profile = ExtResource("4_ai")

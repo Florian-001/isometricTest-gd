@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=7 format=3 uid="uid://b4os1tck6c5md"]
+
+[ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
+[ext_resource type="Resource" uid="uid://be3ci0o703acb" path="res://resources/ai/melee_ai.tres" id="4_ai"]
+[ext_resource type="Resource" uid="uid://ctr35lcl31o04" path="res://resources/abilities/enemy_slash.tres" id="5_slash"]
+[ext_resource type="Resource" uid="uid://ctxelkvrg6cmy" path="res://resources/items/goblin_sword.tres" id="6_sword"]
+
+[resource]
+script = ExtResource("1_enemy")
+display_name = "Goblin Warrior"
+faction = 1
+max_health = 115
+movement_range = 5.0
+strength = 12
+dexterity = 8
+intelligence = 5
+speed = 9
+starting_equipment = Array[ExtResource("3_item_type")]([ExtResource("6_sword")])
+body_color = Color(0.78, 0.3, 0.23, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("5_slash")])
+ai_profile = ExtResource("4_ai")

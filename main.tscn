@@ -5,13 +5,12 @@
 [ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="3_character"]
 [ext_resource type="Script" uid="uid://dcabtm22e14rm" path="res://scripts/tactical_camera_controller.gd" id="4_camera"]
 [ext_resource type="Resource" uid="uid://clbeyhlog2wbi" path="res://resources/friendly_spellcaster.tres" id="5_friendly"]
-[ext_resource type="Resource" uid="uid://n6ywov3dxmd4" path="res://resources/enemy_raider.tres" id="6_enemy"]
+[ext_resource type="PackedScene" uid="uid://3ue0j7my7j3p" path="res://scenes/enemies/goblin_warrior.tscn" id="6_enemy"]
 [ext_resource type="Script" uid="uid://br4bfrnpefm6b" path="res://scripts/initiative_turn_manager.gd" id="7_turn_manager"]
 [ext_resource type="PackedScene" path="res://scenes/turn_order_bar.tscn" id="8_order_bar"]
 [ext_resource type="PackedScene" path="res://scenes/ability_bar.tscn" id="9_ability_bar"]
 [ext_resource type="Script" uid="uid://bax5bwopqqbc1" path="res://scripts/tactical_wall.gd" id="10_wall"]
-[ext_resource type="Resource" uid="uid://be3ci0o703acb" path="res://resources/ai/melee_ai.tres" id="11_melee_ai"]
-[ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="12_ranged_ai"]
+[ext_resource type="PackedScene" uid="uid://cvc4o3f4jypfa" path="res://scenes/enemies/goblin_archer.tscn" id="12_ranged_enemy"]
 [ext_resource type="Script" uid="uid://cw40etoqakmre" path="res://scripts/tactical_terrain.gd" id="13_terrain"]
 [ext_resource type="Script" uid="uid://cy77b7iubppb4" path="res://scripts/tactical_tile.gd" id="14_tile"]
 [ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="15_palette"]
@@ -113,24 +112,12 @@ movement_range_override = 5.0
 speed_override = 8
 starting_grid_cell = Vector2i(2, 4)
 
-[node name="MeleeEnemy" type="Node2D" parent="Characters" unique_id=921107907]
+[node name="MeleeEnemy" parent="Characters" unique_id=921107907 instance=ExtResource("6_enemy")]
 z_index = 111
-script = ExtResource("3_character")
-definition = ExtResource("6_enemy")
-enemy_ai_profile = ExtResource("11_melee_ai")
-max_health_override = 100
-movement_range_override = 5.0
-speed_override = 10
 starting_grid_cell = Vector2i(3, 8)
 
-[node name="RangedEnemy" type="Node2D" parent="Characters" unique_id=1457671969]
+[node name="RangedEnemy" parent="Characters" unique_id=1457671969 instance=ExtResource("12_ranged_enemy")]
 z_index = 112
-script = ExtResource("3_character")
-definition = ExtResource("6_enemy")
-enemy_ai_profile = ExtResource("12_ranged_ai")
-max_health_override = 100
-movement_range_override = 5.0
-speed_override = 9
 starting_grid_cell = Vector2i(9, 3)
 
 [node name="TurnManager" type="Node" parent="." unique_id=226977299]

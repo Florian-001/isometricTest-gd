@@ -29,7 +29,7 @@ func choose_plan(
 		last_planning_duration_ms = Time.get_ticks_msec() - planning_started
 		return EnemyTurnPlan.new()
 
-	var profile := actor.enemy_ai_profile
+	var profile := actor.get_enemy_ai_profile()
 	if profile == null:
 		profile = EnemyAIProfile.new()
 	var snapshot := AIBoardSnapshot.from_battle(

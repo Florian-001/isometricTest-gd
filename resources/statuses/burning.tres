@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="StatusEffectDefinition" load_steps=4 format=3 uid="uid://cmagei35fmnw5"]
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3 uid="uid://cmagei35fmnw5"]
 
 [ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="1_status"]
 [ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="1_xm3hd"]
@@ -10,5 +10,5 @@ status_id = &"burning"
 display_name = "Burning"
 duration_turns = 2
 effect = 1
-color = Color(0.95, 0.25, 0.06, 1)
 icon = ExtResource("2_icon")
+color = Color(0.95, 0.25, 0.06, 1)

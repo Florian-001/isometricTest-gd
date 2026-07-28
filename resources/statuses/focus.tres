@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="StatusEffectDefinition" load_steps=4 format=3 uid="uid://b01jqdoylmg7x"]
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3 uid="uid://b01jqdoylmg7x"]
 
 [ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="1_status"]
 [ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
@@ -23,6 +23,6 @@ script = ExtResource("1_status")
 status_id = &"focus"
 display_name = "Focus"
 duration_turns = 2
-color = Color(0.72, 0.42, 1, 1)
 icon = ExtResource("3_icon")
+color = Color(0.72, 0.42, 1, 1)
 modifiers = Array[ExtResource("2_modifier")]([SubResource("StrengthBonus"), SubResource("DexterityBonus"), SubResource("IntelligenceBonus")])

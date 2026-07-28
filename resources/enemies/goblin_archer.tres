@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=8 format=3 uid="uid://c1auyu2505whv"]
+
+[ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
+[ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="4_ai"]
+[ext_resource type="Resource" uid="uid://b0ygs6jbuindl" path="res://resources/abilities/enemy_shot.tres" id="5_shot"]
+[ext_resource type="Resource" uid="uid://opj3rm2mkqq2" path="res://resources/abilities/slow.tres" id="6_slow"]
+[ext_resource type="Resource" uid="uid://dja1lf1w34kk8" path="res://resources/items/goblin_bow.tres" id="7_bow"]
+
+[resource]
+script = ExtResource("1_enemy")
+display_name = "Goblin Archer"
+faction = 1
+max_health = 75
+movement_range = 6.0
+strength = 7
+dexterity = 11
+intelligence = 6
+speed = 11
+starting_equipment = Array[ExtResource("3_item_type")]([ExtResource("7_bow")])
+body_color = Color(0.56, 0.68, 0.25, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("5_shot"), ExtResource("6_slow")])
+ai_profile = ExtResource("4_ai")

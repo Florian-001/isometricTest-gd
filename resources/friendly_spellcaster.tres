@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=12 format=3 uid="uid://clbeyhlog2wbi"]
+[gd_resource type="Resource" script_class="CharacterDefinition" format=3 uid="uid://clbeyhlog2wbi"]
 
 [ext_resource type="Script" uid="uid://bb43sfxia744r" path="res://scripts/unit_definition.gd" id="1_definition"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
@@ -6,17 +6,17 @@
 [ext_resource type="Resource" uid="uid://7m35u3ondco3" path="res://resources/abilities/arrow.tres" id="4_arrow"]
 [ext_resource type="Resource" uid="uid://7wlmmxsy6gcc" path="res://resources/abilities/heal.tres" id="5_heal"]
 [ext_resource type="Resource" uid="uid://d17q7fv47avlu" path="res://resources/abilities/beam.tres" id="6_beam"]
-[ext_resource type="Resource" path="res://resources/abilities/strike.tres" id="7_strike"]
-[ext_resource type="Script" path="res://scripts/item_definition.gd" id="8_item_type"]
-[ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="9_sword"]
-[ext_resource type="Resource" path="res://resources/items/ranger_armor.tres" id="10_armor"]
-[ext_resource type="Resource" path="res://resources/items/sage_charm.tres" id="11_charm"]
+[ext_resource type="Resource" uid="uid://ypvhtrfkl6un" path="res://resources/abilities/strike.tres" id="7_strike"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="8_item_type"]
+[ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/iron_sword.tres" id="9_sword"]
+[ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/ranger_armor.tres" id="10_armor"]
+[ext_resource type="Resource" uid="uid://pghwydiamt0o" path="res://resources/items/sage_charm.tres" id="11_charm"]
 [ext_resource type="Resource" uid="uid://fbimwcq8pc21" path="res://resources/abilities/ice_shard.tres" id="12_ice_shard"]
 
 [resource]
 script = ExtResource("1_definition")
 display_name = "Friendly Adventurer"
+starting_equipment = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("10_armor"), ExtResource("11_charm")])
 body_color = Color(0.16, 0.53, 1, 1)
 health_bar_color = Color(0.2, 0.92, 0.42, 1)
-starting_equipment = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("10_armor"), ExtResource("11_charm")])
 abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_fireball"), ExtResource("4_arrow"), ExtResource("5_heal"), ExtResource("6_beam"), ExtResource("7_strike"), ExtResource("12_ice_shard")])

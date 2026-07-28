@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3 uid="uid://bayxrvfckboq1"]
+
+[ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="1_actor"]
+[ext_resource type="Resource" uid="uid://b5fu8otkut4yk" path="res://resources/enemies/wolf.tres" id="2_definition"]
+
+[node name="Wolf" type="Node2D"]
+script = ExtResource("1_actor")
+definition = ExtResource("2_definition")

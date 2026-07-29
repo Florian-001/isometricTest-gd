@@ -514,6 +514,12 @@ func _update_ai_debug(
 	var lines: Array[String] = [
 		"Round %d · %s · %s" % [turn_manager.round_number, unit.name, profile_name],
 		"%s in %d ms: %s" % [status, _enemy_ai_planner.last_planning_duration_ms, plan.get_debug_summary()],
+		"Search: %d candidates in %d ms · %d threat states in %d ms" % [
+			_enemy_ai_planner.last_candidate_count,
+			_enemy_ai_planner.last_candidate_generation_duration_ms,
+			_enemy_ai_planner.last_threat_evaluation_count,
+			_enemy_ai_planner.last_threat_evaluation_duration_ms,
+		],
 		"Top candidates:",
 	]
 	var count := mini(ai_debug_candidate_count, _enemy_ai_planner.ranked_candidates.size())

@@ -6,3 +6,5 @@
 script = ExtResource("1_profile")
 display_name = "Melee AI"
 lookahead_candidate_limit = 10
+counterplay_discount = 0.0
+threat_weight = 0.35

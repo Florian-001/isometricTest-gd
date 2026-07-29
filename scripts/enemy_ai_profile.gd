@@ -18,6 +18,11 @@ enum BehaviorStyle {
 @export_range(1, 32, 1, "or_greater") var post_cast_position_limit: int = 4
 @export_range(0.0, 2.0, 0.05, "or_greater") var counterplay_discount: float = 0.75
 
+@export_category("Positioning Risk")
+## Discounts destinations by the strongest direct reply each living opponent could make.
+## Zero disables threat evaluation entirely.
+@export_range(0.0, 2.0, 0.05, "or_greater") var threat_weight: float = 0.0
+
 @export_category("Effect Rewards")
 @export_range(0.0, 10.0, 0.05, "or_greater") var damage_reward: float = 1.0
 @export_range(0.0, 10.0, 0.05, "or_greater") var healing_reward: float = 0.75
@@ -39,4 +44,3 @@ enum BehaviorStyle {
 @export_range(0.0, 25.0, 0.25, "or_greater") var ranged_too_close_penalty: float = 6.0
 @export_range(0.0, 25.0, 0.25, "or_greater") var ranged_out_of_range_penalty: float = 3.0
 @export_range(0.0, 100.0, 0.5, "or_greater") var ranged_clear_shot_reward: float = 6.0
-

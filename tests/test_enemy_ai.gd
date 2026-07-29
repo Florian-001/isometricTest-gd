@@ -24,10 +24,22 @@ func test_profile_defaults_resources_and_configuration_warnings() -> void:
 	assert_true(is_equal_approx(profile.damage_reward, 1.0), "damage should reward effective HP loss")
 	assert_true(is_equal_approx(profile.healing_reward, 0.75), "healing should use its planned default weight")
 
-	var melee_profile := load("res://resources/ai/melee_ai.tres") as EnemyAIProfile
-	var ranged_profile := load("res://resources/ai/ranged_ai.tres") as EnemyAIProfile
+	var melee_profile := ResourceLoader.load(
+		"res://resources/ai/melee_ai.tres",
+		"",
+		ResourceLoader.CACHE_MODE_REPLACE
+	) as EnemyAIProfile
+	var ranged_profile := ResourceLoader.load(
+		"res://resources/ai/ranged_ai.tres",
+		"",
+		ResourceLoader.CACHE_MODE_REPLACE
+	) as EnemyAIProfile
 	assert_eq(melee_profile.behavior_style, EnemyAIProfile.BehaviorStyle.MELEE, "melee template should be editable and typed")
 	assert_eq(ranged_profile.behavior_style, EnemyAIProfile.BehaviorStyle.RANGED, "ranged template should be editable and typed")
+	assert_true(is_zero_approx(melee_profile.counterplay_discount), "standard melee enemies should skip expensive counterplay forecasts")
+	assert_true(is_zero_approx(ranged_profile.counterplay_discount), "standard ranged enemies should skip expensive counterplay forecasts")
+	assert_true(is_equal_approx(melee_profile.threat_weight, 0.35), "standard melee enemies should use moderate threat awareness")
+	assert_true(is_equal_approx(ranged_profile.threat_weight, 0.35), "standard ranged enemies should use moderate threat awareness")
 
 	var enemy := _make_unit(false, Vector2i.ZERO, 4.0, [])
 	assert_true(enemy._get_configuration_warnings().size() > 0, "an enemy without an AI profile should warn in the Inspector")
@@ -187,6 +199,85 @@ func test_virtual_origin_targeting_does_not_move_live_unit() -> void:
 	assert_eq(caster.grid_cell, Vector2i.ZERO, "virtual targeting must not move the live caster")
 
 
+func test_cell_target_ai_prunes_zero_utility_empty_casts() -> void:
+	var shot := _make_damage_ability("Cell Shot", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 10)
+	shot.target_flags = AbilityDefinition.TargetFlags.ENEMY | AbilityDefinition.TargetFlags.CELL
+	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
+	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile)
+	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
+	var units: Array[TacticalCharacter] = [enemy, target]
+	var grid_size := Vector2i(6, 6)
+	var pathfinder := GridPathfinderScript.new(grid_size) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var snapshot := AIBoardSnapshot.from_battle(units, grid_size)
+	var candidates := planner._generate_candidates(
+		enemy,
+		snapshot,
+		pathfinder,
+		targeting,
+		profile,
+		0.0,
+		true,
+		true,
+		false
+	)
+	var cast_count := 0
+	for candidate: EnemyTurnPlan in candidates:
+		if candidate.ability == null:
+			continue
+		cast_count += 1
+		assert_eq(candidate.target_cell, target.grid_cell, "zero-utility empty-cell casts should be pruned")
+	assert_eq(cast_count, 1, "the planner should retain the one cell cast that damages an opponent")
+
+
+func test_snapshot_scores_status_refreshes_by_added_duration_without_live_mutation() -> void:
+	var caster := _make_unit(false, Vector2i.ZERO, 4.0, [])
+	var target := _make_unit(true, Vector2i.ONE, 4.0, [])
+	var slow := load("res://resources/statuses/slow.tres") as StatusEffectDefinition
+	var focus := load("res://resources/statuses/focus.tres") as StatusEffectDefinition
+	var burning := load("res://resources/statuses/burning.tres") as StatusEffectDefinition
+	var units: Array[TacticalCharacter] = [caster, target]
+
+	var new_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
+	var new_slow := new_snapshot.forecast_status_application(caster, target, slow)
+	var new_focus := new_snapshot.forecast_status_application(caster, target, focus, 12.0)
+	var new_burning := new_snapshot.forecast_status_application(caster, target, burning)
+	assert_true(is_equal_approx(new_slow.utility_hint, 8.0), "a new Slow should receive its full configured utility")
+	assert_true(is_equal_approx(new_focus.utility_hint, 12.0), "a new Focus should receive its full configured utility")
+	assert_eq(new_burning.health_delta, -2, "a new Burning forecast should count its full future damage")
+	assert_true(is_zero_approx(new_snapshot.forecast_status_application(caster, target, slow).utility_hint), "a full-duration Slow refresh should be redundant")
+	assert_true(is_zero_approx(new_snapshot.forecast_status_application(caster, target, focus, 12.0).utility_hint), "a full-duration Focus refresh should be redundant")
+	assert_eq(new_snapshot.forecast_status_application(caster, target, burning).health_delta, 0, "a full-duration Burning refresh should add no future damage")
+
+	assert_true(target.apply_status(slow, caster, caster), "the live target should accept Slow")
+	assert_true(target.apply_status(focus, caster, caster), "the live target should accept Focus")
+	assert_true(target.apply_status(burning, caster, caster), "the live target should accept Burning")
+	for active_status in target.get_active_statuses():
+		active_status.remaining_turns = 1
+		active_status.processed_this_turn = true
+	var live_movement := target.get_movement_range()
+	var refresh_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
+	var copied_slow := refresh_snapshot.get_status_state(target, slow.status_id)
+	assert_eq(copied_slow.definition, slow, "snapshots should retain the active status definition")
+	assert_eq(copied_slow.remaining_turns, 1, "snapshots should retain remaining status turns")
+	assert_true(copied_slow.processed_this_turn, "snapshots should retain the processed state")
+	assert_true(is_equal_approx(refresh_snapshot.get_movement_range(target), live_movement), "snapshots should retain status-adjusted movement")
+
+	var refreshed_slow := refresh_snapshot.forecast_status_application(caster, target, slow)
+	var refreshed_focus := refresh_snapshot.forecast_status_application(caster, target, focus, 12.0)
+	var refreshed_burning := refresh_snapshot.forecast_status_application(caster, target, burning)
+	assert_true(is_equal_approx(refreshed_slow.utility_hint, 4.0), "a one-turn Slow extension should receive half utility")
+	assert_true(is_equal_approx(refreshed_focus.utility_hint, 6.0), "a one-turn Focus extension should receive half utility")
+	assert_eq(refreshed_burning.health_delta, -1, "a one-turn Burning extension should count only one extra tick")
+	assert_eq(refresh_snapshot.get_status_remaining(target, slow.status_id), 2, "a simulated refresh should record the new duration")
+	assert_false(refresh_snapshot.get_status_state(target, slow.status_id).processed_this_turn, "a simulated refresh should reset the processed state")
+	assert_eq(target.current_health, 100, "status forecasting must not mutate live health")
+	for active_status in target.get_active_statuses():
+		assert_eq(active_status.remaining_turns, 1, "status forecasting must not refresh live status duration")
+		assert_true(active_status.processed_this_turn, "status forecasting must not change live processed state")
+
+
 func test_melee_profile_prioritizes_melee_when_adjacent() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
@@ -260,6 +351,65 @@ func test_counterplay_forecast_chooses_safer_plan_without_mutation() -> void:
 	assert_eq(enemy.grid_cell, Vector2i(0, 1), "planning must not mutate the enemy position")
 	assert_eq(enemy.current_health, 100, "planning must not mutate live health")
 	assert_eq(target.current_health, 100, "forecast damage must remain side-effect-free")
+
+
+func test_threat_forecast_prefers_an_equally_effective_safe_destination() -> void:
+	var counter := _make_damage_ability("Counter", AbilityDefinition.DeliveryType.MELEE, 1.0, 20)
+	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
+	profile.threat_weight = 1.0
+	profile.approach_reward = 0.0
+	profile.adjacent_reward = 0.0
+	profile.melee_delivery_reward = 0.0
+	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [], profile)
+	var target := _make_unit(true, Vector2i(3, 3), 0.0, [counter])
+	var plan := _choose(enemy, [enemy, target], Vector2i(7, 6))
+	var end_distance := AbilityTargetingScript.new(Vector2i(7, 6)).get_weighted_distance(plan.get_end_cell(enemy.grid_cell), target.grid_cell)
+	assert_true(end_distance > 3.0, "threat scoring should select an equally effective cell outside movement-plus-counter range; got %s with %.2f threat" % [plan.get_end_cell(enemy.grid_cell), plan.threat_score])
+	assert_true(is_zero_approx(plan.threat_score), "the selected safe destination should have no direct incoming threat")
+	assert_true(plan.score_breakdown.has("threat"), "threat should be represented in the score breakdown")
+
+
+func test_moderate_threat_still_allows_a_rewarding_melee_attack() -> void:
+	var slash := _make_damage_ability("Slash", AbilityDefinition.DeliveryType.MELEE, 1.0, 30)
+	var counter := _make_damage_ability("Counter", AbilityDefinition.DeliveryType.MELEE, 1.0, 10)
+	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
+	profile.threat_weight = 0.35
+	var enemy := _make_unit(false, Vector2i(2, 2), 0.0, [slash], profile)
+	var target := _make_unit(true, Vector2i(3, 2), 0.0, [counter])
+	var plan := _choose(enemy, [enemy, target], Vector2i(6, 5))
+	assert_eq(plan.ability, slash, "moderate threat should not outweigh a strong adjacent melee attack")
+	assert_true(is_equal_approx(plan.threat_score, 10.0), "the plan should expose the opponent's strongest direct response")
+	assert_true(is_equal_approx(plan.threat_penalty, 3.5), "the plan should expose the weighted threat penalty")
+	assert_true(is_equal_approx(plan.score_breakdown.threat_score, 10.0), "the debug breakdown should expose raw threat")
+	assert_true(is_equal_approx(plan.score_breakdown.threat_penalty, 3.5), "the debug breakdown should expose weighted threat")
+
+
+func test_threat_forecast_respects_walls_line_of_sight_and_defeat() -> void:
+	var shot := _make_damage_ability("Long Shot", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 20)
+	var enemy := _make_unit(false, Vector2i(0, 1), 0.0, [])
+	var target := _make_unit(true, Vector2i(4, 1), 0.0, [shot])
+	var units: Array[TacticalCharacter] = [enemy, target]
+	var grid_size := Vector2i(6, 3)
+	var pathfinder := GridPathfinderScript.new(grid_size) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
+	var open_snapshot := AIBoardSnapshot.from_battle(units, grid_size)
+	assert_true(planner._estimate_incoming_threat(enemy, open_snapshot, pathfinder, targeting, profile) > 0.0, "a clear in-range projectile should contribute threat")
+
+	var walls := {
+		Vector2i(2, 0): true,
+		Vector2i(2, 1): true,
+		Vector2i(2, 2): true,
+	}
+	var blocked_snapshot := AIBoardSnapshot.from_battle(units, grid_size, walls)
+	var blocked_threat := planner._estimate_incoming_threat(enemy, blocked_snapshot, pathfinder, targeting, profile)
+	var direct_los := GridLineOfSight.new().has_line_of_sight(target.grid_cell, enemy.grid_cell, blocked_snapshot.wall_cells)
+	assert_true(is_zero_approx(blocked_threat), "a wall blocking line of sight should remove projectile threat; got %.2f with movement %.2f and direct LOS %s" % [blocked_threat, blocked_snapshot.get_movement_range(target), direct_los])
+
+	target.current_health = 0
+	var defeated_snapshot := AIBoardSnapshot.from_battle(units, grid_size)
+	assert_true(is_zero_approx(planner._estimate_incoming_threat(enemy, defeated_snapshot, pathfinder, targeting, profile)), "a defeated opponent should contribute no threat")
 
 
 func test_walls_block_ai_ability_targeting() -> void:
@@ -432,6 +582,37 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_false(legacy_raider.get_abilities()[1].can_be_used_by(legacy_raider), "Enemy Shot should remain visible but unavailable to the Melee Raider")
 
 
+func test_starter_enemy_archetype_plans_are_deterministic() -> void:
+	var scene_paths: Array[String] = [
+		"res://scenes/enemies/goblin_warrior.tscn",
+		"res://scenes/enemies/goblin_archer.tscn",
+		"res://scenes/enemies/mage.tscn",
+		"res://scenes/enemies/ranger.tscn",
+		"res://scenes/enemies/wolf.tscn",
+	]
+	var grid_size := Vector2i(8, 5)
+	for scene_path in scene_paths:
+		var enemy_scene := load(scene_path) as PackedScene
+		var enemy := track(enemy_scene.instantiate()) as TacticalCharacter
+		enemy.starting_grid_cell = Vector2i(1, 2)
+		enemy._ready()
+		enemy.reset_movement()
+		enemy.reset_ability_action()
+		var target := _make_unit(true, Vector2i(6, 2), 0.0, [])
+		var units: Array[TacticalCharacter] = [enemy, target]
+		var pathfinder := GridPathfinderScript.new(grid_size) as GridPathfinder
+		var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
+		var first_planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+		var second_planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+		var first := first_planner.choose_plan(enemy, units, pathfinder, targeting)
+		var second := second_planner.choose_plan(enemy, units, pathfinder, targeting)
+		assert_eq(second.sequence, first.sequence, "%s should choose a deterministic action sequence" % enemy.definition.display_name)
+		assert_eq(second.ability, first.ability, "%s should choose a deterministic ability" % enemy.definition.display_name)
+		assert_eq(second.target_cell, first.target_cell, "%s should choose a deterministic target" % enemy.definition.display_name)
+		assert_eq(second.get_end_cell(enemy.grid_cell), first.get_end_cell(enemy.grid_cell), "%s should choose a deterministic destination" % enemy.definition.display_name)
+		assert_true(is_equal_approx(second.total_score, first.total_score), "%s should produce a deterministic score" % enemy.definition.display_name)
+
+
 func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
 	var scene := ResourceLoader.load("res://main.tscn", "", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
 	var root: Node = track(scene.instantiate())
@@ -490,6 +671,9 @@ func test_enemy_controller_has_no_planning_or_preview_delays() -> void:
 	assert_false(source.contains("enemy_ability_preview_delay"), "enemy ability previews should not add an artificial delay")
 	assert_false(source.contains("_show_enemy_ability_preview"), "enemy abilities should execute without a preview overlay")
 	assert_true(source.contains("call_deferred(\"_finish_enemy_turn\", unit)"), "instant enemy turns should advance through a guarded deferred callback")
+	assert_true(source.contains("last_candidate_generation_duration_ms"), "Dev history should expose candidate-generation timing")
+	assert_true(source.contains("last_threat_evaluation_duration_ms"), "Dev history should expose threat-evaluation timing")
+	assert_true(source.contains("last_candidate_count"), "Dev history should expose the candidate count")
 
 
 func _choose(

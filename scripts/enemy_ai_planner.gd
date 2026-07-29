@@ -7,6 +7,10 @@ const MeleeDeliveryScript = preload("res://scripts/melee_delivery.gd")
 
 var ranked_candidates: Array[EnemyTurnPlan] = []
 var last_planning_duration_ms := 0
+var last_candidate_generation_duration_ms := 0
+var last_threat_evaluation_duration_ms := 0
+var last_candidate_count := 0
+var last_threat_evaluation_count := 0
 var _line_of_sight := GridLineOfSight.new()
 
 
@@ -20,6 +24,10 @@ func choose_plan(
 ) -> EnemyTurnPlan:
 	var planning_started := Time.get_ticks_msec()
 	ranked_candidates.clear()
+	last_candidate_generation_duration_ms = 0
+	last_threat_evaluation_duration_ms = 0
+	last_candidate_count = 0
+	last_threat_evaluation_count = 0
 	if (
 		not is_instance_valid(actor)
 		or actor.current_health <= 0
@@ -38,6 +46,7 @@ func choose_plan(
 		wall_cells,
 		terrain_definitions
 	)
+	var candidate_generation_started := Time.get_ticks_msec()
 	var candidates := _generate_candidates(
 		actor,
 		snapshot,
@@ -49,10 +58,17 @@ func choose_plan(
 		true,
 		true
 	)
+	last_candidate_generation_duration_ms = (
+		Time.get_ticks_msec() - candidate_generation_started
+	)
+	last_candidate_count = candidates.size()
 	if candidates.is_empty():
 		last_planning_duration_ms = Time.get_ticks_msec() - planning_started
 		return EnemyTurnPlan.new()
 
+	var threat_evaluation_started := Time.get_ticks_msec()
+	_apply_threat_scores(actor, candidates, snapshot, pathfinder, targeting, profile)
+	last_threat_evaluation_duration_ms = Time.get_ticks_msec() - threat_evaluation_started
 	candidates.sort_custom(_compare_immediate_plans)
 	var beam: Array[EnemyTurnPlan] = []
 	var beam_size := mini(profile.lookahead_candidate_limit, candidates.size())
@@ -195,6 +211,10 @@ func _generate_candidates(
 						targeting,
 						profile
 					)
+					# A non-positive cast cannot improve on holding or moving to the
+					# same destination, and must not trigger expensive reposition searches.
+					if ability_score <= COST_EPSILON:
+						continue
 					var base_plan := _make_cast_plan(
 						actor,
 						start,
@@ -355,6 +375,9 @@ func _finalize_plan(
 		"terrain": plan.terrain_score,
 		"position": plan.position_score,
 		"preferred_delivery": plan.preferred_delivery_score,
+		"threat": 0.0,
+		"threat_score": 0.0,
+		"threat_penalty": 0.0,
 		"counterplay": 0.0,
 		"total": plan.total_score,
 	}
@@ -399,11 +422,24 @@ func _forecast_ability(
 				ability.estimate_primary_effect_for_ai(
 					caster,
 					recipient,
-					snapshot.get_health(recipient)
+					snapshot.get_health(recipient),
+					false
 				),
 				profile,
 				snapshot
 			)
+			if snapshot.is_living(recipient) and ability.status_effect != null:
+				score += _score_effect_estimate(
+					caster,
+					recipient,
+					snapshot.forecast_status_application(
+						caster,
+						recipient,
+						ability.status_effect
+					),
+					profile,
+					snapshot
+				)
 		for additional_effect in ability.effects:
 			if (
 				not snapshot.is_living(recipient)
@@ -411,25 +447,34 @@ func _forecast_ability(
 			):
 				continue
 			var before := snapshot.get_health(recipient)
-			var estimate := (
-				(additional_effect as DamageEffectDefinition).estimate_for_ability(
+			var estimate: Dictionary
+			if additional_effect is ApplyStatusEffectDefinition:
+				var status_application := additional_effect as ApplyStatusEffectDefinition
+				estimate = snapshot.forecast_status_application(
+					caster,
+					recipient,
+					status_application.status_effect,
+					status_application.ai_utility_hint
+				)
+			elif additional_effect is DamageEffectDefinition:
+				estimate = (additional_effect as DamageEffectDefinition).estimate_for_ability(
 					caster,
 					recipient,
 					before,
 					ability
 				)
-				if additional_effect is DamageEffectDefinition
-				else additional_effect.estimate_for_ai(caster, recipient, before)
-			)
+			else:
+				estimate = additional_effect.estimate_for_ai(caster, recipient, before)
 			score += _score_effect_estimate(caster, recipient, estimate, profile, snapshot)
-		if snapshot.is_living(recipient) and ability.get_weapon_status_effect(caster) != null:
+		var weapon_status := ability.get_weapon_status_effect(caster)
+		if snapshot.is_living(recipient) and weapon_status != null:
 			score += _score_effect_estimate(
 				caster,
 				recipient,
-				ability.estimate_weapon_status_for_ai(
+				snapshot.forecast_status_application(
 					caster,
 					recipient,
-					snapshot.get_health(recipient)
+					weapon_status
 				),
 				profile,
 				snapshot
@@ -485,6 +530,139 @@ func _simulate_plan(
 	if result.is_living(actor):
 		_forecast_terrain_path(actor, plan.post_cast_path, result, profile)
 	return result
+
+
+func _apply_threat_scores(
+	actor: TacticalCharacter,
+	candidates: Array[EnemyTurnPlan],
+	initial_state: AIBoardSnapshot,
+	pathfinder: GridPathfinder,
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile
+) -> void:
+	var threat_weight_value: Variant = profile.get(&"threat_weight")
+	var threat_weight: float = float(threat_weight_value) if threat_weight_value != null else 0.0
+	if threat_weight <= COST_EPSILON:
+		return
+	var threat_cache: Dictionary = {}
+	var reachable_cache: Dictionary = {}
+	for plan in candidates:
+		var resulting_state := _simulate_plan(actor, plan, initial_state, targeting, profile)
+		var state_key := _get_snapshot_key(resulting_state)
+		var threat_score := 0.0
+		if threat_cache.has(state_key):
+			threat_score = float(threat_cache[state_key])
+		else:
+			threat_score = _estimate_incoming_threat(
+				actor,
+				resulting_state,
+				pathfinder,
+				targeting,
+				profile,
+				reachable_cache
+			)
+			threat_cache[state_key] = threat_score
+			last_threat_evaluation_count += 1
+		plan.threat_score = threat_score
+		plan.threat_penalty = threat_score * threat_weight
+		plan.immediate_score -= plan.threat_penalty
+		plan.total_score = plan.immediate_score
+		plan.score_breakdown["threat"] = plan.threat_penalty
+		plan.score_breakdown["threat_score"] = plan.threat_score
+		plan.score_breakdown["threat_penalty"] = plan.threat_penalty
+		plan.score_breakdown["total"] = plan.total_score
+
+
+func _estimate_incoming_threat(
+	actor: TacticalCharacter,
+	snapshot: AIBoardSnapshot,
+	pathfinder: GridPathfinder,
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile,
+	reachable_cache: Dictionary = {}
+) -> float:
+	if not snapshot.is_living(actor):
+		return 0.0
+	var target_cell := snapshot.get_cell(actor)
+	var total_threat := 0.0
+	for responder in snapshot.units:
+		if (
+			not snapshot.is_living(responder)
+			or responder.is_friendly() == actor.is_friendly()
+		):
+			continue
+		var reachable_key := _get_threat_reachable_key(responder, actor, snapshot)
+		var reachable: Dictionary
+		if reachable_cache.has(reachable_key):
+			reachable = reachable_cache[reachable_key] as Dictionary
+		else:
+			# The forecast target is dynamic across candidates. Excluding it from
+			# blockers makes this one reusable reachability search per responder;
+			# the target cell itself is still rejected as an attack origin below.
+			var blocked_cells := snapshot.get_blocked_cells(responder)
+			blocked_cells.erase(target_cell)
+			reachable = pathfinder.get_reachable(
+				snapshot.get_cell(responder),
+				snapshot.get_movement_range(responder),
+				blocked_cells
+			)
+			reachable_cache[reachable_key] = reachable
+		var best_response := 0.0
+		for ability in responder.get_abilities():
+			if ability == null or not ability.can_be_used_by(responder):
+				continue
+			var has_attack_origin := false
+			var attack_origin := snapshot.get_cell(responder)
+			for origin_value in reachable:
+				var origin := origin_value as Vector2i
+				if origin == target_cell:
+					continue
+				if not _is_valid_primary_target(
+					responder,
+					origin,
+					target_cell,
+					ability,
+					snapshot,
+					targeting
+				):
+					continue
+				has_attack_origin = true
+				attack_origin = origin
+				break
+			if not has_attack_origin:
+				continue
+			var response_state := snapshot.duplicate_state()
+			response_state.set_cell(responder, attack_origin)
+			best_response = maxf(
+				best_response,
+				_forecast_ability(
+					responder,
+					ability,
+					target_cell,
+					response_state,
+					targeting,
+					profile
+				)
+			)
+		total_threat += maxf(0.0, best_response)
+	return total_threat
+
+
+func _get_threat_reachable_key(
+	responder: TacticalCharacter,
+	dynamic_target: TacticalCharacter,
+	snapshot: AIBoardSnapshot
+) -> String:
+	var parts: Array[String] = [
+		str(responder.get_instance_id()),
+		str(snapshot.get_movement_range(responder)),
+		str(snapshot.wall_cells.hash()),
+	]
+	for unit in snapshot.units:
+		if unit == dynamic_target:
+			continue
+		parts.append("%s:%s" % [unit.get_instance_id(), snapshot.get_cell(unit)])
+	return "|".join(parts)
 
 
 func _get_best_friendly_reply(
@@ -643,9 +821,54 @@ func _forecast_terrain_trigger(
 	var definition := snapshot.get_terrain(snapshot.get_cell(unit))
 	if definition == null:
 		return 0.0
+	var score := 0.0
+	if definition.status_applies_on(trigger):
+		score += _score_terrain_estimate(
+			unit,
+			snapshot.forecast_status_application(null, unit, definition.status_effect),
+			snapshot,
+			profile
+		)
+	for triggered_effect in definition.effects:
+		if (
+			not snapshot.is_living(unit)
+			or not definition.should_apply_additional_effect(triggered_effect)
+			or not triggered_effect.applies_on(trigger)
+			or triggered_effect.effect == null
+		):
+			continue
+		var effect := triggered_effect.effect
+		var estimate: Dictionary
+		if effect is ApplyStatusEffectDefinition:
+			var status_application := effect as ApplyStatusEffectDefinition
+			estimate = snapshot.forecast_status_application(
+				null,
+				unit,
+				status_application.status_effect,
+				status_application.ai_utility_hint
+			)
+		else:
+			estimate = effect.estimate_for_ai(null, unit, snapshot.get_health(unit))
+		estimate["utility_hint"] = (
+			float(estimate.get("utility_hint", 0.0))
+			+ triggered_effect.occupant_ai_utility
+		)
+		score += _score_terrain_estimate(unit, estimate, snapshot, profile)
+	return score
+
+
+func _score_terrain_estimate(
+	unit: TacticalCharacter,
+	estimate: Dictionary,
+	snapshot: AIBoardSnapshot,
+	profile: EnemyAIProfile
+) -> float:
 	var before := snapshot.get_health(unit)
-	var estimate := definition.estimate_trigger(unit, trigger, before)
-	var after := clampi(int(estimate.get("health", before)), 0, unit.get_max_health())
+	var after := clampi(
+		before + int(estimate.get("health_delta", 0)),
+		0,
+		unit.get_max_health()
+	)
 	snapshot.set_health(unit, after)
 	var score := float(estimate.get("utility_hint", 0.0)) * profile.custom_effect_weight
 	if after < before:
@@ -680,7 +903,20 @@ func _get_terrain_path_penalties(
 func _get_snapshot_key(snapshot: AIBoardSnapshot) -> String:
 	var parts: Array[String] = []
 	for unit in snapshot.units:
-		parts.append("%s:%s:%d" % [unit.get_instance_id(), snapshot.get_cell(unit), snapshot.get_health(unit)])
+		var status_parts: Array[String] = []
+		for status_id in snapshot.get_status_ids(unit):
+			var status_state := snapshot.get_status_state(unit, status_id)
+			status_parts.append("%s:%d:%d" % [
+				status_id,
+				int(status_state.get("remaining_turns", 0)),
+				int(bool(status_state.get("processed_this_turn", false))),
+			])
+		parts.append("%s:%s:%d:%s" % [
+			unit.get_instance_id(),
+			snapshot.get_cell(unit),
+			snapshot.get_health(unit),
+			",".join(status_parts),
+		])
 	return "|".join(parts)
 
 

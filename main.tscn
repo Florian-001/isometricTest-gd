@@ -21,8 +21,11 @@
 [ext_resource type="PackedScene" path="res://scenes/inventory_screen.tscn" id="19_inventory_screen"]
 [ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/iron_sword.tres" id="20_sword"]
 [ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/ranger_armor.tres" id="21_armor"]
+[ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="21_qsp4k"]
 [ext_resource type="Resource" uid="uid://pghwydiamt0o" path="res://resources/items/sage_charm.tres" id="22_charm"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="22_xuqvo"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="23_item_type"]
+[ext_resource type="Resource" uid="uid://7m35u3ondco3" path="res://resources/abilities/arrow.tres" id="23_qsp4k"]
 [ext_resource type="Resource" uid="uid://bj3yc0xg083b1" path="res://resources/tiles/ice.tres" id="24_ice"]
 [ext_resource type="Resource" uid="uid://cgq7lrwo26syh" path="res://resources/items/ranger_bow.tres" id="25_ranger_bow"]
 [ext_resource type="Resource" path="res://resources/items/frost_bow.tres" id="26_frost_bow"]
@@ -116,12 +119,11 @@ movement_range_override = 5.0
 speed_override = 8
 starting_grid_cell = Vector2i(2, 4)
 
-[node name="MeleeEnemy" parent="Characters" unique_id=921107907 instance=ExtResource("6_enemy")]
-z_index = 111
-starting_grid_cell = Vector2i(3, 8)
-
 [node name="RangedEnemy" parent="Characters" unique_id=1457671969 instance=ExtResource("12_ranged_enemy")]
 z_index = 112
+enemy_ai_profile = ExtResource("21_qsp4k")
+override_template_abilities = true
+ability_overrides = Array[ExtResource("22_xuqvo")]([ExtResource("23_qsp4k")])
 starting_grid_cell = Vector2i(9, 3)
 
 [node name="TurnManager" type="Node" parent="." unique_id=226977299]
@@ -300,3 +302,7 @@ theme_override_colors/font_color = Color(0.86, 0.93, 1, 1)
 theme_override_font_sizes/font_size = 15
 text = "Select a blue character, hover a highlighted cell, then click to move.
 WASD or middle-drag to pan  •  Mouse wheel to zoom  •  Esc to clear"
+
+[node name="MeleeEnemy" parent="HUD" unique_id=921107907 instance=ExtResource("6_enemy")]
+z_index = 111
+starting_grid_cell = Vector2i(3, 8)

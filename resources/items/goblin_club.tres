@@ -11,6 +11,5 @@ value = -1.0
 [resource]
 script = ExtResource("1_item")
 display_name = "Goblin Club"
-weapon_type = 0
 weapon_damage = 12
 modifiers = Array[ExtResource("2_modifier")]([SubResource("SpeedPenalty")])

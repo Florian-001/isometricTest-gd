@@ -268,7 +268,8 @@ func apply_primary_effect(caster: TacticalCharacter, target: TacticalCharacter) 
 func estimate_primary_effect_for_ai(
 	caster: TacticalCharacter,
 	target: TacticalCharacter,
-	simulated_health: int
+	simulated_health: int,
+	include_status: bool = true
 ) -> Dictionary:
 	var maximum := target.get_max_health() if is_instance_valid(target) else maxi(0, simulated_health)
 	var health := clampi(simulated_health, 0, maximum)
@@ -278,7 +279,7 @@ func estimate_primary_effect_for_ai(
 			health = maxi(0, health - calculate_primary_effect_amount(caster))
 		PrimaryEffect.HEAL:
 			health = mini(maximum, health + calculate_primary_effect_amount(caster))
-	if status_effect != null and health > 0:
+	if include_status and status_effect != null and health > 0:
 		var status_estimate := status_effect.estimate_for_ai(caster, target, health)
 		health = clampi(
 			health + int(status_estimate.get("health_delta", 0)),

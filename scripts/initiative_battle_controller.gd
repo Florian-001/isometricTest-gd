@@ -1,5 +1,7 @@
 extends Node2D
 
+const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
+
 @export var center_camera_on_start := true
 @export_category("Developer Tools")
 @export var enable_dev_tools := true
@@ -41,6 +43,8 @@ var _movement_locked := true
 var _last_mouse_screen_position := Vector2.ZERO
 var _has_mouse_screen_position := false
 var _ai_debug_history: Array[String] = []
+var _combat_over := false
+var _combat_result_text := ""
 
 
 func _ready() -> void:
@@ -86,7 +90,8 @@ func _ready() -> void:
 	dev_button.visible = enable_dev_tools
 	dev_history_panel.visible = false
 	_refresh_ai_debug_history()
-	turn_manager.start_combat(_characters)
+	if not _check_combat_end():
+		turn_manager.start_combat(_characters)
 	_update_turn_hud()
 
 
@@ -364,9 +369,10 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 	_set_movement_locked(true)
 	var moving_character := _selected_character
 	grid.clear_overlays()
-	await moving_character.move_along(path)
-	var traversed_path := _get_traversed_path(path, moving_character.grid_cell)
-	moving_character.spend_movement(_pathfinder.get_path_cost(traversed_path))
+	await moving_character.move_along(
+		path,
+		Callable(self, "_before_character_movement_step")
+	)
 	var can_continue := (
 		is_instance_valid(moving_character)
 		and moving_character == turn_manager.current_unit
@@ -378,6 +384,12 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 		_has_hovered_cell = false
 		_refresh_reachable_cells()
 		_update_turn_hud()
+	elif (
+		is_instance_valid(moving_character)
+		and moving_character == turn_manager.current_unit
+		and moving_character.current_health <= 0
+	):
+		call_deferred("_end_defeated_current_unit", moving_character)
 
 
 func _on_end_turn_pressed() -> void:
@@ -390,7 +402,7 @@ func _on_end_turn_pressed() -> void:
 
 
 func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
-	if unit != turn_manager.current_unit:
+	if _combat_over or unit != turn_manager.current_unit:
 		return
 	grid.show_reachable(unit.grid_cell, {})
 
@@ -400,7 +412,8 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 		_pathfinder,
 		_ability_targeting,
 		_get_wall_cells(),
-		terrain.get_definitions()
+		terrain.get_definitions(),
+		turn_manager.get_rotating_order()
 	)
 	_update_ai_debug(unit, plan)
 	var executed := await _execute_enemy_plan(unit, plan)
@@ -413,7 +426,8 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 			_pathfinder,
 			_ability_targeting,
 			_get_wall_cells(),
-			terrain.get_definitions()
+			terrain.get_definitions(),
+			turn_manager.get_rotating_order()
 		)
 		_update_ai_debug(unit, plan, "Replanned")
 		await _execute_enemy_plan(unit, plan)
@@ -424,7 +438,7 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 
 
 func _finish_enemy_turn(unit: TacticalCharacter) -> void:
-	if unit == turn_manager.current_unit:
+	if not _combat_over and unit == turn_manager.current_unit:
 		turn_manager.end_current_turn()
 
 
@@ -496,10 +510,46 @@ func _move_enemy_to(
 	if unit != turn_manager.current_unit:
 		return false
 	grid.clear_overlays()
-	await unit.move_along(path)
-	var traversed_path := _get_traversed_path(path, unit.grid_cell)
-	var spent := unit.spend_movement(_pathfinder.get_path_cost(traversed_path))
-	return spent and unit.current_health > 0 and unit.grid_cell == destination
+	await unit.move_along(path, Callable(self, "_before_character_movement_step"))
+	return unit.current_health > 0 and unit.grid_cell == destination
+
+
+func _before_character_movement_step(
+	mover: TacticalCharacter,
+	current_cell: Vector2i,
+	next_cell: Vector2i
+) -> bool:
+	if (
+		not is_instance_valid(mover)
+		or mover.current_health <= 0
+		or mover != turn_manager.current_unit
+	):
+		return false
+	var wall_cells := _get_wall_cells()
+	for attacker in turn_manager.turn_order:
+		if not OpportunityAttackSystemScript.can_trigger(
+			attacker,
+			mover,
+			current_cell,
+			next_cell,
+			wall_cells
+		):
+			continue
+		var ability := OpportunityAttackSystemScript.get_opportunity_attack_ability(attacker)
+		await _ability_executor.execute_opportunity_attack(
+			attacker,
+			ability,
+			current_cell,
+			_characters,
+			grid,
+			_ability_targeting,
+			wall_cells
+		)
+		if not is_instance_valid(mover) or mover.current_health <= 0:
+			return false
+
+	var step_cost := _pathfinder.get_step_cost(current_cell, next_cell)
+	return mover.spend_movement(step_cost)
 
 
 func _update_ai_debug(
@@ -510,7 +560,7 @@ func _update_ai_debug(
 	if not enable_dev_tools:
 		return
 	var effective_profile := unit.get_enemy_ai_profile()
-	var profile_name := effective_profile.display_name if effective_profile != null else "Default Melee AI"
+	var profile_name := effective_profile.display_name if effective_profile != null else "General AI"
 	var lines: Array[String] = [
 		"Round %d · %s · %s" % [turn_manager.round_number, unit.name, profile_name],
 		"%s in %d ms: %s" % [status, _enemy_ai_planner.last_planning_duration_ms, plan.get_debug_summary()],
@@ -519,6 +569,11 @@ func _update_ai_debug(
 			_enemy_ai_planner.last_candidate_generation_duration_ms,
 			_enemy_ai_planner.last_threat_evaluation_count,
 			_enemy_ai_planner.last_threat_evaluation_duration_ms,
+		],
+		"Cache: %d reachability searches / %d hits / %d exact replies" % [
+			_enemy_ai_planner.last_reachability_search_count,
+			_enemy_ai_planner.last_cache_hit_count,
+			_enemy_ai_planner.last_exact_reply_count,
 		],
 		"Top candidates:",
 	]
@@ -587,10 +642,14 @@ func _refresh_ai_debug_history() -> void:
 
 
 func _on_turn_starting(unit: TacticalCharacter) -> void:
+	if _combat_over:
+		return
 	terrain.apply_trigger(unit, TileTriggeredEffectDefinition.Trigger.TURN_START)
 
 
 func _on_turn_started(unit: TacticalCharacter) -> void:
+	if _combat_over:
+		return
 	_selected_ability = null
 	_ability_range_cells.clear()
 	_ability_target_cells.clear()
@@ -623,7 +682,9 @@ func _on_character_defeated(character: TacticalCharacter) -> void:
 	turn_manager.notify_unit_state_changed()
 	if character.is_friendly():
 		inventory_screen.setup(general_inventory, _get_living_friendlies())
-	if character == turn_manager.current_unit:
+	if _check_combat_end():
+		return
+	if character == turn_manager.current_unit and not character.is_moving:
 		call_deferred("_end_defeated_current_unit", character)
 
 
@@ -643,7 +704,7 @@ func _on_terrain_changed(
 
 
 func _end_defeated_current_unit(character: TacticalCharacter) -> void:
-	if character == turn_manager.current_unit:
+	if not _combat_over and character == turn_manager.current_unit:
 		turn_manager.end_current_turn()
 
 
@@ -659,7 +720,7 @@ func _on_unit_ability_availability_changed(_available: bool, unit: TacticalChara
 
 
 func _set_movement_locked(value: bool) -> void:
-	_movement_locked = value
+	_movement_locked = true if _combat_over else value
 	_refresh_ability_bar()
 	_update_turn_hud()
 
@@ -680,6 +741,12 @@ func _refresh_ability_bar() -> void:
 
 func _update_turn_hud() -> void:
 	if turn_manager == null or end_turn_button == null:
+		return
+	if _combat_over:
+		turn_status.text = _combat_result_text
+		movement_status.text = ""
+		end_turn_button.text = "Battle Ended"
+		end_turn_button.disabled = true
 		return
 	var unit := turn_manager.current_unit
 	if unit == null:
@@ -702,6 +769,35 @@ func _update_turn_hud() -> void:
 		movement_status.text = "%s is acting..." % unit.name
 		end_turn_button.text = "Enemy Turn..."
 		end_turn_button.disabled = true
+
+
+func _check_combat_end() -> bool:
+	if _combat_over:
+		return true
+	var has_living_friendlies := false
+	var has_living_enemies := false
+	for character in _characters:
+		if not is_instance_valid(character) or character.current_health <= 0:
+			continue
+		if character.is_friendly():
+			has_living_friendlies = true
+		else:
+			has_living_enemies = true
+	if has_living_friendlies and has_living_enemies:
+		return false
+
+	_combat_over = true
+	if has_living_friendlies:
+		_combat_result_text = "Victory"
+	elif has_living_enemies:
+		_combat_result_text = "Defeat"
+	else:
+		_combat_result_text = "Battle Ended"
+	_movement_locked = true
+	turn_manager.stop_combat()
+	clear_selection()
+	_refresh_ability_bar()
+	return true
 
 
 func _get_living_friendlies() -> Array[TacticalCharacter]:

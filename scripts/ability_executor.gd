@@ -32,6 +32,42 @@ func execute(
 		return false
 	if not caster.spend_ability_action():
 		return false
+	return await _perform(caster, ability, selected_cell, units, grid, targeting, wall_cells)
+
+
+func execute_opportunity_attack(
+	caster: TacticalCharacter,
+	ability: AbilityDefinition,
+	selected_cell: Vector2i,
+	units: Array[TacticalCharacter],
+	grid: IsometricGrid,
+	targeting: AbilityTargeting,
+	wall_cells: Dictionary = {}
+) -> bool:
+	if not can_execute_opportunity_attack(
+		caster,
+		ability,
+		selected_cell,
+		units,
+		grid,
+		targeting,
+		wall_cells
+	):
+		return false
+	if not caster.spend_opportunity_reaction():
+		return false
+	return await _perform(caster, ability, selected_cell, units, grid, targeting, wall_cells)
+
+
+func _perform(
+	caster: TacticalCharacter,
+	ability: AbilityDefinition,
+	selected_cell: Vector2i,
+	units: Array[TacticalCharacter],
+	grid: IsometricGrid,
+	targeting: AbilityTargeting,
+	wall_cells: Dictionary
+) -> bool:
 
 	ability_started.emit(caster, ability, selected_cell)
 	match ability.delivery_type:
@@ -81,10 +117,58 @@ func can_execute(
 	targeting: AbilityTargeting,
 	wall_cells: Dictionary = {}
 ) -> bool:
+	return (
+		is_instance_valid(caster)
+		and caster.ability_available
+		and _can_execute_base(
+			caster,
+			ability,
+			selected_cell,
+			units,
+			grid,
+			targeting,
+			wall_cells
+		)
+	)
+
+
+func can_execute_opportunity_attack(
+	caster: TacticalCharacter,
+	ability: AbilityDefinition,
+	selected_cell: Vector2i,
+	units: Array[TacticalCharacter],
+	grid: IsometricGrid,
+	targeting: AbilityTargeting,
+	wall_cells: Dictionary = {}
+) -> bool:
+	return (
+		is_instance_valid(caster)
+		and caster.opportunity_reaction_available
+		and ability == OpportunityAttackSystem.get_opportunity_attack_ability(caster)
+		and _can_execute_base(
+			caster,
+			ability,
+			selected_cell,
+			units,
+			grid,
+			targeting,
+			wall_cells
+		)
+	)
+
+
+func _can_execute_base(
+	caster: TacticalCharacter,
+	ability: AbilityDefinition,
+	selected_cell: Vector2i,
+	units: Array[TacticalCharacter],
+	grid: IsometricGrid,
+	targeting: AbilityTargeting,
+	wall_cells: Dictionary
+) -> bool:
 	if (
 		not is_instance_valid(caster)
 		or caster.current_health <= 0
-		or not caster.ability_available
 		or ability == null
 		or not ability.can_be_used_by(caster)
 		or grid == null

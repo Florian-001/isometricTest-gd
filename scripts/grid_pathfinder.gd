@@ -39,26 +39,78 @@ func is_in_bounds(cell: Vector2i) -> bool:
 
 
 func get_reachable(start: Vector2i, budget: float, blocked_cells: Dictionary = {}) -> Dictionary:
+	return build_reachability(start, budget, blocked_cells)["costs"] as Dictionary
+
+
+## Runs one deterministic weighted search and retains enough information to reconstruct
+## any path in the result without searching the grid again.
+func build_reachability(
+	start: Vector2i,
+	budget: float,
+	blocked_cells: Dictionary = {},
+	cell_preference_penalties: Dictionary = {}
+) -> Dictionary:
 	var costs: Dictionary = {}
+	var preference_costs: Dictionary = {}
+	var came_from: Dictionary = {}
 	if not is_in_bounds(start) or budget < 0.0:
-		return costs
+		return {
+			"start": start,
+			"costs": costs,
+			"preference_costs": preference_costs,
+			"came_from": came_from,
+		}
 
 	var open_cells: Array[Vector2i] = [start]
 	costs[start] = 0.0
-
+	preference_costs[start] = 0.0
 	while not open_cells.is_empty():
-		var current := _pop_lowest_cost(open_cells, costs)
+		var current := _pop_lowest_cost(open_cells, costs, preference_costs)
 		var current_cost: float = costs[current]
 		for neighbor in _get_neighbors(current, blocked_cells):
 			var new_cost := current_cost + get_step_cost(current, neighbor)
 			if new_cost > budget + COST_EPSILON:
 				continue
-			if not costs.has(neighbor) or new_cost < float(costs[neighbor]) - COST_EPSILON:
+			var new_preference_cost := (
+				float(preference_costs[current])
+				+ maxf(0.0, float(cell_preference_penalties.get(neighbor, 0.0)))
+			)
+			var is_cheaper := (
+				not costs.has(neighbor)
+				or new_cost < float(costs[neighbor]) - COST_EPSILON
+			)
+			var is_safer_tie := (
+				costs.has(neighbor)
+				and is_equal_approx(new_cost, float(costs[neighbor]))
+				and new_preference_cost < float(preference_costs[neighbor]) - COST_EPSILON
+			)
+			if is_cheaper or is_safer_tie:
 				costs[neighbor] = new_cost
+				preference_costs[neighbor] = new_preference_cost
+				came_from[neighbor] = current
 				if not open_cells.has(neighbor):
 					open_cells.append(neighbor)
 
-	return costs
+	return {
+		"start": start,
+		"costs": costs,
+		"preference_costs": preference_costs,
+		"came_from": came_from,
+	}
+
+
+func reconstruct_reachable_path(result: Dictionary, destination: Vector2i) -> Array[Vector2i]:
+	var start := result.get("start", Vector2i(-1, -1)) as Vector2i
+	var costs := result.get("costs", {}) as Dictionary
+	if not costs.has(destination):
+		return [] as Array[Vector2i]
+	if destination == start:
+		return [start] as Array[Vector2i]
+	return _reconstruct_path(
+		start,
+		destination,
+		result.get("came_from", {}) as Dictionary
+	)
 
 
 func find_path(

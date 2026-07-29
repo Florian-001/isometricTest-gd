@@ -11,6 +11,7 @@ const EnemyAIProfileScript = preload("res://scripts/enemy_ai_profile.gd")
 const EnemyAIPlannerScript = preload("res://scripts/enemy_ai_planner.gd")
 const GridPathfinderScript = preload("res://scripts/grid_pathfinder.gd")
 const AbilityTargetingScript = preload("res://scripts/ability_targeting.gd")
+const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
 
 
 func suite_name() -> String:
@@ -19,37 +20,28 @@ func suite_name() -> String:
 
 func test_profile_defaults_resources_and_configuration_warnings() -> void:
 	var profile := EnemyAIProfileScript.new() as EnemyAIProfile
-	assert_eq(profile.lookahead_candidate_limit, 32, "AI profiles should default to a 32-plan beam")
-	assert_true(is_equal_approx(profile.counterplay_discount, 0.75), "counterplay should be discounted by 0.75")
-	assert_true(is_equal_approx(profile.damage_reward, 1.0), "damage should reward effective HP loss")
-	assert_true(is_equal_approx(profile.healing_reward, 0.75), "healing should use its planned default weight")
+	assert_eq(profile.display_name, "General AI", "new AI profiles should describe their general behavior")
+	assert_true(is_equal_approx(profile.risk_aversion, 1.0), "general AI should default to balanced risk")
 
-	var melee_profile := ResourceLoader.load(
-		"res://resources/ai/melee_ai.tres",
+	var general_profile := ResourceLoader.load(
+		"res://resources/ai/general_ai.tres",
 		"",
 		ResourceLoader.CACHE_MODE_REPLACE
 	) as EnemyAIProfile
-	var ranged_profile := ResourceLoader.load(
-		"res://resources/ai/ranged_ai.tres",
-		"",
-		ResourceLoader.CACHE_MODE_REPLACE
-	) as EnemyAIProfile
-	assert_eq(melee_profile.behavior_style, EnemyAIProfile.BehaviorStyle.MELEE, "melee template should be editable and typed")
-	assert_eq(ranged_profile.behavior_style, EnemyAIProfile.BehaviorStyle.RANGED, "ranged template should be editable and typed")
-	assert_true(is_zero_approx(melee_profile.counterplay_discount), "standard melee enemies should skip expensive counterplay forecasts")
-	assert_true(is_zero_approx(ranged_profile.counterplay_discount), "standard ranged enemies should skip expensive counterplay forecasts")
-	assert_true(is_equal_approx(melee_profile.threat_weight, 0.35), "standard melee enemies should use moderate threat awareness")
-	assert_true(is_equal_approx(ranged_profile.threat_weight, 0.35), "standard ranged enemies should use moderate threat awareness")
+	assert_eq(general_profile.display_name, "General AI", "the reusable profile should be the single general template")
+	assert_true(is_equal_approx(general_profile.risk_aversion, 1.0), "the reusable profile should use balanced risk")
+	assert_false(FileAccess.file_exists("res://resources/ai/melee_ai.tres"), "the obsolete Melee profile should be removed")
+	assert_false(FileAccess.file_exists("res://resources/ai/ranged_ai.tres"), "the obsolete Ranged profile should be removed")
 
 	var enemy := _make_unit(false, Vector2i.ZERO, 4.0, [])
 	assert_true(enemy._get_configuration_warnings().size() > 0, "an enemy without an AI profile should warn in the Inspector")
-	enemy.enemy_ai_profile = melee_profile
+	enemy.enemy_ai_profile = general_profile
 	assert_true(enemy._get_configuration_warnings().is_empty(), "attaching a profile should resolve the enemy warning")
 	var friendly := _make_unit(true, Vector2i.ONE, 4.0, [])
-	friendly.enemy_ai_profile = melee_profile
+	friendly.enemy_ai_profile = general_profile
 	assert_true(friendly._get_configuration_warnings().size() > 0, "friendly units should warn that enemy AI is ignored")
 	var bundled_definition := EnemyDefinition.new()
-	bundled_definition.ai_profile = melee_profile
+	bundled_definition.ai_profile = general_profile
 	var bundled_enemy := track(TacticalCharacterScript.new()) as TacticalCharacter
 	bundled_enemy.definition = bundled_definition
 	assert_true(bundled_enemy._get_configuration_warnings().is_empty(), "a bundled archetype AI should satisfy enemy configuration")
@@ -87,7 +79,7 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 	var units: Array[TacticalCharacter] = [caster, ally, opponent]
 	var targeting := AbilityTargetingScript.new(Vector2i(4, 4)) as AbilityTargeting
 	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
+	var profile := _profile(0.0)
 
 	var heal := AbilityDefinitionScript.new() as AbilityDefinition
 	heal.effect = AbilityDefinition.PrimaryEffect.HEAL
@@ -103,7 +95,7 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 		targeting,
 		profile
 	)
-	assert_true(is_equal_approx(heal_score, 18.75), "planner healing score should use the primary Heal forecast")
+	assert_true(is_equal_approx(heal_score, 12.5), "planner healing should be weighted by the ally's missing-health percentage")
 	assert_eq(heal_snapshot.get_health(ally), 75, "planner simulation should apply the forecasted primary healing")
 
 	var slow := AbilityDefinitionScript.new() as AbilityDefinition
@@ -202,7 +194,7 @@ func test_virtual_origin_targeting_does_not_move_live_unit() -> void:
 func test_cell_target_ai_prunes_zero_utility_empty_casts() -> void:
 	var shot := _make_damage_ability("Cell Shot", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 10)
 	shot.target_flags = AbilityDefinition.TargetFlags.ENEMY | AbilityDefinition.TargetFlags.CELL
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
+	var profile := _profile(0.0)
 	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile)
 	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
 	var units: Array[TacticalCharacter] = [enemy, target]
@@ -278,72 +270,162 @@ func test_snapshot_scores_status_refreshes_by_added_duration_without_live_mutati
 		assert_true(active_status.processed_this_turn, "status forecasting must not change live processed state")
 
 
-func test_melee_profile_prioritizes_melee_when_adjacent() -> void:
-	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
-	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
-	var enemy := _make_unit(false, Vector2i(2, 2), 3.0, [slash, shot], profile)
-	var target := _make_unit(true, Vector2i(3, 2), 3.0, [])
-	var plan := _choose(enemy, [enemy, target], Vector2i(7, 7))
-	assert_eq(plan.ability, slash, "adjacent melee AI should prefer its melee delivery")
-	assert_true(plan.effect_score >= 30.0, "the chosen melee attack should forecast its damage")
+func test_opportunity_forecast_consumes_reaction_applies_status_and_truncates_paths() -> void:
+	var strike := load("res://resources/abilities/strike.tres") as AbilityDefinition
+	var slow := load("res://resources/statuses/slow.tres") as StatusEffectDefinition
+	var attacker := _make_unit(true, Vector2i(1, 1), 6.0, [strike])
+	var mover := _make_unit(
+		false,
+		Vector2i(2, 1),
+		6.0,
+		[],
+		_profile(1.0)
+	)
+	var melee_weapon := ItemDefinition.new()
+	melee_weapon.weapon_type = ItemDefinition.WeaponType.MELEE
+	melee_weapon.weapon_damage = 10
+	melee_weapon.status_effect = slow
+	attacker.equip_item(melee_weapon)
+	attacker.reset_opportunity_reaction()
+	mover.reset_movement()
+
+	var units := _typed_units([attacker, mover])
+	var pathfinder := GridPathfinderScript.new(Vector2i(8, 3)) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(pathfinder.grid_size) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var snapshot := AIBoardSnapshot.from_battle(units, pathfinder.grid_size)
+	var path: Array[Vector2i] = [
+		Vector2i(2, 1),
+		Vector2i(3, 1),
+		Vector2i(4, 1),
+		Vector2i(5, 1),
+		Vector2i(6, 1),
+		Vector2i(7, 1),
+	]
+	var forecast := planner._forecast_terrain_path(
+		mover,
+		path,
+		snapshot,
+		mover.get_enemy_ai_profile(),
+		targeting,
+		pathfinder
+	)
+	var expected_damage := strike.calculate_damage(attacker)
+
+	assert_true(float(forecast["score"]) < 0.0, "opportunity damage and Slow should penalize the moving unit's plan")
+	assert_eq(snapshot.get_health(mover), 100 - expected_damage, "forecast damage should use the normal Strike calculation")
+	assert_false(snapshot.can_use_opportunity_reaction(attacker), "the forecast should consume the attacker's reaction once")
+	assert_true(attacker.opportunity_reaction_available, "forecasting must not mutate the live reaction")
+	assert_eq(snapshot.get_status_remaining(mover, slow.status_id), 2, "weapon Slow should be included in the opportunity forecast")
+	assert_true(is_equal_approx(snapshot.get_movement_range(mover), 4.2), "forecast Slow should update simulated movement range")
+	assert_eq(
+		forecast["path"],
+		path.slice(0, 5),
+		"Slow should stop the forecast before a fifth movement step exceeds the new range"
+	)
+	var guarded_plan := planner.choose_plan(mover, units, pathfinder, targeting)
+	var guarded_disengages := false
+	for index in range(1, guarded_plan.pre_cast_path.size()):
+		guarded_disengages = guarded_disengages or OpportunityAttackSystemScript.is_leaving_reach(
+			attacker.grid_cell,
+			guarded_plan.pre_cast_path[index - 1],
+			guarded_plan.pre_cast_path[index]
+		)
+	assert_false(guarded_disengages, "AI should avoid disengaging while the damaging reaction is available")
+	attacker.spend_opportunity_reaction()
+	var unguarded_plan := planner.choose_plan(mover, units, pathfinder, targeting)
+	var unguarded_disengages := false
+	for index in range(1, unguarded_plan.pre_cast_path.size()):
+		unguarded_disengages = unguarded_disengages or OpportunityAttackSystemScript.is_leaving_reach(
+			attacker.grid_cell,
+			unguarded_plan.pre_cast_path[index - 1],
+			unguarded_plan.pre_cast_path[index]
+		)
+	assert_true(unguarded_disengages, "AI should resume disengaging after the opposing reaction is spent; got %s" % unguarded_plan.get_debug_summary())
+
+	mover.current_health = expected_damage
+	attacker.reset_opportunity_reaction()
+	mover.reset_movement()
+	var lethal_snapshot := AIBoardSnapshot.from_battle(units, pathfinder.grid_size)
+	var lethal_path: Array[Vector2i] = [Vector2i(2, 1), Vector2i(3, 1)]
+	var lethal_forecast := planner._forecast_terrain_path(
+		mover,
+		lethal_path,
+		lethal_snapshot,
+		mover.get_enemy_ai_profile(),
+		targeting,
+		pathfinder
+	)
+	assert_eq(lethal_snapshot.get_health(mover), 0, "lethal opportunity damage should defeat the simulated mover")
+	assert_eq(lethal_forecast["path"], [Vector2i(2, 1)], "a lethal reaction should stop movement before entering the next cell")
 
 
-func test_melee_profile_closes_and_uses_ranged_fallback() -> void:
+func test_general_ai_prioritizes_the_highest_value_usable_ability() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
 	var fallback := _make_damage_ability("Magic Fallback", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 10)
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
+	var profile := _profile(0.0)
+	var enemy := _make_unit(false, Vector2i(2, 2), 3.0, [slash, fallback], profile)
+	var target := _make_unit(true, Vector2i(3, 2), 3.0, [])
+	var plan := _choose(enemy, [enemy, target], Vector2i(7, 7))
+	assert_eq(plan.ability, slash, "general AI should prefer the stronger legal result without a Melee style bonus")
+	assert_true(plan.effect_score >= 30.0, "the chosen attack should forecast its centralized damage")
+
+
+func test_general_ai_uses_an_available_fallback_from_its_loadout() -> void:
+	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
+	var fallback := _make_damage_ability("Magic Fallback", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 10)
+	var profile := _profile(0.0)
 	var enemy := _make_unit(false, Vector2i(0, 2), 2.0, [slash, fallback], profile)
 	var target := _make_unit(true, Vector2i(6, 2), 3.0, [])
 	var plan := _choose(enemy, [enemy, target], Vector2i(8, 6))
-	assert_eq(plan.ability, fallback, "melee AI should use an available Magic fallback when melee cannot be reached")
-	assert_true(plan.get_end_cell(enemy.grid_cell).x > enemy.grid_cell.x, "the fallback shot should still end closer to the opponent")
+	assert_eq(plan.ability, fallback, "general AI should use a legal fallback when its stronger attack cannot reach")
+	assert_ne(plan.sequence, EnemyTurnPlan.Sequence.MOVE_CAST_MOVE, "general AI must never generate split movement")
 
 
-func test_ranged_profile_shoots_and_retreats_to_standoff() -> void:
+func test_general_ai_uses_weapon_compatible_abilities_without_style_fields() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
+	var profile := _profile(1.0)
 	var enemy := _make_unit(false, Vector2i(3, 3), 3.0, [slash, shot], profile, ItemDefinition.WeaponType.RANGED)
 	var target := _make_unit(true, Vector2i(5, 3), 3.0, [])
 	var plan := _choose(enemy, [enemy, target], Vector2i(10, 7))
-	assert_eq(plan.ability, shot, "a ranged unit outside melee reach should use its ranged attack")
-	assert_true(plan.sequence in [EnemyTurnPlan.Sequence.MOVE_CAST, EnemyTurnPlan.Sequence.CAST_MOVE, EnemyTurnPlan.Sequence.MOVE_CAST_MOVE], "a threatened ranged unit should combine its attack with repositioning")
-	var final_distance := AbilityTargetingScript.new(Vector2i(10, 7)).get_weighted_distance(plan.get_end_cell(enemy.grid_cell), target.grid_cell)
-	assert_true(final_distance >= 3.0, "the ranged profile should increase separation while retaining a shot")
+	assert_eq(plan.ability, shot, "the planner should infer ranged behavior from the usable Ranged ability")
+	assert_ne(plan.sequence, EnemyTurnPlan.Sequence.MOVE_CAST_MOVE, "the compatible shot may reposition but cannot split movement")
 
 
-func test_move_cast_move_candidates_respect_the_shared_budget() -> void:
+func test_candidate_search_is_capped_and_never_generates_split_movement() -> void:
 	var shot := _make_damage_ability("Point Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
-	profile.lookahead_candidate_limit = 256
-	profile.post_cast_position_limit = 8
+	shot.target_flags = AbilityDefinition.TargetFlags.ENEMY | AbilityDefinition.TargetFlags.CELL
+	shot.area_of_effect = 3
+	var profile := _profile(1.0)
 	var enemy := _make_unit(false, Vector2i(0, 1), 2.0, [shot], profile)
-	var target := _make_unit(true, Vector2i(2, 1), 0.0, [])
-	var pathfinder := GridPathfinderScript.new(Vector2i(4, 3)) as GridPathfinder
-	var targeting := AbilityTargetingScript.new(Vector2i(4, 3)) as AbilityTargeting
+	var targets: Array[TacticalCharacter] = []
+	for index in range(8):
+		targets.append(_make_unit(true, Vector2i(3 + index % 4, floori(index / 4.0)), 0.0, []))
+	var pathfinder := GridPathfinderScript.new(Vector2i(8, 4)) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(Vector2i(8, 4)) as AbilityTargeting
 	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
-	planner.choose_plan(enemy, _typed_units([enemy, target]), pathfinder, targeting)
-	var found_split := false
+	var units: Array[TacticalCharacter] = [enemy]
+	units.append_array(targets)
+	planner.choose_plan(enemy, units, pathfinder, targeting)
+	assert_true(planner.last_candidate_count <= 32, "the planner should score no more than 32 tactical candidates")
+	assert_true(planner.last_exact_reply_count <= 3, "only the best three candidates should receive an exact reply")
 	for candidate in planner.ranked_candidates:
-		if candidate.sequence == EnemyTurnPlan.Sequence.MOVE_CAST_MOVE:
-			found_split = true
-			assert_true(candidate.movement_cost <= enemy.remaining_movement + GridPathfinder.COST_EPSILON, "split movement must share one exact budget")
-	assert_true(found_split, "the tactical search should retain legal move-cast-move candidates")
+		assert_ne(candidate.sequence, EnemyTurnPlan.Sequence.MOVE_CAST_MOVE, "split movement should remain serialized but never be generated")
 
 
 func test_counterplay_forecast_chooses_safer_plan_without_mutation() -> void:
-	var shot := _make_damage_ability("Long Shot", AbilityDefinition.DeliveryType.PROJECTILE, 4.0, 40)
+	var shot := _make_damage_ability("Committed Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 40)
 	var counter := _make_damage_ability("Counter Strike", AbilityDefinition.DeliveryType.MELEE, 1.0, 100)
 	var enemy := _make_unit(false, Vector2i(0, 1), 3.0, [shot])
 	var target := _make_unit(true, Vector2i(4, 1), 0.0, [counter])
 	var units: Array[TacticalCharacter] = [enemy, target]
 
-	enemy.enemy_ai_profile = _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
+	enemy.enemy_ai_profile = _profile(0.0)
 	var aggressive := _choose(enemy, units, Vector2i(6, 4))
 	var aggressive_distance := AbilityTargetingScript.new(Vector2i(6, 4)).get_weighted_distance(aggressive.get_end_cell(enemy.grid_cell), target.grid_cell)
 
-	enemy.enemy_ai_profile = _profile(EnemyAIProfile.BehaviorStyle.MELEE, 1.0)
+	enemy.enemy_ai_profile = _profile(2.0)
 	var cautious := _choose(enemy, units, Vector2i(6, 4))
 	var cautious_distance := AbilityTargetingScript.new(Vector2i(6, 4)).get_weighted_distance(cautious.get_end_cell(enemy.grid_cell), target.grid_cell)
 	assert_true(cautious_distance > aggressive_distance, "two-ply scoring should avoid an otherwise lethal adjacent counterattack")
@@ -355,11 +437,7 @@ func test_counterplay_forecast_chooses_safer_plan_without_mutation() -> void:
 
 func test_threat_forecast_prefers_an_equally_effective_safe_destination() -> void:
 	var counter := _make_damage_ability("Counter", AbilityDefinition.DeliveryType.MELEE, 1.0, 20)
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
-	profile.threat_weight = 1.0
-	profile.approach_reward = 0.0
-	profile.adjacent_reward = 0.0
-	profile.melee_delivery_reward = 0.0
+	var profile := _profile(1.0)
 	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [], profile)
 	var target := _make_unit(true, Vector2i(3, 3), 0.0, [counter])
 	var plan := _choose(enemy, [enemy, target], Vector2i(7, 6))
@@ -372,8 +450,7 @@ func test_threat_forecast_prefers_an_equally_effective_safe_destination() -> voi
 func test_moderate_threat_still_allows_a_rewarding_melee_attack() -> void:
 	var slash := _make_damage_ability("Slash", AbilityDefinition.DeliveryType.MELEE, 1.0, 30)
 	var counter := _make_damage_ability("Counter", AbilityDefinition.DeliveryType.MELEE, 1.0, 10)
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
-	profile.threat_weight = 0.35
+	var profile := _profile(0.35)
 	var enemy := _make_unit(false, Vector2i(2, 2), 0.0, [slash], profile)
 	var target := _make_unit(true, Vector2i(3, 2), 0.0, [counter])
 	var plan := _choose(enemy, [enemy, target], Vector2i(6, 5))
@@ -393,7 +470,7 @@ func test_threat_forecast_respects_walls_line_of_sight_and_defeat() -> void:
 	var pathfinder := GridPathfinderScript.new(grid_size) as GridPathfinder
 	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
 	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.MELEE, 0.0)
+	var profile := _profile(0.0)
 	var open_snapshot := AIBoardSnapshot.from_battle(units, grid_size)
 	assert_true(planner._estimate_incoming_threat(enemy, open_snapshot, pathfinder, targeting, profile) > 0.0, "a clear in-range projectile should contribute threat")
 
@@ -414,7 +491,7 @@ func test_threat_forecast_respects_walls_line_of_sight_and_defeat() -> void:
 
 func test_walls_block_ai_ability_targeting() -> void:
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
+	var profile := _profile(0.0)
 	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile, ItemDefinition.WeaponType.RANGED)
 	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
 	var pathfinder := GridPathfinderScript.new(Vector2i(5, 1)) as GridPathfinder
@@ -427,7 +504,7 @@ func test_walls_block_ai_ability_targeting() -> void:
 
 func test_ai_skips_incompatible_abilities_and_resumes_after_weapon_swap() -> void:
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
-	var profile := _profile(EnemyAIProfile.BehaviorStyle.RANGED, 0.0)
+	var profile := _profile(0.0)
 	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile)
 	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
 	var melee_plan := _choose(enemy, [enemy, target], Vector2i(5, 2))
@@ -441,39 +518,148 @@ func test_ai_skips_incompatible_abilities_and_resumes_after_weapon_swap() -> voi
 	assert_eq(ranged_plan.ability, shot, "AI should resume using the ability after a compatible weapon is equipped")
 
 
+func test_team_coordination_prefers_shared_and_setup_defeat_targets() -> void:
+	var b1_attack := _make_damage_ability("B1 Attack", AbilityDefinition.DeliveryType.PROJECTILE, 3.0, 20)
+	var b2_attack := _make_damage_ability("B2 Follow-up", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
+	var b1 := _make_unit(false, Vector2i(2, 1), 0.0, [b1_attack], _profile(0.0))
+	var b2 := _make_unit(false, Vector2i(5, 2), 0.0, [b2_attack], _profile(0.0))
+	var a1 := _make_unit(true, Vector2i(4, 0), 0.0, [])
+	var a2 := _make_unit(true, Vector2i(4, 2), 0.0, [])
+	var units := _typed_units([b1, b2, a1, a2])
+	var grid_size := Vector2i(7, 4)
+	var pathfinder := GridPathfinderScript.new(grid_size) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
+	var focus_walls := {Vector2i(4, 1): true, Vector2i(5, 1): true}
+
+	var focus_planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var focus_plan := focus_planner.choose_plan(
+		b1,
+		units,
+		pathfinder,
+		targeting,
+		focus_walls,
+		{},
+		_typed_units([b1, b2, a1, a2])
+	)
+	assert_eq(focus_plan.target_cell, a2.grid_cell, "B1 should focus A2 because B2 can follow up before A2 acts; got %s" % focus_plan.get_debug_summary())
+	assert_true(focus_plan.coordination_score > 0.0, "shared pressure should be visible in the chosen score")
+	assert_eq(a1.current_health, 100, "coordination forecasts must not mutate A1")
+	assert_eq(a2.current_health, 100, "coordination forecasts must not mutate A2")
+
+	var late_planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var late_plan := late_planner.choose_plan(
+		b1,
+		units,
+		pathfinder,
+		targeting,
+		focus_walls,
+		{},
+		_typed_units([b1, a2, b2, a1])
+	)
+	assert_true(is_zero_approx(late_plan.coordination_score), "ineligible allied actions should add no focus-fire value")
+
+	a1.current_health = 20
+	var lethal_planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var lethal_plan := lethal_planner.choose_plan(
+		b1,
+		units,
+		pathfinder,
+		targeting,
+		focus_walls,
+		{},
+		_typed_units([b1, b2, a2, a1])
+	)
+	assert_eq(lethal_plan.target_cell, a1.grid_cell, "an immediate defeat should beat nonlethal shared pressure")
+
+	a1.current_health = 100
+	a2.current_health = 35
+	var setup_planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var setup_plan := setup_planner.choose_plan(
+		b1,
+		units,
+		pathfinder,
+		targeting,
+		focus_walls,
+		{},
+		_typed_units([b1, b2, a2, a1])
+	)
+	assert_eq(setup_plan.target_cell, a2.grid_cell, "combined pre-activation damage should make A2 the setup-defeat target")
+	assert_true(setup_plan.coordination_score >= 12.5, "setup defeat should include its maximum-health bonus")
+
+
+func test_reachability_tree_reconstructs_cached_weighted_paths() -> void:
+	var pathfinder := GridPathfinderScript.new(Vector2i(5, 3)) as GridPathfinder
+	pathfinder.set_cell_cost_multipliers({Vector2i(1, 1): 2.0})
+	var result := pathfinder.build_reachability(
+		Vector2i(0, 1),
+		5.0,
+		{},
+		{Vector2i(1, 1): 10.0}
+	)
+	var path := pathfinder.reconstruct_reachable_path(result, Vector2i(2, 1))
+	assert_true(path.size() >= 3, "the shared reachability result should reconstruct a complete path")
+	assert_false(path.has(Vector2i(1, 1)), "equal-cost reconstruction should retain safer path preferences")
+	assert_true(pathfinder.get_path_cost(path) <= 5.0, "the reconstructed path should respect the original movement budget")
+
+
+func test_representative_planning_meets_the_shallow_search_budget() -> void:
+	var mage_scene := load("res://scenes/enemies/mage.tscn") as PackedScene
+	var mage := track(mage_scene.instantiate()) as TacticalCharacter
+	mage.starting_grid_cell = Vector2i(1, 3)
+	mage._ready()
+	mage.reset_movement()
+	mage.reset_ability_action()
+	var friendlies: Array[TacticalCharacter] = [
+		_make_unit(true, Vector2i(6, 1), 4.0, []),
+		_make_unit(true, Vector2i(7, 3), 4.0, []),
+		_make_unit(true, Vector2i(6, 5), 4.0, []),
+	]
+	friendlies[1].current_health = 45
+	var units: Array[TacticalCharacter] = [mage]
+	units.append_array(friendlies)
+	var pathfinder := GridPathfinderScript.new(Vector2i(10, 7)) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(pathfinder.grid_size) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var durations: Array[int] = []
+	for _iteration in range(7):
+		planner.choose_plan(mage, units, pathfinder, targeting)
+		durations.append(planner.last_planning_duration_ms)
+		assert_true(planner.last_candidate_count <= 32, "representative turns should keep the hard candidate cap")
+		assert_true(planner.last_exact_reply_count <= 3, "representative turns should keep shallow exact replies")
+		assert_true(planner.last_cache_hit_count > 0, "a nontrivial decision should reuse cached battlefield queries")
+	durations.sort()
+	assert_true(durations[floori(durations.size() / 2.0)] <= 16, "median representative planning should stay within 16 ms; got %s (generation %d, threat %d, candidates %d, reachability %d)" % [durations, planner.last_candidate_generation_duration_ms, planner.last_threat_evaluation_duration_ms, planner.last_candidate_count, planner.last_reachability_search_count])
+	assert_true(durations[durations.size() - 1] <= 32, "representative planning should stay within 32 ms; got %s" % [durations])
+
+
 func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> void:
 	var ranger := _assert_enemy_definition(
 		"res://resources/enemies/ranger.tres",
 		"Ranger", 90, 6.0, [8, 14, 8, 12],
-		EnemyAIProfile.BehaviorStyle.RANGED,
 		["Ranger Bow", "Ranger Armor"],
 		["Enemy Shot", "Focus"]
 	)
 	var warrior := _assert_enemy_definition(
 		"res://resources/enemies/goblin_warrior.tres",
 		"Goblin Warrior", 115, 5.0, [12, 8, 5, 9],
-		EnemyAIProfile.BehaviorStyle.MELEE,
 		["Goblin Sword"],
 		["Enemy Slash"]
 	)
 	var archer := _assert_enemy_definition(
 		"res://resources/enemies/goblin_archer.tres",
 		"Goblin Archer", 75, 6.0, [7, 11, 6, 11],
-		EnemyAIProfile.BehaviorStyle.RANGED,
 		["Goblin Bow"],
-		["Enemy Shot", "Slow"]
+		["Enemy Shot"]
 	)
 	var wolf := _assert_enemy_definition(
 		"res://resources/enemies/wolf.tres",
 		"Wolf", 85, 7.0, [14, 10, 4, 14],
-		EnemyAIProfile.BehaviorStyle.MELEE,
 		["Wolf Claws"],
 		["Strike"]
 	)
 	var mage := _assert_enemy_definition(
 		"res://resources/enemies/mage.tres",
 		"Mage", 70, 5.0, [5, 8, 15, 9],
-		EnemyAIProfile.BehaviorStyle.RANGED,
 		["Mage Staff"],
 		["Fireball", "Ice Shard", "Heal", "Slow"]
 	)
@@ -569,7 +755,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_eq(ranger_variant.get_equipped_item(ItemDefinition.EquipmentSlot.ARMOR).display_name, "Ranger Armor", "an override should retain inherited items in other slots")
 	assert_eq(ranger.starting_equipment[0].display_name, "Ranger Bow", "an instance override should leave the shared Ranger equipment unchanged")
 
-	var explicit_ai := load("res://resources/ai/melee_ai.tres") as EnemyAIProfile
+	var explicit_ai := load("res://resources/ai/general_ai.tres") as EnemyAIProfile
 	ranger_variant.enemy_ai_profile = explicit_ai
 	assert_eq(ranger_variant.get_enemy_ai_profile(), explicit_ai, "an explicit per-instance AI profile should override the bundled profile")
 	var legacy := load("res://resources/enemy_raider.tres") as CharacterDefinition
@@ -621,13 +807,13 @@ func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
 	assert_eq(melee.definition.display_name, "Goblin Warrior", "the sample melee enemy should use the Sword Goblin Warrior")
 	assert_eq(ranged.definition.display_name, "Goblin Archer", "the sample ranged enemy should use the Goblin Archer")
 	assert_eq(melee.enemy_ai_profile, null, "the sample melee enemy should inherit its bundled AI")
-	assert_eq(ranged.enemy_ai_profile, null, "the sample ranged enemy should inherit its bundled AI")
-	assert_eq(melee.get_enemy_ai_profile().behavior_style, EnemyAIProfile.BehaviorStyle.MELEE, "the sample melee enemy should resolve the bundled melee profile")
-	assert_eq(ranged.get_enemy_ai_profile().behavior_style, EnemyAIProfile.BehaviorStyle.RANGED, "the sample ranged enemy should resolve the bundled ranged profile")
+	assert_eq(ranged.enemy_ai_profile.display_name, "General AI", "the sample override should migrate to General AI")
+	assert_eq(melee.get_enemy_ai_profile().display_name, "General AI", "the sample melee enemy should resolve the general profile")
+	assert_eq(ranged.get_enemy_ai_profile().display_name, "General AI", "the sample ranged enemy should resolve the general profile")
 	assert_eq(melee.get_abilities().size(), 1, "the Goblin Warrior should expose only Enemy Slash")
-	assert_eq(ranged.get_abilities().size(), 2, "the Goblin Archer should expose Enemy Shot and Slow")
-	assert_eq(melee.starting_grid_cell, Vector2i(3, 8), "sample melee placement should stay unchanged")
-	assert_eq(ranged.starting_grid_cell, Vector2i(9, 3), "sample ranged placement should match the design")
+	assert_eq(ranged.get_abilities().size(), 1, "the sample Goblin Archer override should remain unchanged")
+	assert_eq(melee.starting_grid_cell, Vector2i(7, 11), "sample melee placement should stay unchanged")
+	assert_eq(ranged.starting_grid_cell, Vector2i(1, 10), "sample ranged placement should stay unchanged")
 	assert_true(root.has_node("HUD/DevButton"), "the sample HUD should expose the Dev button")
 	assert_eq(root.get_node("HUD/DevButton").text, "Dev", "the developer history button should have a clear compact label")
 	assert_true(root.has_node("HUD/DevHistoryPanel"), "the sample HUD should contain an AI score history panel")
@@ -640,7 +826,6 @@ func _assert_enemy_definition(
 	expected_health: int,
 	expected_movement: float,
 	expected_stats: Array,
-	expected_style: EnemyAIProfile.BehaviorStyle,
 	expected_items: Array,
 	expected_abilities: Array
 ) -> EnemyDefinition:
@@ -652,7 +837,7 @@ func _assert_enemy_definition(
 	assert_true(is_equal_approx(definition.movement_range, expected_movement), "%s should keep its configured base movement" % expected_name)
 	assert_eq([definition.strength, definition.dexterity, definition.intelligence, definition.speed], expected_stats, "%s should keep its configured core stats" % expected_name)
 	assert_true(definition.ai_profile != null, "%s should bundle an AI profile" % expected_name)
-	assert_eq(definition.ai_profile.behavior_style, expected_style, "%s should bundle the expected AI style" % expected_name)
+	assert_eq(definition.ai_profile.display_name, "General AI", "%s should bundle the general ability-driven AI" % expected_name)
 	var item_names: Array[String] = []
 	for item in definition.starting_equipment:
 		item_names.append(item.display_name)
@@ -687,10 +872,9 @@ func _choose(
 	return planner.choose_plan(actor, _typed_units(units_value), pathfinder, targeting)
 
 
-func _profile(style: EnemyAIProfile.BehaviorStyle, counter_discount: float) -> EnemyAIProfile:
+func _profile(risk_aversion: float = 1.0) -> EnemyAIProfile:
 	var profile := EnemyAIProfileScript.new() as EnemyAIProfile
-	profile.behavior_style = style
-	profile.counterplay_discount = counter_discount
+	profile.risk_aversion = risk_aversion
 	return profile
 
 

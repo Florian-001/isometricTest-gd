@@ -159,6 +159,17 @@ func _run() -> void:
 
 	friend_b.apply_damage(friend_b.current_health)
 	_check(screen.character_picker.item_count == 1, "defeated friendly characters should be removed from the Inventory picker")
+	friend_a.apply_damage(friend_a.current_health)
+	_check(main._combat_over, "defeating the final friendly should end combat")
+	_check(main.turn_manager.current_unit == null, "combat end should clear the active AI turn loop")
+	_check(main.turn_status.text == "Defeat", "the battlefield should report defeat when only enemies remain")
+	_check(main.end_turn_button.disabled, "turn controls should remain disabled after combat ends")
+	var ended_round: int = main.turn_manager.round_number
+	await process_frame
+	await process_frame
+	await process_frame
+	_check(main.turn_manager.current_unit == null, "AI turns should not restart after defeat")
+	_check(main.turn_manager.round_number == ended_round, "rounds should not advance after defeat")
 
 	screen.close_screen()
 	_check(not screen.visible, "the Close button behavior should hide the inventory screen")

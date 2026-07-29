@@ -31,6 +31,7 @@ func start_combat(units: Array[TacticalCharacter]) -> void:
 	current_index = 0 if not turn_order.is_empty() else -1
 	current_unit = turn_order[current_index] if current_index >= 0 else null
 	turn_order_changed.emit(get_rotating_order())
+	_reset_opportunity_reactions()
 	round_started.emit(round_number)
 	_start_current_turn()
 
@@ -71,12 +72,19 @@ func end_current_turn() -> void:
 		current_index = 0
 		current_unit = turn_order[0]
 		turn_order_changed.emit(get_rotating_order())
+		_reset_opportunity_reactions()
 		round_started.emit(round_number)
 	else:
 		current_index = next_index
 		current_unit = turn_order[current_index]
 		turn_order_changed.emit(get_rotating_order())
 	_start_current_turn()
+
+
+func stop_combat() -> void:
+	current_index = -1
+	current_unit = null
+	turn_order_changed.emit(get_rotating_order())
 
 
 func get_rotating_order() -> Array[TacticalCharacter]:
@@ -101,16 +109,21 @@ func notify_unit_state_changed() -> void:
 
 
 func _start_current_turn() -> void:
-	if not _is_living(current_unit):
+	var starting_unit := current_unit
+	if not _is_living(starting_unit):
 		return
-	turn_starting.emit(current_unit)
-	current_unit.process_status_turn_start()
-	if not _is_living(current_unit):
-		call_deferred("_advance_defeated_current_unit", current_unit)
+	turn_starting.emit(starting_unit)
+	if current_unit != starting_unit:
 		return
-	current_unit.reset_movement()
-	current_unit.reset_ability_action()
-	turn_started.emit(current_unit)
+	starting_unit.process_status_turn_start()
+	if current_unit != starting_unit:
+		return
+	if not _is_living(starting_unit):
+		call_deferred("_advance_defeated_current_unit", starting_unit)
+		return
+	starting_unit.reset_movement()
+	starting_unit.reset_ability_action()
+	turn_started.emit(starting_unit)
 
 
 func _advance_defeated_current_unit(unit: TacticalCharacter) -> void:
@@ -139,3 +152,9 @@ func _sort_turn_order() -> void:
 			return initiative_a > initiative_b
 		return int(_scene_indices.get(a, 999999)) < int(_scene_indices.get(b, 999999))
 	)
+
+
+func _reset_opportunity_reactions() -> void:
+	for unit in turn_order:
+		if _is_living(unit):
+			unit.reset_opportunity_reaction()

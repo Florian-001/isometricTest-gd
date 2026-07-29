@@ -19,10 +19,12 @@ var cast_origin := Vector2i(-1, -1)
 var end_cell := Vector2i(-1, -1)
 var ability_index := -1
 var scene_target_index := 999999
+var target_turn_order_index := 999999
 var movement_cost := 0.0
 var effect_score := 0.0
 var terrain_score := 0.0
 var position_score := 0.0
+var coordination_score := 0.0
 var preferred_delivery_score := 0.0
 var threat_score := 0.0
 var threat_penalty := 0.0
@@ -77,13 +79,13 @@ func get_debug_summary() -> String:
 	if ability != null:
 		action += " %s from %s @ %s" % [ability.display_name, cast_origin, target_cell]
 	action += " -> %s" % end_cell
-	return "%s | %.2f = %.2f effect (%.2f terrain) + %.2f position + %.2f style - %.2f threat - %.2f reply" % [
+	return "%s | %.2f = %.2f effect (%.2f terrain) + %.2f future + %.2f team - %.2f risk - %.2f exact reply" % [
 		action,
 		total_score,
 		effect_score,
 		terrain_score,
 		position_score,
-		preferred_delivery_score,
+		coordination_score,
 		threat_penalty,
 		counterplay_score,
 	]

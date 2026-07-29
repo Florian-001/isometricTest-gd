@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
-[ext_resource type="Resource" uid="uid://be3ci0o703acb" path="res://resources/ai/melee_ai.tres" id="4_ai"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="4_ai"]
 [ext_resource type="Resource" uid="uid://ctr35lcl31o04" path="res://resources/abilities/enemy_slash.tres" id="5_slash"]
 [ext_resource type="Resource" uid="uid://ctxelkvrg6cmy" path="res://resources/items/goblin_sword.tres" id="6_sword"]
 

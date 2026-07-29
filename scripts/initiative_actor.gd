@@ -13,6 +13,7 @@ signal cell_entered(character, cell: Vector2i)
 signal defeated(character)
 signal movement_remaining_changed(remaining: float, maximum: float)
 signal ability_availability_changed(available: bool)
+signal opportunity_reaction_availability_changed(available: bool)
 signal stats_changed
 signal equipment_changed(slot: ItemDefinition.EquipmentSlot, item: ItemDefinition)
 signal statuses_changed
@@ -78,10 +79,14 @@ var remaining_movement: float:
 var ability_available: bool:
 	get:
 		return _ability_available
+var opportunity_reaction_available: bool:
+	get:
+		return _opportunity_reaction_available
 var _grid: IsometricGrid
 var _defeat_emitted := false
 var _remaining_movement := 0.0
 var _ability_available := false
+var _opportunity_reaction_available := true
 var _equipped_items: Dictionary = {}
 var _active_statuses: Array[ActiveStatus] = []
 var _runtime_stats_initialized := false
@@ -475,12 +480,25 @@ func spend_ability_action() -> bool:
 	return true
 
 
+func reset_opportunity_reaction() -> void:
+	_opportunity_reaction_available = current_health > 0
+	opportunity_reaction_availability_changed.emit(_opportunity_reaction_available)
+
+
+func spend_opportunity_reaction() -> bool:
+	if not _opportunity_reaction_available or current_health <= 0:
+		return false
+	_opportunity_reaction_available = false
+	opportunity_reaction_availability_changed.emit(false)
+	return true
+
+
 func contains_global_point(point: Vector2) -> bool:
 	var body_center := global_position + Vector2(0.0, -29.0)
 	return body_center.distance_to(point) <= 23.0
 
 
-func move_along(path: Array[Vector2i]) -> void:
+func move_along(path: Array[Vector2i], before_step: Callable = Callable()) -> void:
 	if is_moving or _grid == null or path.size() < 2:
 		return
 
@@ -488,6 +506,10 @@ func move_along(path: Array[Vector2i]) -> void:
 	movement_started.emit(self)
 	for index in range(1, path.size()):
 		var next_cell := path[index]
+		if before_step.is_valid():
+			var can_continue: bool = await before_step.call(self, grid_cell, next_cell)
+			if not can_continue or current_health <= 0:
+				break
 		var target_position := _grid.grid_to_global(next_cell)
 		var distance := global_position.distance_to(target_position)
 		var duration := maxf(0.04, distance / movement_animation_speed)
@@ -517,6 +539,8 @@ func apply_damage(amount: int) -> void:
 	if current_health == 0 and not _defeat_emitted:
 		_ability_available = false
 		ability_availability_changed.emit(false)
+		_opportunity_reaction_available = false
+		opportunity_reaction_availability_changed.emit(false)
 		_defeat_emitted = true
 		defeated.emit(self)
 

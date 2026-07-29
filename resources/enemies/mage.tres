@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
-[ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="4_ai"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="4_ai"]
 [ext_resource type="Resource" uid="uid://rhaedcm7xel0" path="res://resources/abilities/fireball.tres" id="5_fireball"]
 [ext_resource type="Resource" uid="uid://fbimwcq8pc21" path="res://resources/abilities/ice_shard.tres" id="6_ice_shard"]
 [ext_resource type="Resource" uid="uid://7wlmmxsy6gcc" path="res://resources/abilities/heal.tres" id="7_heal"]

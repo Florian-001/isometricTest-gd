@@ -19,6 +19,7 @@ const WallPainterPluginScript = preload("res://addons/wall_painter/wall_painter_
 const ProjectileDeliveryScript = preload("res://scripts/projectile_delivery.gd")
 const AbilityExecutorScript = preload("res://scripts/ability_executor.gd")
 const MeleeDeliveryScript = preload("res://scripts/melee_delivery.gd")
+const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
 const StatusCatalogScript = preload("res://addons/tile_painter/status_effect_catalog.gd")
 const ItemCatalogScript = preload("res://addons/tile_painter/item_definition_catalog.gd")
 const ItemArrayModelScript = preload("res://addons/tile_painter/item_array_editor_model.gd")
@@ -170,6 +171,34 @@ func test_individual_turn_sequence_and_movement_reset() -> void:
 	assert_eq(manager.current_unit, friend_a, "the order should rotate back to FriendA")
 	assert_eq(manager.round_number, 2, "the round should increment only after every unit acts")
 	assert_true(is_equal_approx(friend_a.remaining_movement, 6.0), "FriendA should reset at the start of its next turn")
+
+
+func test_combat_can_stop_during_or_between_turns() -> void:
+	var friend := _make_unit(true, Vector2i(1, 1), 6.0, 12)
+	var enemy := _make_unit(false, Vector2i(4, 4), 5.0, 10)
+	var units: Array[TacticalCharacter] = [friend, enemy]
+	var manager = track(TurnManagerScript.new())
+	manager.start_combat(units)
+	var stopped_round: int = manager.round_number
+	manager.stop_combat()
+	assert_eq(manager.current_unit, null, "stopping combat should clear the active unit")
+	assert_eq(manager.current_index, -1, "stopping combat should clear the active turn index")
+	manager.end_current_turn()
+	assert_eq(manager.current_unit, null, "ending a turn after combat stops should do nothing")
+	assert_eq(manager.round_number, stopped_round, "stopped combat should not advance rounds")
+
+	var reentrant_friend := _make_unit(true, Vector2i(1, 2), 6.0, 12)
+	var reentrant_enemy := _make_unit(false, Vector2i(4, 3), 5.0, 10)
+	var reentrant_units: Array[TacticalCharacter] = [reentrant_friend, reentrant_enemy]
+	var reentrant_manager = track(TurnManagerScript.new())
+	var started_units: Array[TacticalCharacter] = []
+	reentrant_manager.turn_starting.connect(func(_unit: TacticalCharacter):
+		reentrant_manager.stop_combat()
+	)
+	reentrant_manager.turn_started.connect(func(unit: TacticalCharacter): started_units.append(unit))
+	reentrant_manager.start_combat(reentrant_units)
+	assert_eq(reentrant_manager.current_unit, null, "combat may stop safely during the turn-start phase")
+	assert_true(started_units.is_empty(), "a unit should not begin acting after combat stops during turn start")
 
 
 func test_rotating_order_and_dead_unit_skip() -> void:
@@ -847,6 +876,132 @@ func test_melee_preflight_rejects_invalid_attacks_without_spending_action() -> v
 		"the executor should reject blocked melee before starting"
 	)
 	assert_true(caster.ability_available, "an invalid melee attack should not spend the ability action")
+
+
+func test_opportunity_attack_selection_reach_reaction_and_round_reset() -> void:
+	var attacker := _make_unit(true, Vector2i(1, 1), 6.0, 12)
+	var mover := _make_unit(false, Vector2i(2, 1), 6.0, 10)
+	var ally := _make_unit(true, Vector2i(2, 1), 6.0, 10)
+	var strike := load("res://resources/abilities/strike.tres") as AbilityDefinition
+	var melee_utility := AbilityDefinitionScript.new() as AbilityDefinition
+	melee_utility.ability_type = AbilityDefinition.AbilityType.MELEE
+	melee_utility.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var abilities: Array[AbilityDefinition] = [melee_utility, strike]
+	attacker.definition.abilities = abilities
+	var weapon := ItemDefinition.new()
+	weapon.weapon_type = ItemDefinition.WeaponType.MELEE
+	attacker.equip_item(weapon)
+	attacker.reset_opportunity_reaction()
+
+	assert_eq(
+		OpportunityAttackSystemScript.get_opportunity_attack_ability(attacker),
+		strike,
+		"a unit should use its first compatible single-target damaging Melee ability"
+	)
+	assert_true(
+		OpportunityAttackSystemScript.can_trigger(
+			attacker,
+			mover,
+			Vector2i(2, 1),
+			Vector2i(3, 1)
+		),
+		"leaving orthogonal melee reach should trigger an opportunity attack"
+	)
+	assert_false(
+		OpportunityAttackSystemScript.can_trigger(
+			attacker,
+			mover,
+			Vector2i(2, 1),
+			Vector2i(2, 2)
+		),
+		"moving to another adjacent cell should remain inside melee reach"
+	)
+	assert_true(
+		OpportunityAttackSystemScript.is_leaving_reach(
+			attacker.grid_cell,
+			Vector2i(2, 2),
+			Vector2i(3, 3)
+		),
+		"leaving diagonal reach should trigger"
+	)
+	assert_false(
+		OpportunityAttackSystemScript.is_leaving_reach(
+			attacker.grid_cell,
+			Vector2i(2, 2),
+			Vector2i(3, 3),
+			{Vector2i(2, 1): true}
+		),
+		"a blocked diagonal corner should not count as melee reach"
+	)
+	assert_false(
+		OpportunityAttackSystemScript.can_trigger(
+			attacker,
+			ally,
+			Vector2i(2, 1),
+			Vector2i(3, 1)
+		),
+		"allies should never trigger opportunity attacks"
+	)
+
+	assert_true(attacker.spend_opportunity_reaction(), "an available reaction should be spendable")
+	assert_false(
+		OpportunityAttackSystemScript.can_trigger(
+			attacker,
+			mover,
+			Vector2i(2, 1),
+			Vector2i(3, 1)
+		),
+		"a spent reaction should not trigger again during the round"
+	)
+	attacker.reset_ability_action()
+	attacker.spend_ability_action()
+	attacker.reset_opportunity_reaction()
+	assert_false(attacker.ability_available, "resetting a reaction must not restore the normal action")
+	assert_true(
+		OpportunityAttackSystemScript.can_trigger(
+			attacker,
+			mover,
+			Vector2i(2, 1),
+			Vector2i(3, 1)
+		),
+		"a spent normal ability action should not prevent the separate reaction"
+	)
+	attacker.current_health = 0
+	assert_eq(
+		OpportunityAttackSystemScript.get_opportunity_attack_ability(attacker),
+		null,
+		"defeated units should not provide opportunity attacks"
+	)
+	attacker.current_health = attacker.get_max_health()
+
+	var manager := track(TurnManagerScript.new()) as TurnManager
+	var combatants: Array[TacticalCharacter] = [attacker, mover]
+	manager.start_combat(combatants)
+	assert_true(attacker.opportunity_reaction_available, "combat round one should initialize reactions")
+	attacker.spend_opportunity_reaction()
+	manager.end_current_turn()
+	manager.end_current_turn()
+	assert_eq(manager.round_number, 2, "two living units should wrap into round two")
+	assert_true(attacker.opportunity_reaction_available, "a new round should reset spent reactions")
+
+	var enemy_slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
+	var goblin := _make_unit(false, Vector2i(4, 4), 5.0)
+	var goblin_abilities: Array[AbilityDefinition] = [enemy_slash]
+	goblin.definition.abilities = goblin_abilities
+	var goblin_weapon := ItemDefinition.new()
+	goblin_weapon.weapon_type = ItemDefinition.WeaponType.MELEE
+	goblin.equip_item(goblin_weapon)
+	assert_eq(
+		OpportunityAttackSystemScript.get_opportunity_attack_ability(goblin),
+		enemy_slash,
+		"Goblin Warriors should use Enemy Slash without hard-coding Strike"
+	)
+	goblin.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
+	assert_eq(
+		OpportunityAttackSystemScript.get_opportunity_attack_ability(goblin),
+		null,
+		"a Melee ability without a compatible weapon should not provide a reaction attack"
+	)
 
 
 func test_ability_recipient_filtering_and_mass_heal_shape() -> void:

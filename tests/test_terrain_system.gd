@@ -259,7 +259,7 @@ func test_lethal_fire_plan_is_rejected_when_holding_is_safer() -> void:
 func test_counterplay_forecast_applies_responder_turn_start_fire() -> void:
 	var counter := _damage_ability(1.0, 20)
 	var profile := _profile()
-	profile.counterplay_discount = 1.0
+	profile.risk_aversion = 1.0
 	var actor := _make_unit(false, Vector2i(0, 0), 0.0, [], profile)
 	var responder := _make_unit(true, Vector2i(0, 1), 0.0, [counter])
 	responder.current_health = 1
@@ -334,8 +334,7 @@ func _choose(
 
 func _profile() -> EnemyAIProfile:
 	var profile := EnemyAIProfileScript.new() as EnemyAIProfile
-	profile.behavior_style = EnemyAIProfile.BehaviorStyle.MELEE
-	profile.counterplay_discount = 0.0
+	profile.risk_aversion = 0.0
 	return profile
 
 

@@ -6,6 +6,7 @@ enum Effect {
 	NONE,
 	DAMAGE_EACH_TURN,
 	STAT_MODIFIER,
+	STUN,
 }
 
 enum ModifierDirection {
@@ -61,7 +62,7 @@ func _validate_property(property: Dictionary) -> void:
 	if property_name in [&"damage_type", &"damage_per_turn"]:
 		should_hide = effect != Effect.DAMAGE_EACH_TURN
 	elif property_name == &"affected_unit_ai_utility":
-		should_hide = effect != Effect.STAT_MODIFIER
+		should_hide = effect not in [Effect.STAT_MODIFIER, Effect.STUN]
 	elif property_name in [
 		&"affected_stat",
 		&"modifier_direction",
@@ -80,6 +81,10 @@ func _validate_property(property: Dictionary) -> void:
 		)
 	if should_hide:
 		property.usage = property.usage & ~PROPERTY_USAGE_EDITOR
+
+
+func blocks_actions() -> bool:
+	return effect == Effect.STUN
 
 
 func get_stat_modifiers() -> Array[StatModifierDefinition]:
@@ -168,6 +173,11 @@ func get_description(turns_override: int = -1) -> String:
 				direction_name,
 				UnitStat.get_display_name(affected_stat),
 				amount_text,
+				turn_text,
+			]
+		Effect.STUN:
+			return "%s: Cannot move, use abilities, or make opportunity attacks for %s" % [
+				display_name,
 				turn_text,
 			]
 		_:

@@ -136,7 +136,8 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 	var frost_arrow := AbilityDefinitionScript.new() as AbilityDefinition
 	frost_arrow.ability_type = AbilityDefinition.AbilityType.RANGED
 	frost_arrow.effect = AbilityDefinition.PrimaryEffect.DAMAGE
-	frost_arrow.scaling_stat = UnitStat.Type.NONE
+	frost_arrow.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	frost_arrow.scaling_amount = 50.0
 	frost_arrow.target_flags = AbilityDefinition.TargetFlags.ENEMY
 	var frost_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
 	var frost_score := planner._forecast_ability(
@@ -147,8 +148,8 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 		targeting,
 		profile
 	)
-	assert_true(is_equal_approx(frost_score, 18.0), "Frost Bow AI value should combine 10 weapon damage with Slow utility 8")
-	assert_eq(frost_snapshot.get_health(opponent), 90, "weapon status forecasting should preserve the exact damage result")
+	assert_true(is_equal_approx(frost_score, 13.0), "Frost Bow AI value should combine 50% weapon damage 5 with Slow utility 8")
+	assert_eq(frost_snapshot.get_health(opponent), 95, "weapon status forecasting should preserve the exact Weapon-scaled damage result")
 
 	frost_arrow.status_effect = load("res://resources/statuses/slow.tres") as StatusEffectDefinition
 	var duplicate_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
@@ -160,7 +161,7 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 		targeting,
 		profile
 	)
-	assert_true(is_equal_approx(duplicate_score, 18.0), "matching ability and weapon statuses should contribute AI utility only once")
+	assert_true(is_equal_approx(duplicate_score, 13.0), "matching ability and weapon statuses should contribute AI utility only once")
 
 	var magic_damage := AbilityDefinitionScript.new() as AbilityDefinition
 	magic_damage.ability_type = AbilityDefinition.AbilityType.MAGIC
@@ -178,6 +179,111 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 		profile
 	)
 	assert_true(is_equal_approx(magic_score, 10.0), "Magic AI forecasts should ignore equipped weapon statuses")
+
+
+func test_stun_forecast_suppresses_actions_movement_reactions_and_threat() -> void:
+	var stun := load("res://resources/statuses/stun.tres") as StatusEffectDefinition
+	var attack := _make_damage_ability("Attack", AbilityDefinition.DeliveryType.CAST_ON_TARGET, 4.0, 12)
+	var stunned_enemy := _make_unit(false, Vector2i(1, 1), 5.0, [attack], _profile())
+	var target := _make_unit(true, Vector2i(3, 1), 5.0, [attack])
+	stunned_enemy.reset_opportunity_reaction()
+	stunned_enemy.apply_status(stun, target, target)
+	var pathfinder := GridPathfinderScript.new(Vector2i(7, 5)) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(Vector2i(7, 5)) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var live_plan := planner.choose_plan(
+		stunned_enemy,
+		_typed_units([stunned_enemy, target]),
+		pathfinder,
+		targeting
+	)
+	assert_eq(live_plan.ability, null, "a live stunned enemy should choose Hold without an ability")
+	assert_true(live_plan.pre_cast_path.is_empty() and live_plan.post_cast_path.is_empty(), "a live stunned enemy should not generate movement")
+	assert_eq(planner.ranked_candidates.size(), 1, "a stunned enemy should score only the deterministic Hold candidate")
+
+	stunned_enemy.remove_status(&"stun")
+	stunned_enemy.reset_movement()
+	stunned_enemy.reset_opportunity_reaction()
+	var snapshot := AIBoardSnapshot.from_battle(
+		_typed_units([stunned_enemy, target]),
+		Vector2i(7, 5)
+	)
+	var forecast := snapshot.forecast_status_application(target, stunned_enemy, stun)
+	assert_true(snapshot.is_stunned(stunned_enemy), "AI snapshots should record forecast Stun")
+	assert_true(is_zero_approx(snapshot.get_remaining_movement(stunned_enemy)), "forecast Stun should immediately remove simulated movement")
+	assert_false(snapshot.can_use_opportunity_reaction(stunned_enemy), "forecast Stun should suppress simulated reactions without consuming the token")
+	assert_true(is_equal_approx(float(forecast.utility_hint), 20.0), "hostile Stun should use its configured HP-equivalent utility")
+	var action_estimate := planner._estimate_unit_action_against_target(
+		stunned_enemy,
+		target,
+		snapshot,
+		pathfinder,
+		targeting,
+		_profile(),
+		true
+	)
+	assert_true(is_zero_approx(float(action_estimate.score)), "a forecast-stunned unit should contribute no threat or follow-up action")
+	var refresh := snapshot.forecast_status_application(target, stunned_enemy, stun)
+	assert_true(is_zero_approx(float(refresh.utility_hint)), "refreshing a full-duration simulated Stun should not double-count utility")
+
+	var stun_ability := AbilityDefinitionScript.new() as AbilityDefinition
+	stun_ability.display_name = "Test Stun"
+	stun_ability.effect = AbilityDefinition.PrimaryEffect.STATUS
+	stun_ability.status_effect = stun
+	stun_ability.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var caster := _make_unit(true, Vector2i(1, 3), 5.0, [stun_ability])
+	var responder := _make_unit(false, Vector2i(3, 3), 5.0, [attack], _profile())
+	responder.reset_opportunity_reaction()
+	var ability_snapshot := AIBoardSnapshot.from_battle(
+		_typed_units([caster, responder]),
+		Vector2i(7, 5)
+	)
+	var ability_score := planner._forecast_ability(
+		caster,
+		stun_ability,
+		responder.grid_cell,
+		ability_snapshot,
+		targeting,
+		_profile()
+	)
+	assert_true(is_equal_approx(ability_score, 20.0), "ability forecasting should include Stun's configured utility")
+	assert_true(ability_snapshot.is_stunned(responder), "ability forecasting should apply Stun to its simulated target")
+
+
+func test_charge_forecast_moves_caster_without_spending_movement_and_plans_from_landing() -> void:
+	var charge := (load("res://resources/abilities/charge.tres") as AbilityDefinition).duplicate(true) as AbilityDefinition
+	var strike := load("res://resources/abilities/strike.tres") as AbilityDefinition
+	var caster := _make_unit(false, Vector2i(1, 2), 4.0, [charge])
+	var target := _make_unit(true, Vector2i(6, 2), 4.0, [])
+	var reactor := _make_unit(true, Vector2i(2, 1), 4.0, [strike])
+	var reactor_weapon := ItemDefinition.new()
+	reactor_weapon.weapon_type = ItemDefinition.WeaponType.MELEE
+	reactor_weapon.weapon_damage = 5
+	reactor.equip_item(reactor_weapon)
+	reactor.reset_opportunity_reaction()
+	var units: Array[TacticalCharacter] = [caster, target, reactor]
+	var targeting := AbilityTargetingScript.new(Vector2i(9, 7)) as AbilityTargeting
+	var snapshot := AIBoardSnapshot.from_battle(units, Vector2i(9, 7))
+	var movement_before := snapshot.get_remaining_movement(caster)
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	planner._forecast_ability(caster, charge, target.grid_cell, snapshot, targeting, _profile())
+
+	assert_eq(snapshot.get_cell(caster), Vector2i(5, 2), "Charge forecasting should relocate the caster beside its target")
+	assert_eq(snapshot.get_health(target), 100 - charge.calculate_damage(caster), "Charge forecasting should apply centralized damage after movement")
+	assert_eq(snapshot.get_health(caster), 100 - strike.calculate_damage(reactor), "Charge forecasting should include opportunity damage along the route")
+	assert_false(snapshot.can_use_opportunity_reaction(reactor), "Charge forecasting should consume the simulated reaction")
+	assert_true(is_equal_approx(snapshot.get_remaining_movement(caster), movement_before), "Charge forecasting should preserve normal movement points")
+	assert_eq(caster.grid_cell, Vector2i(1, 2), "Charge forecasting must not mutate the live caster position")
+	assert_eq(caster.current_health, 100, "Charge forecasting must not mutate live health")
+
+	var planner_caster := _make_unit(false, Vector2i(1, 5), 0.0, [charge])
+	var planner_target := _make_unit(true, Vector2i(6, 5), 0.0, [])
+	var plan := _choose(planner_caster, [planner_caster, planner_target], Vector2i(9, 7))
+	assert_eq(plan.ability, charge, "the general AI should select an immediately valid Charge")
+	assert_eq(plan.cast_origin, Vector2i(1, 5), "Charge should cast from the actor's original cell")
+	assert_eq(plan.get_end_cell(planner_caster.grid_cell), Vector2i(5, 5), "AI plan positions should use the post-Charge landing cell")
+	assert_true(is_zero_approx(plan.movement_cost), "Charge distance should not count as normal movement cost")
+	assert_eq(OpportunityAttackSystemScript.get_opportunity_attack_ability(planner_caster), null, "caster-moving abilities should not become opportunity attacks")
 
 
 func test_virtual_origin_targeting_does_not_move_live_unit() -> void:
@@ -879,8 +985,25 @@ func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
 	assert_eq(melee.starting_grid_cell, Vector2i(7, 9), "sample melee placement should stay unchanged")
 	assert_eq(ranged.starting_grid_cell, Vector2i(4, 9), "sample ranged placement should stay unchanged")
 	var battle := track((load("res://scenes/battle.tscn") as PackedScene).instantiate())
-	assert_true(battle.has_node("HUD/DevButton"), "the shared battle HUD should expose the Dev button")
-	assert_eq(battle.get_node("HUD/DevButton").text, "Dev", "the developer history button should have a clear compact label")
+	assert_false(battle.has_node("HUD/HelpBackground"), "the shared battle HUD should not retain the tutorial background")
+	assert_false(battle.has_node("HUD/HelpText"), "the shared battle HUD should not retain the tutorial text")
+	assert_false(battle.has_node("HUD/TurnPanel"), "the bottom-right turn information panel should be removed")
+	assert_true(battle.has_node("HUD/EndTurnButton"), "the shared battle HUD should expose a standalone End Turn button")
+	var end_turn := battle.get_node("HUD/EndTurnButton") as Button
+	assert_eq(end_turn.get_parent().name, "HUD", "End Turn should be a direct standalone HUD control")
+	assert_eq(end_turn.anchor_left, 1.0, "End Turn should anchor to the right edge")
+	assert_eq(end_turn.anchor_top, 1.0, "End Turn should anchor to the bottom edge")
+	assert_eq(end_turn.offset_right, -16.0, "End Turn should keep the requested right margin")
+	assert_eq(end_turn.offset_bottom, -16.0, "End Turn should keep the requested bottom margin")
+	assert_true(battle.has_node("HUD/TopRightActions"), "the shared battle HUD should expose a top-right action row")
+	var actions := battle.get_node("HUD/TopRightActions") as HBoxContainer
+	assert_eq(actions.anchor_left, 1.0, "the action row should anchor to the right edge")
+	assert_eq(actions.offset_top, 118.0, "the action row should sit beneath the turn-order display")
+	assert_eq(actions.get_child_count(), 3, "the action row should contain only Dev, Inventory, and Levels")
+	assert_eq(actions.get_child(0).name, "DevButton", "Dev should be first in the top-right action row")
+	assert_eq(actions.get_child(1).name, "InventoryButton", "Inventory should be second in the top-right action row")
+	assert_eq(actions.get_child(2).name, "LevelsButton", "Levels should be third in the top-right action row")
+	assert_eq(actions.get_node("DevButton").text, "Dev", "the developer history button should keep its compact label")
 	assert_true(battle.has_node("HUD/DevHistoryPanel"), "the shared battle HUD should contain an AI score history panel")
 	assert_false(battle.get_node("HUD/DevHistoryPanel").visible, "AI scores should stay off the battlefield until Dev is pressed")
 

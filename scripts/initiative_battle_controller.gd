@@ -4,6 +4,7 @@ extends Node2D
 const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
 const BattleMapDefinitionScript = preload("res://scripts/battle_map_definition.gd")
 const BattleMapScript = preload("res://scripts/battle_map.gd")
+const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
 
 signal return_to_level_select_requested
 
@@ -21,14 +22,12 @@ signal return_to_level_select_requested
 @onready var turn_order_bar: TurnOrderBar = $HUD/TurnOrderBar
 @onready var ability_bar: AbilityBar = $HUD/AbilityBar
 @onready var general_inventory: GeneralInventory = $GeneralInventory
-@onready var inventory_button: Button = $HUD/InventoryButton
-@onready var levels_button: Button = $HUD/LevelsButton
+@onready var inventory_button: Button = $HUD/TopRightActions/InventoryButton
+@onready var levels_button: Button = $HUD/TopRightActions/LevelsButton
 @onready var inventory_screen: InventoryScreen = $HUD/InventoryScreen
 @onready var return_to_levels_dialog: ConfirmationDialog = $HUD/ReturnToLevelsDialog
-@onready var turn_status: Label = $HUD/TurnPanel/Margin/VBox/TurnStatus
-@onready var movement_status: Label = $HUD/TurnPanel/Margin/VBox/MovementStatus
-@onready var end_turn_button: Button = $HUD/TurnPanel/Margin/VBox/EndTurnButton
-@onready var dev_button: Button = $HUD/DevButton
+@onready var end_turn_button: Button = $HUD/EndTurnButton
+@onready var dev_button: Button = $HUD/TopRightActions/DevButton
 @onready var dev_history_panel: PanelContainer = $HUD/DevHistoryPanel
 @onready var ai_debug_label: Label = $HUD/DevHistoryPanel/Margin/VBox/HistoryScroll/DebugText
 
@@ -97,6 +96,9 @@ func _ready() -> void:
 			)
 			character.ability_availability_changed.connect(
 				_on_unit_ability_availability_changed.bind(character)
+			)
+			character.statuses_changed.connect(
+				_on_character_statuses_changed.bind(character)
 			)
 			character.cell_entered.connect(_on_character_cell_entered)
 			character.defeated.connect(_on_character_defeated)
@@ -355,28 +357,50 @@ func _update_ability_hover(global_mouse: Vector2) -> void:
 	var wall_cells := _get_wall_cells()
 	var affected_cells: Array[Vector2i] = []
 	var trajectory_cells: Array[Vector2i] = []
+	var effect_origin := _selected_character.grid_cell
+	var caster_movement_path: Array[Vector2i] = []
+	if _selected_ability.moves_caster() and _ability_range_cells.has(cell):
+		caster_movement_path = _ability_targeting.get_caster_movement_path(
+			_selected_character,
+			cell,
+			_selected_ability,
+			_characters,
+			wall_cells
+		)
+		if not caster_movement_path.is_empty():
+			effect_origin = AbilityCasterMovementScript.get_landing_cell(caster_movement_path)
+			trajectory_cells.assign(caster_movement_path)
 	if is_valid:
 		affected_cells = _ability_targeting.get_affected_cells(
-			_selected_character.grid_cell,
+			effect_origin,
 			cell,
 			_selected_ability,
 			wall_cells
 		)
-		if _selected_ability.shape == AbilityDefinition.Shape.LINE_FROM_CASTER:
+		if (
+			_selected_ability.shape == AbilityDefinition.Shape.LINE_FROM_CASTER
+			and not _selected_ability.moves_caster()
+		):
 			trajectory_cells = _ability_targeting.get_trajectory_cells(
-				_selected_character.grid_cell,
+				effect_origin,
 				cell,
 				wall_cells
 			)
 	if (
 		_selected_ability.delivery_type == AbilityDefinition.DeliveryType.PROJECTILE
 		and _ability_range_cells.has(cell)
+		and (not _selected_ability.moves_caster() or not caster_movement_path.is_empty())
 	):
-		trajectory_cells = _ability_executor.projectile_delivery.get_preview(
-			_selected_character.grid_cell,
+		var projectile_path := _ability_executor.projectile_delivery.get_preview(
+			effect_origin,
 			cell,
 			wall_cells
 		)
+		if trajectory_cells.is_empty():
+			trajectory_cells.assign(projectile_path)
+		else:
+			for index in range(1, projectile_path.size()):
+				trajectory_cells.append(projectile_path[index])
 	grid.show_ability_preview(cell, affected_cells, trajectory_cells, is_valid)
 
 
@@ -404,7 +428,8 @@ func _begin_ability_cast(target_cell: Vector2i) -> void:
 		_characters,
 		grid,
 		_ability_targeting,
-		_get_wall_cells()
+		_get_wall_cells(),
+		Callable(self, "_before_ability_movement_step")
 	)
 	_selected_ability = null
 	_ability_range_cells.clear()
@@ -530,7 +555,8 @@ func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
 			_characters,
 			grid,
 			_ability_targeting,
-			_get_wall_cells()
+			_get_wall_cells(),
+			Callable(self, "_before_ability_movement_step")
 		)
 		if not cast_succeeded:
 			return false
@@ -580,6 +606,30 @@ func _before_character_movement_step(
 	current_cell: Vector2i,
 	next_cell: Vector2i
 ) -> bool:
+	if not await _resolve_step_opportunity_attacks(mover, current_cell, next_cell):
+		return false
+	if not mover.can_move():
+		return false
+	var step_cost := _pathfinder.get_step_cost(current_cell, next_cell)
+	return mover.spend_movement(step_cost)
+
+
+func _before_ability_movement_step(
+	mover: TacticalCharacter,
+	current_cell: Vector2i,
+	next_cell: Vector2i
+) -> bool:
+	return (
+		await _resolve_step_opportunity_attacks(mover, current_cell, next_cell)
+		and mover.can_move()
+	)
+
+
+func _resolve_step_opportunity_attacks(
+	mover: TacticalCharacter,
+	current_cell: Vector2i,
+	next_cell: Vector2i
+) -> bool:
 	if (
 		not is_instance_valid(mover)
 		or mover.current_health <= 0
@@ -608,9 +658,7 @@ func _before_character_movement_step(
 		)
 		if not is_instance_valid(mover) or mover.current_health <= 0:
 			return false
-
-	var step_cost := _pathfinder.get_step_cost(current_cell, next_cell)
-	return mover.spend_movement(step_cost)
+	return true
 
 
 func _update_ai_debug(
@@ -801,8 +849,25 @@ func _on_unit_movement_changed(_remaining: float, _maximum: float, unit: Tactica
 
 func _on_unit_ability_availability_changed(_available: bool, unit: TacticalCharacter) -> void:
 	if unit == turn_manager.current_unit:
+		if not _available and _selected_ability != null:
+			_cancel_ability_targeting()
 		_refresh_ability_bar()
 		_update_turn_hud()
+
+
+func _on_character_statuses_changed(unit: TacticalCharacter) -> void:
+	if unit != turn_manager.current_unit:
+		return
+	if unit.is_stunned() and _selected_ability != null:
+		_cancel_ability_targeting()
+	if (
+		unit.is_friendly()
+		and unit == _selected_character
+		and not _movement_locked
+	):
+		_refresh_reachable_cells()
+	_refresh_ability_bar()
+	_update_turn_hud()
 
 
 func _set_movement_locked(value: bool) -> void:
@@ -829,30 +894,19 @@ func _update_turn_hud() -> void:
 	if turn_manager == null or end_turn_button == null:
 		return
 	if _combat_over:
-		turn_status.text = _combat_result_text
-		movement_status.text = ""
 		end_turn_button.text = "Battle Ended"
 		end_turn_button.disabled = true
 		return
 	var unit := turn_manager.current_unit
 	if unit == null:
-		turn_status.text = "No Active Unit"
-		movement_status.text = ""
+		end_turn_button.text = "Waiting..."
 		end_turn_button.disabled = true
 		return
 
-	turn_status.text = "%s's Turn | Round %d" % [unit.name, turn_manager.round_number]
 	if unit.is_friendly():
-		movement_status.text = "%s | Move %.2f / %.2f | Ability %s" % [
-			unit.name,
-			unit.remaining_movement,
-			unit.get_movement_range(),
-			"Ready" if unit.ability_available else "Used",
-		]
 		end_turn_button.text = "End Turn"
 		end_turn_button.disabled = _movement_locked
 	else:
-		movement_status.text = "%s is acting..." % unit.name
 		end_turn_button.text = "Enemy Turn..."
 		end_turn_button.disabled = true
 

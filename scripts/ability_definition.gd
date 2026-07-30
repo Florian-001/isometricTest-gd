@@ -2,6 +2,8 @@
 class_name AbilityDefinition
 extends Resource
 
+const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
+
 enum DeliveryType {
 	PROJECTILE,
 	CAST_ON_TARGET,
@@ -37,11 +39,21 @@ enum AbilityType {
 	MAGIC,
 }
 
+enum CasterMovement {
+	NONE,
+	CHARGE_TO_TARGET,
+}
+
 @export_category("Ability")
 @export var display_name: String = "New Ability"
 ## Controls weapon requirements and weapon-damage contribution. Delivery and Damage Type
 ## remain independent presentation and damage-classification settings.
-@export var ability_type: AbilityType = AbilityType.MAGIC
+@export var ability_type: AbilityType = AbilityType.MAGIC:
+	set(value):
+		ability_type = value
+		_normalize_weapon_scaling()
+		if Engine.is_editor_hint():
+			notify_property_list_changed()
 ## Optional icon used by the ability bar and projectile. A colored fallback is generated when empty.
 @export var image: Texture2D
 
@@ -50,6 +62,7 @@ enum AbilityType {
 @export var effect: PrimaryEffect = PrimaryEffect.NONE:
 	set(value):
 		effect = value
+		_normalize_weapon_scaling()
 		if Engine.is_editor_hint():
 			notify_property_list_changed()
 ## Classification used by defenses and status systems. Weapon use is controlled by Ability Type.
@@ -58,9 +71,10 @@ enum AbilityType {
 @export_range(0, 9999, 1, "or_greater") var innate_damage: int = 0
 ## Base healing for Heal.
 @export_range(0, 9999, 1, "or_greater") var effect_amount: int = 0
-## Effective stat used by Damage and Heal, including equipment and status buffs.
-@export var scaling_stat: UnitStat.Type = UnitStat.Type.STRENGTH
-## Percentage of the effective scaling stat added to Damage or Heal.
+## Effective stat used by Damage and Heal. Damaging Melee/Ranged abilities can
+## instead select Weapon to scale only their matching weapon-damage contribution.
+@export var scaling_stat: int = DamageCalculator.ScalingSource.STRENGTH
+## Percentage of the selected stat or weapon damage added to Damage or Heal.
 @export_range(0.0, 10000.0, 5.0, "or_greater", "suffix:%") var scaling_amount: float = 100.0
 
 @export_category("Applied Status")
@@ -80,6 +94,10 @@ enum AbilityType {
 			area_of_effect += 1
 @export_flags("Friend:1", "Enemy:2", "Self:4", "Cell:8") var target_flags: int = TargetFlags.ENEMY
 @export var shape: Shape = Shape.SQUARE
+
+@export_category("Caster Movement")
+## Optional movement performed before the configured delivery and effects resolve.
+@export var caster_movement: CasterMovement = CasterMovement.NONE
 
 @export_category("Additional Effects")
 ## Resize the list, then choose New DamageEffectDefinition, New HealEffectDefinition,
@@ -103,6 +121,28 @@ func get_effective_area_span() -> int:
 	return 1 if area_of_effect <= 1 else area_of_effect
 
 
+func moves_caster() -> bool:
+	return caster_movement != CasterMovement.NONE
+
+
+func get_caster_movement_path(
+	caster_cell: Vector2i,
+	target_cell: Vector2i,
+	grid_size: Vector2i,
+	blocked_cells: Dictionary = {}
+) -> Array[Vector2i]:
+	match caster_movement:
+		CasterMovement.CHARGE_TO_TARGET:
+			return AbilityCasterMovementScript.get_charge_path(
+				caster_cell,
+				target_cell,
+				grid_size,
+				blocked_cells
+			)
+	var stationary_path: Array[Vector2i] = [caster_cell]
+	return stationary_path
+
+
 func _validate_property(property: Dictionary) -> void:
 	var property_name: StringName = property.name
 	var should_hide := false
@@ -114,6 +154,25 @@ func _validate_property(property: Dictionary) -> void:
 		should_hide = effect not in [PrimaryEffect.DAMAGE, PrimaryEffect.HEAL]
 	if should_hide:
 		property.usage = property.usage & ~PROPERTY_USAGE_EDITOR
+	elif property_name == &"scaling_stat":
+		property.hint = PROPERTY_HINT_ENUM
+		property.hint_string = (
+			DamageCalculator.WEAPON_SCALING_OPTIONS
+			if _can_select_weapon_scaling()
+			else DamageCalculator.UNIT_STAT_SCALING_OPTIONS
+		)
+
+
+func _can_select_weapon_scaling() -> bool:
+	return (
+		effect == PrimaryEffect.DAMAGE
+		and ability_type in [AbilityType.MELEE, AbilityType.RANGED]
+	)
+
+
+func _normalize_weapon_scaling() -> void:
+	if scaling_stat == DamageCalculator.ScalingSource.WEAPON and not _can_select_weapon_scaling():
+		scaling_stat = DamageCalculator.ScalingSource.NONE
 
 
 func has_target_flag(flag: TargetFlags) -> bool:
@@ -131,7 +190,11 @@ func get_required_weapon_type() -> int:
 
 
 func can_be_used_by(caster: TacticalCharacter) -> bool:
-	if not is_instance_valid(caster) or caster.current_health <= 0:
+	if (
+		not is_instance_valid(caster)
+		or caster.current_health <= 0
+		or not caster.can_use_abilities()
+	):
 		return false
 	var required_weapon_type := get_required_weapon_type()
 	return (
@@ -143,6 +206,8 @@ func can_be_used_by(caster: TacticalCharacter) -> bool:
 func get_unavailable_reason(caster: TacticalCharacter) -> String:
 	if can_be_used_by(caster):
 		return ""
+	if is_instance_valid(caster) and caster.current_health > 0 and caster.is_stunned():
+		return "Stunned"
 	if ability_type == AbilityType.MELEE:
 		return "Requires a Melee weapon"
 	if ability_type == AbilityType.RANGED:
@@ -155,12 +220,20 @@ func get_ability_type_name() -> String:
 
 
 func uses_weapon_damage(caster: TacticalCharacter) -> bool:
-	return (
-		has_damage()
-		and can_be_used_by(caster)
-		and get_required_weapon_type() >= 0
-		and caster.get_weapon_for_ability(self) != null
-	)
+	if (
+		not has_damage()
+		or not can_be_used_by(caster)
+		or get_required_weapon_type() < 0
+		or caster.get_weapon_for_ability(self) == null
+	):
+		return false
+	if effect == PrimaryEffect.DAMAGE:
+		return (
+			scaling_stat != DamageCalculator.ScalingSource.WEAPON
+			or scaling_amount > 0.0
+		)
+	# Ability-owned legacy damage effects retain the automatic full weapon term.
+	return true
 
 
 func get_weapon_status_effect(caster: TacticalCharacter) -> StatusEffectDefinition:
@@ -236,7 +309,11 @@ func calculate_primary_effect_amount(caster: TacticalCharacter) -> int:
 			)
 		PrimaryEffect.HEAL:
 			var total := float(maxi(0, effect_amount))
-			if is_instance_valid(caster) and scaling_stat != UnitStat.Type.NONE:
+			if (
+				is_instance_valid(caster)
+				and scaling_stat != DamageCalculator.ScalingSource.NONE
+				and DamageCalculator.is_unit_stat_scaling_source(scaling_stat)
+			):
 				total += (
 					caster.get_effective_stat(scaling_stat)
 					* maxf(0.0, scaling_amount)
@@ -363,6 +440,8 @@ func get_description(caster: TacticalCharacter = null) -> String:
 		range,
 		description,
 	]
+	if caster_movement == CasterMovement.CHARGE_TO_TARGET:
+		result += " | Charges in a clear straight line and stops adjacent"
 	if is_instance_valid(caster):
 		var unavailable_reason := get_unavailable_reason(caster)
 		if not unavailable_reason.is_empty():
@@ -390,10 +469,17 @@ func _get_damage_description(caster: TacticalCharacter) -> String:
 	var parts: Array[String] = []
 	if innate_damage > 0:
 		parts.append("%d innate" % innate_damage)
-	if ability_type in [AbilityType.MELEE, AbilityType.RANGED]:
+	if scaling_stat == DamageCalculator.ScalingSource.WEAPON and _can_select_weapon_scaling():
+		if scaling_amount > 0.0:
+			parts.append("weapon damage x%d%%" % roundi(scaling_amount))
+	elif ability_type in [AbilityType.MELEE, AbilityType.RANGED]:
 		parts.append("weapon damage")
-	if scaling_stat != UnitStat.Type.NONE and scaling_amount > 0.0:
-		parts.append("%s x%d%%" % [UnitStat.get_display_name(scaling_stat), roundi(scaling_amount)])
+	if (
+		scaling_stat != DamageCalculator.ScalingSource.NONE
+		and scaling_stat != DamageCalculator.ScalingSource.WEAPON
+		and scaling_amount > 0.0
+	):
+		parts.append("%s x%d%%" % [DamageCalculator.get_scaling_source_display_name(scaling_stat), roundi(scaling_amount)])
 	return "%s (%s)" % [total_prefix, " + ".join(parts) if not parts.is_empty() else "0"]
 
 
@@ -404,6 +490,10 @@ func _get_heal_description(caster: TacticalCharacter) -> String:
 		else "Healing"
 	)
 	var parts: Array[String] = ["%d base" % maxi(0, effect_amount)]
-	if scaling_stat != UnitStat.Type.NONE and scaling_amount > 0.0:
-		parts.append("%s x%d%%" % [UnitStat.get_display_name(scaling_stat), roundi(scaling_amount)])
+	if (
+		scaling_stat != DamageCalculator.ScalingSource.NONE
+		and DamageCalculator.is_unit_stat_scaling_source(scaling_stat)
+		and scaling_amount > 0.0
+	):
+		parts.append("%s x%d%%" % [DamageCalculator.get_scaling_source_display_name(scaling_stat), roundi(scaling_amount)])
 	return "%s (%s)" % [total_prefix, " + ".join(parts)]

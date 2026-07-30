@@ -55,11 +55,15 @@ func _run() -> void:
 	_check(_stat_value(screen, "speed") == "12", "the selected character should show effective Speed")
 	_check(_stat_value(screen, "weapon_damage") == "10", "FriendA should start with Frost Bow damage")
 	_check(_stat_change(screen, "weapon_damage") == "(+10)", "Frost Bow damage should be identified as an equipment contribution")
-	_check(screen.ability_entries.get_child_count() == 6, "the selected character should show its full ability loadout")
+	_check(
+		screen.ability_entries.get_child_count() == friend_a.get_abilities().size(),
+		"the selected character should show its full ability loadout"
+	)
 	_check(_ability_summary(screen, "Fireball") == "32 DMG", "magical damage should use current effective Intelligence")
 	_check(_ability_summary(screen, "Arrow") == "17 DMG", "FriendA's Frost Bow should enable Arrow at its live total")
 	_check(_ability_summary(screen, "Heal") == "37 HEAL", "healing should use current effective Intelligence")
 	_check(_ability_summary(screen, "Strike") == "Requires a Melee weapon", "FriendA's Frost Bow should leave Strike visible but unavailable")
+	_check(_ability_summary(screen, "Charge") == "Requires a Melee weapon", "FriendA's Frost Bow should leave Charge visible but unavailable")
 	_check(_ability_tooltip(screen, "Arrow").contains("Weapon applies Slow"), "FriendA's Arrow tooltip should describe Frost Bow Slow")
 	_check(_ability_tooltip(screen, "Ice Shard").contains("Slow"), "ability tooltips should include their applied status")
 
@@ -89,6 +93,7 @@ func _run() -> void:
 	_check(inventory.get_items().size() == 6, "equipping an item should remove it from the general inventory")
 	_check(_stat_value(screen, "strength") == "12", "equipping Iron Sword should add its Strength bonus")
 	_check(_ability_summary(screen, "Strike") == "32 DMG", "equipping Iron Sword should enable and update Strike")
+	_check(_ability_summary(screen, "Charge") == "32 DMG", "equipping Iron Sword should enable and update Charge")
 	_check(inventory.starting_items.size() == 6, "runtime equipment transfers must not mutate GeneralInventory's configured starting array")
 
 	var ranger_bow_button := _find_item_button(screen, "Ranger Bow")
@@ -118,11 +123,18 @@ func _run() -> void:
 	friend_a.equip_item(load("res://resources/items/iron_sword.tres") as ItemDefinition)
 	_check(_stat_value(screen, "weapon_damage") == "20", "direct re-equipping should restore the live details")
 
+	var half_weapon := AbilityDefinition.new()
+	half_weapon.display_name = "Half Weapon"
+	half_weapon.ability_type = AbilityDefinition.AbilityType.MELEE
+	half_weapon.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	half_weapon.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	half_weapon.scaling_amount = 50.0
 	var utility_definition := CharacterDefinition.new()
 	utility_definition.abilities = [
 		load("res://resources/abilities/focus.tres") as AbilityDefinition,
 		load("res://resources/abilities/slow.tres") as AbilityDefinition,
 		AbilityDefinition.new(),
+		half_weapon,
 	]
 	utility_definition.abilities[2].display_name = "Custom Utility"
 	var utility_character := TacticalCharacter.new()
@@ -147,6 +159,8 @@ func _run() -> void:
 	_check(_ability_summary(utility_screen, "Focus") == "Focus", "additional status abilities should show their status name")
 	_check(_ability_summary(utility_screen, "Slow") == "Slow", "direct status abilities should show their status name")
 	_check(_ability_summary(utility_screen, "Custom Utility") == "Utility", "other non-numeric abilities should use the Utility summary")
+	_check(_ability_summary(utility_screen, "Half Weapon") == "6 DMG", "Inventory should display 50% of Goblin Club's 12 weapon damage")
+	_check(_ability_tooltip(utility_screen, "Half Weapon").contains("weapon damage x50%"), "Inventory tooltips should show the Weapon scaling formula")
 	_check(utility_screen.ability_entries.get_child(0) is PanelContainer, "Inventory abilities should be read-only entries rather than action buttons")
 	_check(_stat_change(utility_screen, "speed") == "(-1)", "equipment penalties should display as negative changes")
 	_check(_stat_change_color(utility_screen, "speed") == InventoryScreen.NEGATIVE_CHANGE_COLOR, "equipment penalties should use the negative change color")
@@ -158,13 +172,26 @@ func _run() -> void:
 	empty_screen.setup(utility_inventory, no_characters)
 	_check((empty_screen.stats_entries.get_child(0) as Label).text == "No character selected", "missing characters should show a stats empty state")
 	_check((empty_screen.ability_entries.get_child(0) as Label).text == "No abilities available", "missing characters should show an abilities empty state")
+	var stun := load("res://resources/statuses/stun.tres") as StatusEffectDefinition
+	friend_a.reset_movement()
+	friend_a.reset_ability_action()
+	friend_a.reset_opportunity_reaction()
+	_check(main.turn_manager.current_unit == friend_a, "the Stun HUD fixture should use the current friendly")
+	_check(friend_a.apply_status(stun, stun), "the current friendly should accept reusable Stun")
+	_check(main.turn_manager.current_unit == friend_a, "Stun should not automatically end a friendly turn")
+	_check(main.end_turn_button.text == "End Turn", "a stunned friendly should retain the normal End Turn control")
+	_check(not main.end_turn_button.disabled, "a stunned friendly should still be allowed to press End Turn")
+	_check(_ability_summary(screen, "Fireball") == "Stunned", "Inventory ability summaries should use the centralized Stunned reason")
+	for button in main.ability_bar.get_node("Margin/HBox").get_children():
+		_check((button as Button).disabled, "every battlefield ability should be disabled while its caster is stunned")
+		_check((button as Button).get_meta("unavailable_reason") == "Stunned", "Ability Bar entries should expose the Stunned reason")
 
 	friend_b.apply_damage(friend_b.current_health)
 	_check(screen.character_picker.item_count == 1, "defeated friendly characters should be removed from the Inventory picker")
 	friend_a.apply_damage(friend_a.current_health)
 	_check(main._combat_over, "defeating the final friendly should end combat")
 	_check(main.turn_manager.current_unit == null, "combat end should clear the active AI turn loop")
-	_check(main.turn_status.text == "Defeat", "the battlefield should report defeat when only enemies remain")
+	_check(main.end_turn_button.text == "Battle Ended", "the End Turn control should report completed combat")
 	_check(main.end_turn_button.disabled, "turn controls should remain disabled after combat ends")
 	var ended_round: int = main.turn_manager.round_number
 	await process_frame

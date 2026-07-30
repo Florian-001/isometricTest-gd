@@ -11,6 +11,7 @@ var unit_movement_ranges: Dictionary = {}
 var unit_remaining_movement: Dictionary = {}
 var unit_opportunity_reactions: Dictionary = {}
 var unit_statuses: Dictionary = {}
+var unit_stunned: Dictionary = {}
 
 
 static func from_battle(
@@ -42,6 +43,7 @@ static func from_battle(
 				"processed_this_turn": active_status.processed_this_turn,
 			}
 		snapshot.unit_statuses[unit] = statuses
+		snapshot.unit_stunned[unit] = unit.is_stunned()
 	return snapshot
 
 
@@ -56,6 +58,7 @@ func duplicate_state() -> AIBoardSnapshot:
 	result.unit_movement_ranges = unit_movement_ranges.duplicate()
 	result.unit_remaining_movement = unit_remaining_movement.duplicate()
 	result.unit_opportunity_reactions = unit_opportunity_reactions.duplicate()
+	result.unit_stunned = unit_stunned.duplicate()
 	for unit in unit_statuses:
 		var copied_statuses: Dictionary = {}
 		var statuses := unit_statuses[unit] as Dictionary
@@ -92,15 +95,23 @@ func get_movement_range(unit: TacticalCharacter) -> float:
 
 
 func get_remaining_movement(unit: TacticalCharacter) -> float:
+	if is_stunned(unit):
+		return 0.0
 	return maxf(0.0, float(unit_remaining_movement.get(unit, 0.0)))
 
 
 func reset_movement(unit: TacticalCharacter) -> void:
 	if unit_movement_ranges.has(unit):
-		unit_remaining_movement[unit] = get_movement_range(unit) if is_living(unit) else 0.0
+		unit_remaining_movement[unit] = (
+			get_movement_range(unit)
+			if is_living(unit) and not is_stunned(unit)
+			else 0.0
+		)
 
 
 func spend_movement(unit: TacticalCharacter, cost: float) -> bool:
+	if is_stunned(unit):
+		return false
 	var remaining := get_remaining_movement(unit)
 	if cost < 0.0 or cost > remaining + GridPathfinder.COST_EPSILON:
 		return false
@@ -109,7 +120,11 @@ func spend_movement(unit: TacticalCharacter, cost: float) -> bool:
 
 
 func can_use_opportunity_reaction(unit: TacticalCharacter) -> bool:
-	return is_living(unit) and bool(unit_opportunity_reactions.get(unit, false))
+	return (
+		is_living(unit)
+		and not is_stunned(unit)
+		and bool(unit_opportunity_reactions.get(unit, false))
+	)
 
 
 func spend_opportunity_reaction(unit: TacticalCharacter) -> bool:
@@ -140,6 +155,10 @@ func get_status_ids(unit: TacticalCharacter) -> Array[StringName]:
 	return result
 
 
+func is_stunned(unit: TacticalCharacter) -> bool:
+	return bool(unit_stunned.get(unit, false))
+
+
 func forecast_status_application(
 	caster: TacticalCharacter,
 	target: TacticalCharacter,
@@ -167,6 +186,9 @@ func forecast_status_application(
 		"processed_this_turn": false,
 	}
 	unit_statuses[target] = statuses
+	if status_effect.blocks_actions():
+		unit_stunned[target] = true
+		unit_remaining_movement[target] = 0.0
 	return {
 		"health_delta": int(estimate.get("health_delta", 0)),
 		"utility_hint": (

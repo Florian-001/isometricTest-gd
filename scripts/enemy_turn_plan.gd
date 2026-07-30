@@ -67,6 +67,8 @@ func get_cast_cell(fallback: Vector2i) -> Vector2i:
 
 
 func get_end_cell(fallback: Vector2i) -> Vector2i:
+	if end_cell != Vector2i(-1, -1):
+		return end_cell
 	if not post_cast_path.is_empty():
 		return post_cast_path[post_cast_path.size() - 1]
 	if not pre_cast_path.is_empty():

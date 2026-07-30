@@ -1,39 +1,44 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://dpa2d8y315dp2"]
 
-[ext_resource type="Script" path="res://scripts/battle_map.gd" id="1_map"]
-[ext_resource type="Script" path="res://scripts/isometric_grid.gd" id="2_grid"]
-[ext_resource type="Script" path="res://scripts/tactical_terrain.gd" id="3_terrain"]
+[ext_resource type="Script" uid="uid://b5nmj1epdq2br" path="res://scripts/battle_map.gd" id="1_map"]
+[ext_resource type="Script" uid="uid://db3xtp2lso38p" path="res://scripts/isometric_grid.gd" id="2_grid"]
+[ext_resource type="Script" uid="uid://cw40etoqakmre" path="res://scripts/tactical_terrain.gd" id="3_terrain"]
 [ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="4_palette"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="5_friend_a"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="6_friend_b"]
-[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_warrior.tscn" id="7_warrior"]
+[ext_resource type="PackedScene" uid="uid://3ue0j7my7j3p" path="res://scenes/enemies/goblin_warrior.tscn" id="7_warrior"]
 
-[node name="GoblinSkirmish" type="Node2D"]
+[node name="GoblinSkirmish" type="Node2D" unique_id=1047695173]
 script = ExtResource("1_map")
 
-[node name="Grid" type="Node2D" parent="."]
+[node name="Grid" type="Node2D" parent="." unique_id=1426717094]
 position = Vector2(640, 96)
 script = ExtResource("2_grid")
 
-[node name="Terrain" type="Node" parent="."]
+[node name="Terrain" type="Node" parent="." unique_id=2012010501]
 script = ExtResource("3_terrain")
 palette = ExtResource("4_palette")
 
-[node name="Walls" type="Node2D" parent="."]
+[node name="Walls" type="Node2D" parent="." unique_id=517446935]
 
-[node name="Characters" type="Node2D" parent="."]
+[node name="Characters" type="Node2D" parent="." unique_id=316875413]
 
-[node name="FriendA" parent="Characters" instance=ExtResource("5_friend_a")]
+[node name="FriendA" parent="Characters" unique_id=202289012 instance=ExtResource("5_friend_a")]
+z_index = 113
 starting_grid_cell = Vector2i(4, 9)
 
-[node name="FriendB" parent="Characters" instance=ExtResource("6_friend_b")]
+[node name="FriendB" parent="Characters" unique_id=819615493 instance=ExtResource("6_friend_b")]
+z_index = 116
 starting_grid_cell = Vector2i(7, 9)
 
-[node name="GoblinWarriorA" parent="Characters" instance=ExtResource("7_warrior")]
+[node name="GoblinWarriorA" parent="Characters" unique_id=903214657 instance=ExtResource("7_warrior")]
+z_index = 105
 starting_grid_cell = Vector2i(3, 2)
 
-[node name="GoblinWarriorB" parent="Characters" instance=ExtResource("7_warrior")]
+[node name="GoblinWarriorB" parent="Characters" unique_id=551355218 instance=ExtResource("7_warrior")]
+z_index = 108
 starting_grid_cell = Vector2i(6, 2)
 
-[node name="GoblinWarriorC" parent="Characters" instance=ExtResource("7_warrior")]
+[node name="GoblinWarriorC" parent="Characters" unique_id=1439437667 instance=ExtResource("7_warrior")]
+z_index = 111
 starting_grid_cell = Vector2i(9, 2)

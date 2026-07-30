@@ -10,6 +10,7 @@ static func get_opportunity_attack_ability(attacker: TacticalCharacter) -> Abili
 	for ability in attacker.get_abilities():
 		if (
 			ability != null
+			and not ability.moves_caster()
 			and ability.ability_type == AbilityDefinition.AbilityType.MELEE
 			and ability.has_damage()
 			and ability.get_effective_area_span() == 1

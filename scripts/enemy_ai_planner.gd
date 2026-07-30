@@ -15,6 +15,7 @@ const SETUP_DEFEAT_RATIO := 0.125
 const FRIENDLY_DAMAGE_PENALTY := 2.0
 const MeleeDeliveryScript = preload("res://scripts/melee_delivery.gd")
 const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
+const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
 
 var ranked_candidates: Array[EnemyTurnPlan] = []
 var last_planning_duration_ms := 0
@@ -217,13 +218,15 @@ func _generate_candidates(
 	_finalize_plan(hold, actor, start, snapshot, targeting, profile, include_position)
 	_plan_state_cache[hold] = snapshot.duplicate_state()
 	_append_unique(candidates, seen, hold, start)
+	if snapshot.is_stunned(actor):
+		return candidates
 
 	var descriptors: Array[Dictionary] = []
 	if ability_ready:
 		var abilities := actor.get_abilities()
 		for ability_index in range(abilities.size()):
 			var ability := abilities[ability_index]
-			if ability == null or not ability.can_be_used_by(actor):
+			if not _can_use_ability_in_snapshot(actor, ability, snapshot):
 				continue
 			var target_cells := _get_relevant_target_cells(
 				actor,
@@ -317,7 +320,7 @@ func _generate_candidates(
 			_append_unique(candidates, seen, pursue, start)
 			# A melee-focused unit gains nothing by replacing progress toward attack
 			# range with a safer retreat. Fall back to safety only when pursuit fails.
-			if _has_only_usable_melee_hostile_abilities(actor):
+			if _has_only_usable_melee_hostile_abilities(actor, snapshot):
 				return [pursue]
 
 	if candidates.size() < MAX_CANDIDATES and _quick_cell_danger(
@@ -433,12 +436,13 @@ func _build_cast_move_candidate(
 	var cast_state := _simulate_plan(actor, base_plan, snapshot, targeting, profile, pathfinder)
 	if not cast_state.is_living(actor):
 		return null
-	var remaining := maxf(0.0, snapshot.get_remaining_movement(actor))
+	var movement_start := cast_state.get_cell(actor)
+	var remaining := maxf(0.0, cast_state.get_remaining_movement(actor))
 	if remaining <= COST_EPSILON:
 		return null
 	var reachability := _get_reachability(
 		actor,
-		start,
+		movement_start,
 		remaining,
 		cast_state,
 		pathfinder,
@@ -446,14 +450,14 @@ func _build_cast_move_candidate(
 	)
 	var destination := _select_safest_destination(
 		actor,
-		start,
+		movement_start,
 		reachability["costs"] as Dictionary,
 		cast_state,
 		pathfinder,
 		targeting,
 		profile
 	)
-	if destination == start:
+	if destination == movement_start:
 		return null
 	var path := pathfinder.reconstruct_reachable_path(reachability, destination)
 	if path.size() < 2:
@@ -618,7 +622,7 @@ func _finalize_plan(
 	profile: EnemyAIProfile,
 	include_position: bool
 ) -> void:
-	var end_cell := plan.get_end_cell(start)
+	var end_cell := snapshot.get_cell(actor)
 	plan.cast_origin = plan.get_cast_cell(start)
 	plan.end_cell = end_cell
 	var future_score := (
@@ -677,7 +681,35 @@ func _forecast_ability(
 	targeting: AbilityTargeting,
 	profile: EnemyAIProfile
 ) -> float:
+	if not _can_use_ability_in_snapshot(caster, ability, snapshot):
+		return 0.0
 	var caster_cell := snapshot.get_cell(caster)
+	var score := 0.0
+	if ability.moves_caster():
+		var movement_path := _get_snapshot_caster_movement_path(
+			caster,
+			caster_cell,
+			target_cell,
+			ability,
+			snapshot
+		)
+		if movement_path.is_empty():
+			return 0.0
+		var movement_forecast := _forecast_forced_caster_movement(
+			caster,
+			movement_path,
+			snapshot,
+			profile,
+			targeting
+		)
+		score += float(movement_forecast["score"])
+		if (
+			not snapshot.is_living(caster)
+			or snapshot.get_cell(caster)
+			!= AbilityCasterMovementScript.get_landing_cell(movement_path)
+		):
+			return score
+		caster_cell = snapshot.get_cell(caster)
 	var affected_cells := targeting.get_affected_cells(
 		caster_cell,
 		target_cell,
@@ -693,7 +725,6 @@ func _forecast_ability(
 		):
 			recipients.append(unit)
 
-	var score := 0.0
 	if recipients.is_empty():
 		for additional_effect in ability.effects:
 			if ability.should_apply_additional_effect(additional_effect):
@@ -762,6 +793,42 @@ func _forecast_ability(
 				snapshot
 			)
 	return score
+
+
+func _forecast_forced_caster_movement(
+	unit: TacticalCharacter,
+	path: Array[Vector2i],
+	snapshot: AIBoardSnapshot,
+	profile: EnemyAIProfile,
+	targeting: AbilityTargeting
+) -> Dictionary:
+	var traversed: Array[Vector2i] = []
+	var score := 0.0
+	if path.is_empty():
+		return {"path": traversed, "score": score}
+	traversed.append(path[0])
+	for index in range(1, path.size()):
+		if not snapshot.is_living(unit) or snapshot.is_stunned(unit):
+			break
+		score += _forecast_opportunity_attacks(
+			unit,
+			path[index - 1],
+			path[index],
+			snapshot,
+			targeting,
+			profile
+		)
+		if not snapshot.is_living(unit) or snapshot.is_stunned(unit):
+			break
+		snapshot.set_cell(unit, path[index])
+		traversed.append(path[index])
+		score += _forecast_terrain_trigger(
+			unit,
+			TileTriggeredEffectDefinition.Trigger.ENTER,
+			snapshot,
+			profile
+		)
+	return {"path": traversed, "score": score}
 
 
 func _score_effect_estimate(
@@ -981,8 +1048,7 @@ func _estimate_unit_action_against_target(
 	var usable_abilities: Array[AbilityDefinition] = []
 	for ability in unit.get_abilities():
 		if (
-			ability != null
-			and ability.can_be_used_by(unit)
+			_can_use_ability_in_snapshot(unit, ability, snapshot)
 			and (
 				ability.has_target_flag(AbilityDefinition.TargetFlags.ENEMY)
 				or ability.has_target_flag(AbilityDefinition.TargetFlags.CELL)
@@ -1106,7 +1172,7 @@ func _estimate_best_exact_action(
 ) -> float:
 	var abilities: Array[AbilityDefinition] = []
 	for ability in unit.get_abilities():
-		if ability != null and ability.can_be_used_by(unit):
+		if _can_use_ability_in_snapshot(unit, ability, snapshot):
 			abilities.append(ability)
 	if abilities.is_empty():
 		return 0.0
@@ -1212,7 +1278,7 @@ func _forecast_terrain_path(
 		return {"path": traversed, "score": score}
 	traversed.append(path[0])
 	for index in range(1, path.size()):
-		if not snapshot.is_living(unit):
+		if not snapshot.is_living(unit) or snapshot.is_stunned(unit):
 			break
 		score += _forecast_opportunity_attacks(
 			unit,
@@ -1222,7 +1288,7 @@ func _forecast_terrain_path(
 			targeting,
 			profile
 		)
-		if not snapshot.is_living(unit):
+		if not snapshot.is_living(unit) or snapshot.is_stunned(unit):
 			break
 		if not snapshot.spend_movement(
 			unit,
@@ -1491,8 +1557,20 @@ func _rough_cast_value(
 	snapshot: AIBoardSnapshot,
 	targeting: AbilityTargeting
 ) -> float:
+	var effect_origin := caster_cell
+	if ability.moves_caster():
+		var movement_path := _get_snapshot_caster_movement_path(
+			caster,
+			caster_cell,
+			target_cell,
+			ability,
+			snapshot
+		)
+		if movement_path.is_empty():
+			return 0.0
+		effect_origin = AbilityCasterMovementScript.get_landing_cell(movement_path)
 	var affected_cells := targeting.get_affected_cells(
-		caster_cell,
+		effect_origin,
 		target_cell,
 		ability,
 		snapshot.wall_cells
@@ -1603,8 +1681,7 @@ func _has_usable_hostile_ability(actor: TacticalCharacter, snapshot: AIBoardSnap
 	for opponent in snapshot.get_living_opponents(actor):
 		for ability in opponent.get_abilities():
 			if (
-				ability != null
-				and ability.can_be_used_by(opponent)
+				_can_use_ability_in_snapshot(opponent, ability, snapshot)
 				and (
 					ability.has_target_flag(AbilityDefinition.TargetFlags.ENEMY)
 					or ability.has_target_flag(AbilityDefinition.TargetFlags.CELL)
@@ -1614,12 +1691,14 @@ func _has_usable_hostile_ability(actor: TacticalCharacter, snapshot: AIBoardSnap
 	return false
 
 
-func _has_only_usable_melee_hostile_abilities(actor: TacticalCharacter) -> bool:
+func _has_only_usable_melee_hostile_abilities(
+	actor: TacticalCharacter,
+	snapshot: AIBoardSnapshot
+) -> bool:
 	var has_melee := false
 	for ability in actor.get_abilities():
 		if (
-			ability == null
-			or not ability.can_be_used_by(actor)
+			not _can_use_ability_in_snapshot(actor, ability, snapshot)
 			or not (
 				ability.has_target_flag(AbilityDefinition.TargetFlags.ENEMY)
 				or ability.has_target_flag(AbilityDefinition.TargetFlags.CELL)
@@ -1762,7 +1841,7 @@ func _estimate_immediate_cast_value_from_cell(
 ) -> float:
 	var best := 0.0
 	for ability in actor.get_abilities():
-		if ability == null or not ability.can_be_used_by(actor):
+		if not _can_use_ability_in_snapshot(actor, ability, snapshot):
 			continue
 		for unit in snapshot.units:
 			if not snapshot.is_living(unit) or not _is_relevant_candidate_unit(actor, unit, ability):
@@ -1787,9 +1866,9 @@ func _estimate_future_value(
 		last_cache_hit_count += 1
 		return float(_future_value_cache[key])
 	var best := _estimate_immediate_cast_value_from_cell(actor, cell, snapshot, targeting)
-	var movement := snapshot.get_movement_range(actor)
+	var movement := snapshot.get_movement_range(actor) if not snapshot.is_stunned(actor) else 0.0
 	for ability in actor.get_abilities():
-		if ability == null or not ability.can_be_used_by(actor):
+		if not _can_use_ability_in_snapshot(actor, ability, snapshot):
 			continue
 		for unit in snapshot.units:
 			if not snapshot.is_living(unit) or not _is_relevant_candidate_unit(actor, unit, ability):
@@ -1816,7 +1895,7 @@ func _get_cast_gap(
 ) -> float:
 	var best := INF
 	for ability in actor.get_abilities():
-		if ability == null or not ability.can_be_used_by(actor):
+		if not _can_use_ability_in_snapshot(actor, ability, snapshot):
 			continue
 		for target_cell in _get_relevant_target_cells(actor, ability, snapshot, targeting):
 			best = minf(
@@ -1873,22 +1952,73 @@ func _is_valid_primary_target(
 		or target_cell.x >= snapshot.grid_size.x
 		or target_cell.y >= snapshot.grid_size.y
 		or snapshot.wall_cells.has(target_cell)
-		or not ability.can_be_used_by(caster)
+		or not _can_use_ability_in_snapshot(caster, ability, snapshot)
 	):
 		return false
 	if targeting.get_weighted_distance(caster_cell, target_cell) > ability.range + COST_EPSILON:
 		return false
 	if not _has_line_of_sight(caster_cell, target_cell, snapshot.wall_cells):
 		return false
+	var delivery_origin := caster_cell
+	if ability.moves_caster():
+		var movement_path := _get_snapshot_caster_movement_path(
+			caster,
+			caster_cell,
+			target_cell,
+			ability,
+			snapshot
+		)
+		if movement_path.is_empty():
+			return false
+		delivery_origin = AbilityCasterMovementScript.get_landing_cell(movement_path)
 	if (
 		ability.delivery_type == AbilityDefinition.DeliveryType.MELEE
-		and not MeleeDeliveryScript.can_reach(caster_cell, target_cell, snapshot.wall_cells)
+		and not MeleeDeliveryScript.can_reach(delivery_origin, target_cell, snapshot.wall_cells)
 	):
 		return false
+	if ability.moves_caster():
+		return true
 	if ability.has_target_flag(AbilityDefinition.TargetFlags.CELL):
 		return true
 	var occupant := snapshot.get_living_unit_at(target_cell)
 	return occupant != null and _matches_unit_flag(caster, occupant, ability)
+
+
+func _can_use_ability_in_snapshot(
+	unit: TacticalCharacter,
+	ability: AbilityDefinition,
+	snapshot: AIBoardSnapshot
+) -> bool:
+	if ability == null or not snapshot.is_living(unit) or snapshot.is_stunned(unit):
+		return false
+	var required_weapon_type := ability.get_required_weapon_type()
+	return (
+		required_weapon_type == DamageCalculator.NO_WEAPON_REQUIRED
+		or unit.has_equipped_weapon_type(required_weapon_type)
+	)
+
+
+func _get_snapshot_caster_movement_path(
+	caster: TacticalCharacter,
+	caster_cell: Vector2i,
+	target_cell: Vector2i,
+	ability: AbilityDefinition,
+	snapshot: AIBoardSnapshot
+) -> Array[Vector2i]:
+	var empty_path: Array[Vector2i] = []
+	if ability == null or not ability.moves_caster() or not snapshot.is_living(caster):
+		return empty_path
+	var target := snapshot.get_living_unit_at(target_cell)
+	if target == null or target == caster or not _matches_unit_flag(caster, target, ability):
+		return empty_path
+	var blocked_cells := snapshot.get_blocked_cells(caster)
+	blocked_cells.erase(target_cell)
+	return ability.get_caster_movement_path(
+		caster_cell,
+		target_cell,
+		snapshot.grid_size,
+		blocked_cells
+	)
 
 
 func _has_line_of_sight(from_cell: Vector2i, to_cell: Vector2i, walls: Dictionary) -> bool:

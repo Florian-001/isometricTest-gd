@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_ability"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+
+[resource]
+script = ExtResource("1_ability")
+display_name = "Charge"
+ability_type = 0
+effect = 1
+damage_type = 0
+innate_damage = 0
+scaling_stat = 1
+scaling_amount = 100.0
+range = 5.0
+delivery_type = 2
+area_of_effect = 0
+target_flags = 2
+caster_movement = 1
+placeholder_color = Color(0.95, 0.48, 0.18, 1)
+melee_slash_color = Color(1, 0.78, 0.32, 1)

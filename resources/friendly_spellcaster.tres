@@ -8,10 +8,12 @@
 [ext_resource type="Resource" uid="uid://d17q7fv47avlu" path="res://resources/abilities/beam.tres" id="6_beam"]
 [ext_resource type="Resource" uid="uid://ypvhtrfkl6un" path="res://resources/abilities/strike.tres" id="7_strike"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="8_item_type"]
+[ext_resource type="Resource" uid="uid://dtnblflinhkn2" path="res://resources/abilities/searing_dagger.tres" id="9_cc17q"]
 [ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/iron_sword.tres" id="9_sword"]
 [ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/ranger_armor.tres" id="10_armor"]
 [ext_resource type="Resource" uid="uid://pghwydiamt0o" path="res://resources/items/sage_charm.tres" id="11_charm"]
 [ext_resource type="Resource" uid="uid://fbimwcq8pc21" path="res://resources/abilities/ice_shard.tres" id="12_ice_shard"]
+[ext_resource type="Resource" path="res://resources/abilities/charge.tres" id="13_charge"]
 
 [resource]
 script = ExtResource("1_definition")
@@ -19,4 +21,4 @@ display_name = "Friendly Adventurer"
 starting_equipment = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("10_armor"), ExtResource("11_charm")])
 body_color = Color(0.16, 0.53, 1, 1)
 health_bar_color = Color(0.2, 0.92, 0.42, 1)
-abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_fireball"), ExtResource("4_arrow"), ExtResource("5_heal"), ExtResource("6_beam"), ExtResource("7_strike"), ExtResource("12_ice_shard")])
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_fireball"), ExtResource("4_arrow"), ExtResource("5_heal"), ExtResource("6_beam"), ExtResource("7_strike"), ExtResource("12_ice_shard"), ExtResource("13_charge"), ExtResource("9_cc17q")])

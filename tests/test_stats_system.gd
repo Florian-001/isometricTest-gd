@@ -190,6 +190,36 @@ func test_central_physical_magical_damage_scaling_descriptions_and_ai_forecasts(
 	assert_true(physical.get_description(caster).contains("39 physical damage"), "the tooltip should show centralized physical damage")
 	assert_true(physical.get_description(caster).contains("Strength x150%"), "the tooltip should show the configured scaling")
 
+	var weapon_scaled := AbilityDefinition.new()
+	weapon_scaled.ability_type = AbilityDefinition.AbilityType.MELEE
+	weapon_scaled.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	weapon_scaled.innate_damage = 5
+	weapon_scaled.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	weapon_scaled.scaling_amount = 50.0
+	assert_eq(weapon_scaled.calculate_damage(caster), 10, "50% Weapon scaling should add only 5 of a 10-damage weapon, not the automatic full weapon term")
+	assert_true(weapon_scaled.get_description(caster).contains("weapon damage x50%"), "damage descriptions should expose the selected Weapon percentage")
+	var weapon_estimate := weapon_scaled.estimate_primary_effect_for_ai(caster, target, target.current_health)
+	assert_eq(weapon_estimate["health_delta"], -10, "AI forecasting should use the same Weapon-scaled amount")
+	weapon_scaled.scaling_amount = 150.0
+	assert_eq(weapon_scaled.calculate_damage(caster), 20, "Weapon scaling above 100% should multiply the weapon without adding another full copy")
+	weapon.weapon_damage = 7
+	weapon_scaled.scaling_amount = 50.0
+	assert_eq(weapon_scaled.calculate_damage(caster), roundi(5.0 + 7.0 * 0.5), "Weapon percentage results should retain nearest-integer rounding")
+	weapon.weapon_damage = 10
+
+	var ranged_weapon := ItemDefinitionScript.new() as ItemDefinition
+	ranged_weapon.weapon_type = ItemDefinition.WeaponType.RANGED
+	ranged_weapon.weapon_damage = 12
+	caster.equip_item(ranged_weapon)
+	assert_false(weapon_scaled.can_be_used_by(caster), "a mismatched weapon should leave a Weapon-scaled ability unavailable")
+	assert_eq(weapon_scaled.calculate_damage(caster), 5, "a mismatched weapon should contribute zero to Weapon scaling")
+	caster.equip_item(weapon)
+
+	weapon_scaled.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	weapon_scaled.ability_type = AbilityDefinition.AbilityType.MAGIC
+	assert_eq(weapon_scaled.scaling_stat, DamageCalculator.ScalingSource.NONE, "changing a Weapon-scaled ability to Magic should reset scaling to None")
+	assert_eq(weapon_scaled.calculate_damage(caster), 5, "Magic abilities should never use equipped weapon damage")
+
 	var damage := AbilityDefinition.new()
 	damage.effect = AbilityDefinition.PrimaryEffect.DAMAGE
 	damage.damage_type = DamageCalculator.Type.MAGICAL
@@ -225,6 +255,12 @@ func test_central_physical_magical_damage_scaling_descriptions_and_ai_forecasts(
 	assert_eq(heal_estimate["health_delta"], 46, "AI forecast should include full effective-stat healing")
 	healing.apply_primary_effect(caster, target)
 	assert_eq(target.current_health, 96, "applied healing should match the forecast")
+	healing.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	healing.ability_type = AbilityDefinition.AbilityType.MELEE
+	healing.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	healing.effect = AbilityDefinition.PrimaryEffect.HEAL
+	assert_eq(healing.scaling_stat, DamageCalculator.ScalingSource.NONE, "changing a Weapon-scaled ability to Heal should reset scaling to None")
+	assert_eq(healing.calculate_primary_effect_amount(caster), 25, "Heal should ignore invalid Weapon scaling and retain only its base amount")
 
 	var slow_status := load("res://resources/statuses/slow.tres") as StatusEffectDefinition
 	var slow := AbilityDefinition.new()
@@ -345,6 +381,70 @@ func test_speed_movement_reconciliation_and_next_round_resort() -> void:
 	assert_eq(manager.turn_order, [normal, fast], "the next round should re-sort by current effective Speed")
 
 
+func test_stun_blocks_one_activation_and_preserves_unspent_reaction() -> void:
+	assert_eq(StatusEffectDefinition.Effect.NONE, 0, "None status effects should retain value zero")
+	assert_eq(StatusEffectDefinition.Effect.DAMAGE_EACH_TURN, 1, "periodic damage should retain value one")
+	assert_eq(StatusEffectDefinition.Effect.STAT_MODIFIER, 2, "stat modifiers should retain value two")
+	assert_eq(StatusEffectDefinition.Effect.STUN, 3, "Stun should append serialized value three")
+	var stun := load("res://resources/statuses/stun.tres") as StatusEffectDefinition
+	assert_eq(stun.status_id, &"stun", "Stun should use a stable reusable status id")
+	assert_eq(stun.display_name, "Stun", "Stun should expose its display name")
+	assert_eq(stun.duration_turns, 1, "Stun should last one affected-unit activation")
+	assert_true(stun.blocks_actions(), "the centralized status query should identify Stun")
+	assert_true(is_equal_approx(stun.affected_unit_ai_utility, -20.0), "Stun should expose its editable AI utility")
+	assert_true(stun.icon != null, "Stun should provide a status-bar icon")
+	assert_true(stun.get_description().contains("Cannot move, use abilities, or make opportunity attacks"), "Stun descriptions should explain every blocked action")
+
+	var ability := AbilityDefinition.new()
+	ability.display_name = "Test Spell"
+	var definition := CharacterDefinitionScript.new() as CharacterDefinition
+	definition.movement_range = 6.0
+	var abilities: Array[AbilityDefinition] = [ability]
+	definition.abilities = abilities
+	var unit := _make_unit(definition)
+	var source := _make_unit(CharacterDefinitionScript.new())
+	unit.reset_movement()
+	unit.reset_ability_action()
+	unit.reset_opportunity_reaction()
+	assert_true(unit.apply_status(stun, ability, source), "a living unit should accept Stun from an ability source")
+	assert_true(unit.apply_status(stun, stun, source), "reapplying Stun should refresh it")
+	assert_eq(unit.get_active_statuses().size(), 1, "Stun should refresh instead of stacking")
+	assert_eq(unit.get_active_statuses()[0].source, stun, "a refreshed Stun should replace its source object")
+	assert_eq(unit.get_active_statuses()[0].source_unit, source, "a refreshed Stun should replace its source unit")
+	assert_true(unit.is_stunned(), "the unit should report its centralized stunned state")
+	assert_false(unit.can_move(), "Stun should block movement")
+	assert_false(unit.can_use_abilities(), "Stun should block all abilities")
+	assert_false(unit.can_use_opportunity_reactions(), "Stun should block reactions")
+	assert_true(is_zero_approx(unit.remaining_movement), "Stun should expose zero usable movement")
+	assert_false(unit.ability_available, "Stun should hide an otherwise unused ability action")
+	assert_false(unit.opportunity_reaction_available, "Stun should hide an unspent reaction token")
+	assert_true(is_equal_approx(unit.get_movement_range(), 6.0), "Stun should not modify the underlying Movement stat")
+	assert_eq(ability.get_unavailable_reason(unit), "Stunned", "ability availability should prioritize the Stunned reason")
+	assert_eq(unit._get_status_icon_entries()[0].definition, stun, "Stun should appear in the existing status-icon row")
+
+	var other := _make_unit(CharacterDefinitionScript.new())
+	var manager := track(TurnManagerScript.new()) as TurnManager
+	manager.start_combat([unit, other])
+	assert_eq(manager.current_unit, unit, "a friendly stunned activation should remain current until End Turn")
+	assert_true(unit.get_active_statuses()[0].processed_this_turn, "Stun should be processed on its owner's activation")
+	assert_true(is_zero_approx(unit.remaining_movement), "turn reset must not grant movement through Stun")
+	assert_false(unit.ability_available, "turn reset must not grant an ability through Stun")
+	assert_false(unit.opportunity_reaction_available, "round reset must not expose a reaction through Stun")
+	manager.end_current_turn()
+	assert_eq(manager.current_unit, other, "ending the stunned activation should advance combat normally")
+	assert_false(unit.is_stunned(), "one-turn Stun should expire at the end of the processed activation")
+	assert_true(unit.ability_available, "the unused raw ability token should become visible after Stun expires")
+	assert_true(unit.opportunity_reaction_available, "an unspent reaction should return after Stun expires")
+	assert_true(is_equal_approx(unit.remaining_movement, 6.0), "the unit's normal movement should return after Stun expires")
+
+	unit.reset_opportunity_reaction()
+	assert_true(unit.spend_opportunity_reaction(), "the separate spent-reaction case should consume its token")
+	unit.apply_status(stun, source, source)
+	unit.process_status_turn_start()
+	unit.advance_status_durations()
+	assert_false(unit.opportunity_reaction_available, "Stun expiry must not restore a reaction spent before application")
+
+
 func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> void:
 	var definition := load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
 	var unit := _make_unit(definition)
@@ -354,7 +454,7 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.DEXTERITY), 12.0), "Ranger Armor should grant Dexterity")
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.INTELLIGENCE), 12.0), "Sage Charm should grant Intelligence")
 	assert_eq(unit.get_weapon_damage(), 20, "Iron Sword should provide the physical weapon-damage contribution")
-	assert_eq(unit.get_abilities().size(), 6, "Ice Shard should expand the sample loadout to six abilities")
+	assert_eq(unit.get_abilities().size(), 7, "Charge should expand the sample loadout to seven abilities")
 
 	var expected_stats := [
 		UnitStat.Type.INTELLIGENCE,
@@ -363,8 +463,9 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 		UnitStat.Type.INTELLIGENCE,
 		UnitStat.Type.STRENGTH,
 		UnitStat.Type.INTELLIGENCE,
+		UnitStat.Type.STRENGTH,
 	]
-	var expected_amounts := [32, 7, 37, 22, 32, 27]
+	var expected_amounts := [32, 7, 37, 22, 32, 27, 32]
 	for index in range(unit.get_abilities().size()):
 		var ability := unit.get_abilities()[index]
 		if index == 2:
@@ -379,6 +480,7 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	assert_eq(unit.get_abilities()[3].damage_type, DamageCalculator.Type.MAGICAL, "Beam should be magical")
 	assert_eq(unit.get_abilities()[4].damage_type, DamageCalculator.Type.PHYSICAL, "Strike should be physical")
 	assert_eq(unit.get_abilities()[5].damage_type, DamageCalculator.Type.MAGICAL, "Ice Shard should be magical")
+	assert_eq(unit.get_abilities()[6].damage_type, DamageCalculator.Type.PHYSICAL, "Charge should be physical")
 	var expected_ability_types := [
 		AbilityDefinition.AbilityType.MAGIC,
 		AbilityDefinition.AbilityType.RANGED,
@@ -386,17 +488,20 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 		AbilityDefinition.AbilityType.MAGIC,
 		AbilityDefinition.AbilityType.MELEE,
 		AbilityDefinition.AbilityType.MAGIC,
+		AbilityDefinition.AbilityType.MELEE,
 	]
 	for index in range(expected_ability_types.size()):
 		assert_eq(unit.get_abilities()[index].ability_type, expected_ability_types[index], "sample ability type should match its migrated role")
 	assert_false(unit.get_abilities()[1].can_be_used_by(unit), "Arrow should be unavailable with the starting Melee sword")
 	assert_true(unit.get_abilities()[4].can_be_used_by(unit), "Strike should be available with the starting Melee sword")
+	assert_true(unit.get_abilities()[6].can_be_used_by(unit), "Charge should be available with the starting Melee sword")
 	var ranger_bow := load("res://resources/items/ranger_bow.tres") as ItemDefinition
 	unit.equip_item(ranger_bow)
 	assert_eq(unit.get_abilities()[1].calculate_damage(unit), 17, "Arrow should deal Ranger Bow 10 plus 60% of Dexterity 12")
 	assert_true(unit.get_abilities()[1].can_be_used_by(unit), "Arrow should become available with a Ranged weapon")
 	assert_eq(unit.get_abilities()[4].calculate_damage(unit), 10, "Strike preview should omit mismatched weapon damage and lost Sword Strength")
 	assert_false(unit.get_abilities()[4].can_be_used_by(unit), "Strike should become unavailable with a Ranged weapon")
+	assert_false(unit.get_abilities()[6].can_be_used_by(unit), "Charge should become unavailable with a Ranged weapon")
 	assert_eq(unit.get_abilities()[0].calculate_damage(unit), 32, "Magic damage should remain unchanged across weapon types")
 	assert_eq(unit.get_abilities()[5].status_effect.status_id, &"slow", "Ice Shard should apply Slow")
 	var status_icon_paths: Array[String] = []
@@ -405,12 +510,13 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 		"res://resources/statuses/burning.tres",
 		"res://resources/statuses/slow.tres",
 		"res://resources/statuses/focus.tres",
+		"res://resources/statuses/stun.tres",
 	]:
 		var status := load(status_path) as StatusEffectDefinition
 		assert_true(status.icon != null, "%s should provide its own status icon" % status.display_name)
 		status_icon_paths.append(status.icon.resource_path)
 		unique_status_icon_paths[status.icon.resource_path] = true
-	assert_eq(unique_status_icon_paths.size(), status_icon_paths.size(), "Burning, Slow, and Focus should use distinct icon assets")
+	assert_eq(unique_status_icon_paths.size(), status_icon_paths.size(), "every reusable status should use a distinct icon asset")
 
 	var focus := load("res://resources/abilities/focus.tres") as AbilityDefinition
 	var slow := load("res://resources/abilities/slow.tres") as AbilityDefinition

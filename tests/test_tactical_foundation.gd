@@ -20,6 +20,7 @@ const ProjectileDeliveryScript = preload("res://scripts/projectile_delivery.gd")
 const AbilityExecutorScript = preload("res://scripts/ability_executor.gd")
 const MeleeDeliveryScript = preload("res://scripts/melee_delivery.gd")
 const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
+const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
 const StatusCatalogScript = preload("res://addons/tile_painter/status_effect_catalog.gd")
 const ItemCatalogScript = preload("res://addons/tile_painter/item_definition_catalog.gd")
 const ItemArrayModelScript = preload("res://addons/tile_painter/item_array_editor_model.gd")
@@ -249,11 +250,11 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_eq(ability.get_effective_area_span(), 5, "normalized area span should be exposed to targeting")
 
 	var friendly_definition = load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
-	assert_eq(friendly_definition.abilities.size(), 6, "the friendly template should expose six sample abilities")
+	assert_eq(friendly_definition.abilities.size(), 7, "the friendly template should expose seven sample abilities")
 	var names: Array[String] = []
 	for sample in friendly_definition.abilities:
 		names.append(sample.display_name)
-	assert_eq(names, ["Fireball", "Arrow", "Heal", "Beam", "Strike", "Ice Shard"], "Ice Shard should be the final sample ability")
+	assert_eq(names, ["Fireball", "Arrow", "Heal", "Beam", "Strike", "Ice Shard", "Charge"], "Charge should be the final sample ability")
 	assert_eq(friendly_definition.abilities[0].innate_damage, 20, "Fireball innate damage should be editable directly on the ability")
 	assert_eq(friendly_definition.abilities[4].innate_damage, 0, "Strike should expose zero innate damage directly on the ability")
 	var ice_shard := friendly_definition.abilities[5] as AbilityDefinition
@@ -266,6 +267,14 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_eq(ice_shard.area_of_effect, 0, "Ice Shard should affect one cell")
 	assert_eq(ice_shard.target_flags, AbilityDefinition.TargetFlags.ENEMY, "Ice Shard should target one enemy")
 	assert_eq(ice_shard.status_effect.status_id, &"slow", "Ice Shard should expose Slow directly")
+	var charge := friendly_definition.abilities[6] as AbilityDefinition
+	assert_eq(charge.caster_movement, AbilityDefinition.CasterMovement.CHARGE_TO_TARGET, "Charge should expose caster movement directly")
+	assert_eq(charge.ability_type, AbilityDefinition.AbilityType.MELEE, "Charge should require a Melee weapon")
+	assert_eq(charge.delivery_type, AbilityDefinition.DeliveryType.MELEE, "Charge should resolve through Melee delivery")
+	assert_eq(charge.target_flags, AbilityDefinition.TargetFlags.ENEMY, "Charge should require an enemy unit target")
+	assert_true(is_equal_approx(charge.range, 5.0), "Charge should have range 5")
+	assert_true(_has_editor_property(charge, &"caster_movement"), "Caster Movement should always be visible in the Inspector")
+	assert_true(charge.get_description().contains("Charges in a clear straight line"), "Charge descriptions should explain their movement")
 	_assert_primary_effect_fields(
 		ability,
 		AbilityDefinition.PrimaryEffect.NONE,
@@ -286,6 +295,27 @@ func test_ability_resources_and_sample_assignment() -> void:
 		AbilityDefinition.PrimaryEffect.STATUS,
 		["status_effect"]
 	)
+	assert_eq(DamageCalculator.ScalingSource.NONE, UnitStat.Type.NONE, "ability scaling should preserve the shared stat serialization values")
+	assert_eq(DamageCalculator.ScalingSource.MOVEMENT_RANGE, UnitStat.Type.MOVEMENT_RANGE, "all existing ability scaling values should remain stable")
+	assert_eq(DamageCalculator.ScalingSource.WEAPON, 6, "Weapon should append one new ability-only scaling value")
+	assert_false(UnitStat.Type.keys().has("WEAPON"), "Weapon must not leak into item or status stat modifier dropdowns")
+	ability.ability_type = AbilityDefinition.AbilityType.MELEE
+	ability.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	assert_true(_get_editor_property_hint(ability, &"scaling_stat").contains("Weapon"), "damaging Melee abilities should offer Weapon scaling")
+	ability.ability_type = AbilityDefinition.AbilityType.RANGED
+	assert_true(_get_editor_property_hint(ability, &"scaling_stat").contains("Weapon"), "damaging Ranged abilities should offer Weapon scaling")
+	ability.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	ability.ability_type = AbilityDefinition.AbilityType.MAGIC
+	assert_eq(ability.scaling_stat, DamageCalculator.ScalingSource.NONE, "changing to Magic should clear Weapon scaling")
+	assert_false(_get_editor_property_hint(ability, &"scaling_stat").contains("Weapon"), "Magic damage should keep stat-only scaling options")
+	ability.ability_type = AbilityDefinition.AbilityType.MELEE
+	ability.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	ability.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	ability.effect = AbilityDefinition.PrimaryEffect.HEAL
+	assert_eq(ability.scaling_stat, DamageCalculator.ScalingSource.NONE, "changing to Heal should clear Weapon scaling")
+	assert_false(_get_editor_property_hint(ability, &"scaling_stat").contains("Weapon"), "Heal should keep stat-only scaling options")
+	var legacy_damage_inspector := DamageEffectScript.new() as DamageEffectDefinition
+	assert_false(_get_editor_property_hint(legacy_damage_inspector, &"scaling_stat").contains("Weapon"), "legacy damage-effect scaling should remain stat-only")
 
 	var status := StatusEffectDefinition.new()
 	_assert_status_effect_fields(status, StatusEffectDefinition.Effect.NONE, null, [])
@@ -307,6 +337,12 @@ func test_ability_resources_and_sample_assignment() -> void:
 		StatusEffectDefinition.ModifierValueType.PERCENTAGE,
 		["affected_stat", "modifier_direction", "modifier_value_type", "percentage_amount", "affected_unit_ai_utility"]
 	)
+	_assert_status_effect_fields(
+		status,
+		StatusEffectDefinition.Effect.STUN,
+		null,
+		["affected_unit_ai_utility"]
+	)
 
 	var item := ItemDefinition.new()
 	assert_eq(item.weapon_type, ItemDefinition.WeaponType.MELEE, "new weapons should default to Melee")
@@ -317,7 +353,7 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_true(status_inspector_source.contains("object is ItemDefinition"), "the saved-status dropdown should handle ItemDefinition resources")
 	assert_eq(
 		StatusCatalogScript.get_statuses().map(func(saved_status: StatusEffectDefinition): return saved_status.display_name),
-		["Burning", "Focus", "Slow"],
+		["Burning", "Focus", "Slow", "Stun"],
 		"the weapon status dropdown should discover every saved status deterministically"
 	)
 	item.slot = ItemDefinition.EquipmentSlot.ARMOR
@@ -326,6 +362,88 @@ func test_ability_resources_and_sample_assignment() -> void:
 	item.slot = ItemDefinition.EquipmentSlot.ACCESSORY
 	assert_false(_has_editor_property(item, &"weapon_type"), "Weapon Type should be hidden for Accessory items")
 	assert_false(_has_editor_property(item, &"status_effect"), "Status Effect should be hidden for Accessory items")
+
+
+func test_charge_targeting_paths_blockers_and_directions() -> void:
+	assert_eq(AbilityDefinition.CasterMovement.NONE, 0, "None caster movement should retain serialization value zero")
+	assert_eq(AbilityDefinition.CasterMovement.CHARGE_TO_TARGET, 1, "Charge should append serialization value one")
+	var fresh := AbilityDefinitionScript.new() as AbilityDefinition
+	assert_eq(fresh.caster_movement, AbilityDefinition.CasterMovement.NONE, "new abilities should not move their caster")
+	assert_true(_has_editor_property(fresh, &"caster_movement"), "Caster Movement should always be visible")
+
+	var charge := (load("res://resources/abilities/charge.tres") as AbilityDefinition).duplicate(true) as AbilityDefinition
+	var caster := _make_unit(true, Vector2i(5, 5), 6.0)
+	var target := _make_unit(false, Vector2i(9, 5), 6.0)
+	var weapon := ItemDefinition.new()
+	weapon.weapon_type = ItemDefinition.WeaponType.MELEE
+	weapon.weapon_damage = 20
+	caster.equip_item(weapon)
+	var units: Array[TacticalCharacter] = [caster, target]
+	var targeting := AbilityTargetingScript.new(Vector2i(11, 11)) as AbilityTargeting
+	var directions := [
+		Vector2i(4, 0),
+		Vector2i(-4, 0),
+		Vector2i(0, 4),
+		Vector2i(0, -4),
+		Vector2i(3, 3),
+		Vector2i(-3, 3),
+		Vector2i(-3, -3),
+		Vector2i(3, -3),
+	]
+	for difference in directions:
+		target.grid_cell = caster.grid_cell + difference
+		assert_true(
+			targeting.is_valid_primary_target(caster, target.grid_cell, charge, units),
+			"Charge should accept straight direction %s" % difference
+		)
+		var path := targeting.get_caster_movement_path(caster, target.grid_cell, charge, units)
+		var direction := Vector2i(signi(difference.x), signi(difference.y))
+		assert_eq(
+			AbilityCasterMovementScript.get_landing_cell(path),
+			target.grid_cell - direction,
+			"Charge should stop immediately before its target"
+		)
+
+	target.grid_cell = Vector2i(8, 7)
+	assert_false(
+		targeting.is_valid_primary_target(caster, target.grid_cell, charge, units),
+		"Charge should reject a target outside the eight straight directions"
+	)
+	target.grid_cell = Vector2i(9, 5)
+	var blocker := _make_unit(false, Vector2i(7, 5), 6.0)
+	var blocked_units: Array[TacticalCharacter] = [caster, target, blocker]
+	assert_false(
+		targeting.is_valid_primary_target(caster, target.grid_cell, charge, blocked_units),
+		"Charge should reject an occupied intermediate cell"
+	)
+	blocker.grid_cell = Vector2i(8, 5)
+	assert_false(
+		targeting.is_valid_primary_target(caster, target.grid_cell, charge, blocked_units),
+		"Charge should reject an occupied landing cell"
+	)
+	blocker.grid_cell = Vector2i(0, 0)
+	target.grid_cell = Vector2i(8, 8)
+	assert_false(
+		targeting.is_valid_primary_target(
+			caster,
+			target.grid_cell,
+			charge,
+			blocked_units,
+			{Vector2i(6, 5): true}
+		),
+		"Charge should obey diagonal corner blockers"
+	)
+	target.grid_cell = Vector2i(6, 5)
+	assert_eq(
+		targeting.get_caster_movement_path(caster, target.grid_cell, charge, units),
+		[caster.grid_cell],
+		"an adjacent Charge should attack without grid movement"
+	)
+	target.grid_cell = Vector2i(9, 5)
+	assert_false(
+		targeting.is_valid_primary_target(caster, Vector2i(9, 4), charge, units),
+		"Charge should require a living unit at the selected cell"
+	)
 
 
 func test_inline_item_modifier_inspector_model_and_resources() -> void:
@@ -640,6 +758,30 @@ func test_weapon_status_applies_to_every_surviving_weapon_damage_target() -> voi
 		assert_eq(target.get_active_statuses()[0].definition, slow, "Frost Bow should apply the reusable Slow definition")
 		assert_eq(target.get_active_statuses()[0].source, frost_bow, "weapon-applied statuses should record the weapon as source")
 		assert_eq(target.get_active_statuses()[0].source_unit, caster, "weapon-applied statuses should record the caster")
+
+	var half_weapon_target := _make_unit(false, Vector2i(3, 0), 6.0)
+	var half_weapon := AbilityDefinition.new()
+	half_weapon.display_name = "Half Weapon Shot"
+	half_weapon.ability_type = AbilityDefinition.AbilityType.RANGED
+	half_weapon.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	half_weapon.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	half_weapon.scaling_amount = 50.0
+	half_weapon.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	assert_eq(half_weapon.calculate_damage(caster), 5, "50% Weapon scaling should deal half of Frost Bow's 10 damage")
+	assert_true(half_weapon.uses_weapon_damage(caster), "positive Weapon scaling should count as weapon usage")
+	var half_weapon_units: Array[TacticalCharacter] = [caster, half_weapon_target]
+	executor._apply_effects(caster, half_weapon_target.grid_cell, half_weapon, half_weapon_units, targeting, {})
+	assert_eq(half_weapon_target.current_health, 95, "execution should use the centralized half-weapon amount")
+	assert_eq(half_weapon_target.get_active_statuses()[0].definition, slow, "positive Weapon scaling should apply the weapon status")
+
+	var zero_weapon_target := _make_unit(false, Vector2i(3, 5), 6.0)
+	half_weapon.scaling_amount = 0.0
+	assert_eq(half_weapon.calculate_damage(caster), 0, "zero-percent Weapon scaling should contribute no weapon damage")
+	assert_false(half_weapon.uses_weapon_damage(caster), "zero-percent Weapon scaling should not count as weapon usage")
+	var zero_weapon_units: Array[TacticalCharacter] = [caster, zero_weapon_target]
+	executor._apply_effects(caster, zero_weapon_target.grid_cell, half_weapon, zero_weapon_units, targeting, {})
+	assert_eq(zero_weapon_target.current_health, 100, "zero-percent Weapon scaling should deal no damage without innate damage")
+	assert_true(zero_weapon_target.get_active_statuses().is_empty(), "zero-percent Weapon scaling should not apply the weapon status")
 
 	executor._apply_effects(caster, target_a.grid_cell, volley, units, targeting, {})
 	assert_eq(target_a.get_active_statuses().size(), 1, "repeated Frost Bow hits should refresh rather than stack Slow")
@@ -1268,7 +1410,7 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	var bar = track(AbilityBarScene.instantiate())
 	bar.rebuild(unit, true)
 	var entries: HBoxContainer = bar.get_node("Margin/HBox")
-	assert_eq(entries.get_child_count(), 6, "the ability bar should create one button per configured ability")
+	assert_eq(entries.get_child_count(), 7, "the ability bar should create one button per configured ability")
 	assert_true(entries.get_child(0).text.contains("32 DMG"), "damage buttons should show their caster-scaled total damage")
 	assert_true(entries.get_child(1).text.contains("Requires a Ranged weapon"), "the Ability Bar summary should show the incompatible weapon reason")
 	assert_true(entries.get_child(1).disabled, "Arrow should remain visible but disabled with a Melee weapon")
@@ -1279,6 +1421,9 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	assert_true(entries.get_child(5).tooltip_text.contains("Slow"), "Ice Shard's tooltip should include its direct status")
 	assert_false(entries.get_child(0).disabled, "ability buttons should be enabled while the action is available")
 	assert_false(entries.get_child(4).disabled, "Strike should be enabled by the starting Melee sword")
+	assert_true(entries.get_child(6).text.contains("32 DMG"), "Charge should show the shared Melee damage calculation")
+	assert_false(entries.get_child(6).disabled, "Charge should be enabled by the starting Melee sword")
+	assert_true(entries.get_child(6).tooltip_text.contains("Charges in a clear straight line"), "Charge's tooltip should explain caster movement")
 
 	var ranger_bow := load("res://resources/items/ranger_bow.tres") as ItemDefinition
 	unit.equip_item(ranger_bow)
@@ -1286,10 +1431,30 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	assert_true(entries.get_child(1).text.contains("17 DMG"), "Arrow should include Ranger Bow damage after a compatible swap")
 	assert_false(entries.get_child(1).disabled, "a Ranged weapon should enable Arrow")
 	assert_true(entries.get_child(4).disabled, "a Ranged weapon should disable Strike")
+	assert_true(entries.get_child(6).disabled, "a Ranged weapon should disable Charge")
 	assert_true(entries.get_child(4).tooltip_text.contains("Requires a Melee weapon"), "Strike should explain its Melee requirement")
 	unit.spend_ability_action()
 	bar.rebuild(unit, true)
 	assert_true(entries.get_child(0).disabled, "ability buttons should disable after the action is spent")
+
+	var half_weapon := AbilityDefinition.new()
+	half_weapon.display_name = "Half Weapon Shot"
+	half_weapon.ability_type = AbilityDefinition.AbilityType.RANGED
+	half_weapon.effect = AbilityDefinition.PrimaryEffect.DAMAGE
+	half_weapon.scaling_stat = DamageCalculator.ScalingSource.WEAPON
+	half_weapon.scaling_amount = 50.0
+	var half_weapon_definition := CharacterDefinitionScript.new() as CharacterDefinition
+	var half_weapon_abilities: Array[AbilityDefinition] = [half_weapon]
+	half_weapon_definition.abilities = half_weapon_abilities
+	var half_weapon_unit := track(TacticalCharacterScript.new()) as TacticalCharacter
+	half_weapon_unit.definition = half_weapon_definition
+	half_weapon_unit._ready()
+	half_weapon_unit.equip_item(load("res://resources/items/frost_bow.tres") as ItemDefinition)
+	var half_weapon_bar = track(AbilityBarScene.instantiate())
+	half_weapon_bar.rebuild(half_weapon_unit, true)
+	var half_weapon_entries: HBoxContainer = half_weapon_bar.get_node("Margin/HBox")
+	assert_true((half_weapon_entries.get_child(0) as Button).text.contains("5 DMG"), "the Ability Bar should display the centralized half-weapon total")
+	assert_true((half_weapon_entries.get_child(0) as Button).tooltip_text.contains("weapon damage x50%"), "the Ability Bar tooltip should show the Weapon scaling formula")
 
 
 func test_enemy_planner_approaches_without_overspending() -> void:
@@ -1491,6 +1656,13 @@ func _has_editor_property(object: Object, property_name: StringName) -> bool:
 		if StringName(property_info.name) == property_name:
 			return bool(property_info.usage & PROPERTY_USAGE_EDITOR)
 	return false
+
+
+func _get_editor_property_hint(object: Object, property_name: StringName) -> String:
+	for property_info in object.get_property_list():
+		if StringName(property_info.name) == property_name:
+			return String(property_info.get("hint_string", ""))
+	return ""
 
 
 func _make_unit(friendly: bool, cell: Vector2i, movement: float, speed: int = 10) -> TacticalCharacter:

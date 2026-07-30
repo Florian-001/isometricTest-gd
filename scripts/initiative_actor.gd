@@ -75,13 +75,13 @@ var grid_cell: Vector2i = Vector2i.ZERO
 var is_moving := false
 var remaining_movement: float:
 	get:
-		return _remaining_movement
+		return 0.0 if is_stunned() else _remaining_movement
 var ability_available: bool:
 	get:
-		return _ability_available
+		return _ability_available and can_use_abilities()
 var opportunity_reaction_available: bool:
 	get:
-		return _opportunity_reaction_available
+		return _opportunity_reaction_available and can_use_opportunity_reactions()
 var _grid: IsometricGrid
 var _defeat_emitted := false
 var _remaining_movement := 0.0
@@ -358,6 +358,30 @@ func get_ability_unavailable_reason(ability: AbilityDefinition) -> String:
 	return ability.get_unavailable_reason(self) if ability != null else "Ability unavailable"
 
 
+func is_stunned() -> bool:
+	_initialize_runtime_stats()
+	for active_status in _active_statuses:
+		if (
+			active_status.definition != null
+			and active_status.remaining_turns > 0
+			and active_status.definition.blocks_actions()
+		):
+			return true
+	return false
+
+
+func can_move() -> bool:
+	return current_health > 0 and not is_stunned()
+
+
+func can_use_abilities() -> bool:
+	return current_health > 0 and not is_stunned()
+
+
+func can_use_opportunity_reactions() -> bool:
+	return current_health > 0 and not is_stunned()
+
+
 func apply_status(
 	status_definition: StatusEffectDefinition,
 	source: Object = null,
@@ -370,7 +394,7 @@ func apply_status(
 	):
 		return false
 	_initialize_runtime_stats()
-	var previous_movement := get_movement_range()
+	var previous_state := _capture_status_state()
 	for active_status in _active_statuses:
 		if (
 			active_status.definition != null
@@ -383,10 +407,10 @@ func apply_status(
 				active_status.source_unit = source as TacticalCharacter
 			active_status.remaining_turns = status_definition.duration_turns
 			active_status.processed_this_turn = false
-			_notify_statuses_changed(previous_movement)
+			_notify_statuses_changed(previous_state)
 			return true
 	_active_statuses.append(ActiveStatus.new(status_definition, source, source_unit))
-	_notify_statuses_changed(previous_movement)
+	_notify_statuses_changed(previous_state)
 	return true
 
 
@@ -395,9 +419,9 @@ func remove_status(status_id: StringName) -> bool:
 	for index in range(_active_statuses.size() - 1, -1, -1):
 		var active_status := _active_statuses[index]
 		if active_status.definition != null and active_status.definition.status_id == status_id:
-			var previous_movement := get_movement_range()
+			var previous_state := _capture_status_state()
 			_active_statuses.remove_at(index)
-			_notify_statuses_changed(previous_movement)
+			_notify_statuses_changed(previous_state)
 			return true
 	return false
 
@@ -424,7 +448,7 @@ func advance_status_durations() -> void:
 	_initialize_runtime_stats()
 	if _active_statuses.is_empty():
 		return
-	var previous_movement := get_movement_range()
+	var previous_state := _capture_status_state()
 	var changed := false
 	for index in range(_active_statuses.size() - 1, -1, -1):
 		var active_status := _active_statuses[index]
@@ -436,7 +460,7 @@ func advance_status_durations() -> void:
 		if active_status.remaining_turns <= 0:
 			_active_statuses.remove_at(index)
 	if changed:
-		_notify_statuses_changed(previous_movement)
+		_notify_statuses_changed(previous_state)
 
 
 func get_abilities() -> Array[AbilityDefinition]:
@@ -450,30 +474,30 @@ func get_abilities() -> Array[AbilityDefinition]:
 
 func reset_movement() -> void:
 	_remaining_movement = get_movement_range() if current_health > 0 else 0.0
-	movement_remaining_changed.emit(_remaining_movement, get_movement_range())
+	movement_remaining_changed.emit(remaining_movement, get_movement_range())
 
 
 func can_afford_path(cost: float) -> bool:
-	return cost >= 0.0 and cost <= _remaining_movement + GridPathfinder.COST_EPSILON
+	return can_move() and cost >= 0.0 and cost <= remaining_movement + GridPathfinder.COST_EPSILON
 
 
 func spend_movement(cost: float) -> bool:
-	if cost < 0.0 or not can_afford_path(cost):
+	if not can_move() or cost < 0.0 or not can_afford_path(cost):
 		return false
 	_remaining_movement = maxf(0.0, _remaining_movement - cost)
 	if _remaining_movement <= GridPathfinder.COST_EPSILON:
 		_remaining_movement = 0.0
-	movement_remaining_changed.emit(_remaining_movement, get_movement_range())
+	movement_remaining_changed.emit(remaining_movement, get_movement_range())
 	return true
 
 
 func reset_ability_action() -> void:
 	_ability_available = current_health > 0
-	ability_availability_changed.emit(_ability_available)
+	ability_availability_changed.emit(ability_available)
 
 
 func spend_ability_action() -> bool:
-	if not _ability_available or current_health <= 0:
+	if not ability_available:
 		return false
 	_ability_available = false
 	ability_availability_changed.emit(false)
@@ -482,11 +506,11 @@ func spend_ability_action() -> bool:
 
 func reset_opportunity_reaction() -> void:
 	_opportunity_reaction_available = current_health > 0
-	opportunity_reaction_availability_changed.emit(_opportunity_reaction_available)
+	opportunity_reaction_availability_changed.emit(opportunity_reaction_available)
 
 
 func spend_opportunity_reaction() -> bool:
-	if not _opportunity_reaction_available or current_health <= 0:
+	if not opportunity_reaction_available:
 		return false
 	_opportunity_reaction_available = false
 	opportunity_reaction_availability_changed.emit(false)
@@ -499,16 +523,18 @@ func contains_global_point(point: Vector2) -> bool:
 
 
 func move_along(path: Array[Vector2i], before_step: Callable = Callable()) -> void:
-	if is_moving or _grid == null or path.size() < 2:
+	if is_moving or not can_move() or _grid == null or path.size() < 2:
 		return
 
 	is_moving = true
 	movement_started.emit(self)
 	for index in range(1, path.size()):
+		if not can_move():
+			break
 		var next_cell := path[index]
 		if before_step.is_valid():
 			var can_continue: bool = await before_step.call(self, grid_cell, next_cell)
-			if not can_continue or current_health <= 0:
+			if not can_continue or not can_move():
 				break
 		var target_position := _grid.grid_to_global(next_cell)
 		var distance := global_position.distance_to(target_position)
@@ -636,10 +662,40 @@ func _notify_stats_changed(previous_movement: float) -> void:
 	stats_changed.emit()
 
 
-func _notify_statuses_changed(previous_movement: float) -> void:
+func _capture_status_state() -> Dictionary:
+	return {
+		"movement_range": get_movement_range(),
+		"remaining_movement": remaining_movement,
+		"ability_available": ability_available,
+		"opportunity_reaction_available": opportunity_reaction_available,
+	}
+
+
+func _notify_statuses_changed(previous_state: Dictionary) -> void:
 	statuses_changed.emit()
 	queue_redraw()
-	_notify_stats_changed(previous_movement)
+	var previous_movement_range := float(previous_state.get("movement_range", get_movement_range()))
+	var new_movement_range := get_movement_range()
+	if _remaining_movement > new_movement_range:
+		_remaining_movement = new_movement_range
+	if (
+		not is_equal_approx(
+			float(previous_state.get("remaining_movement", remaining_movement)),
+			remaining_movement
+		)
+		or not is_equal_approx(previous_movement_range, new_movement_range)
+	):
+		movement_remaining_changed.emit(remaining_movement, new_movement_range)
+	var previous_ability := bool(previous_state.get("ability_available", ability_available))
+	if previous_ability != ability_available:
+		ability_availability_changed.emit(ability_available)
+	var previous_reaction := bool(previous_state.get(
+		"opportunity_reaction_available",
+		opportunity_reaction_available
+	))
+	if previous_reaction != opportunity_reaction_available:
+		opportunity_reaction_availability_changed.emit(opportunity_reaction_available)
+	stats_changed.emit()
 
 
 func _show_damage_number(amount: int) -> void:

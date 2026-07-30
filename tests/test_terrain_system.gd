@@ -81,11 +81,12 @@ func test_tile_status_inspector_defaults_visibility_and_catalog() -> void:
 	var names: Array[String] = []
 	for status in statuses:
 		names.append(status.display_name)
-	assert_eq(names, ["Burning", "Focus", "Slow"], "saved status choices should be discovered recursively and sorted")
+	assert_eq(names, ["Burning", "Focus", "Slow", "Stun"], "saved status choices should be discovered recursively and sorted")
 	for path in [
 		"res://resources/statuses/burning.tres",
 		"res://resources/statuses/focus.tres",
 		"res://resources/statuses/slow.tres",
+		"res://resources/statuses/stun.tres",
 	]:
 		assert_true(
 			ResourceLoader.get_resource_uid(path) != ResourceUID.INVALID_ID,
@@ -93,7 +94,7 @@ func test_tile_status_inspector_defaults_visibility_and_catalog() -> void:
 		)
 	assert_eq(
 		StatusCatalogScript.get_labels(statuses),
-		["Burning", "Focus", "Slow"],
+		["Burning", "Focus", "Slow", "Stun"],
 		"unique status choices should use their display names"
 	)
 

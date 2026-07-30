@@ -3,6 +3,7 @@ extends RefCounted
 
 const COST_EPSILON := 0.0001
 const MeleeDeliveryScript = preload("res://scripts/melee_delivery.gd")
+const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
 
 var grid_size: Vector2i
 var _line_of_sight := GridLineOfSight.new()
@@ -109,15 +110,82 @@ func is_valid_primary_target_from(
 		return false
 	if not _line_of_sight.has_line_of_sight(caster_cell, selected_cell, wall_cells):
 		return false
+	var delivery_origin := caster_cell
+	if ability.moves_caster():
+		var movement_path := get_caster_movement_path_from(
+			caster,
+			caster_cell,
+			selected_cell,
+			ability,
+			units,
+			wall_cells
+		)
+		if movement_path.is_empty():
+			return false
+		delivery_origin = AbilityCasterMovementScript.get_landing_cell(movement_path)
 	if (
 		ability.delivery_type == AbilityDefinition.DeliveryType.MELEE
-		and not MeleeDeliveryScript.can_reach(caster_cell, selected_cell, wall_cells)
+		and not MeleeDeliveryScript.can_reach(delivery_origin, selected_cell, wall_cells)
 	):
 		return false
+	if ability.moves_caster():
+		return true
 	if ability.has_target_flag(AbilityDefinition.TargetFlags.CELL):
 		return true
 	var occupant := _get_living_unit_at_from(selected_cell, units, caster, caster_cell)
 	return occupant != null and _matches_unit_flag(caster, occupant, ability)
+
+
+func get_caster_movement_path(
+	caster: TacticalCharacter,
+	selected_cell: Vector2i,
+	ability: AbilityDefinition,
+	units: Array[TacticalCharacter],
+	wall_cells: Dictionary = {}
+) -> Array[Vector2i]:
+	return get_caster_movement_path_from(
+		caster,
+		caster.grid_cell if _is_living(caster) else Vector2i(-1, -1),
+		selected_cell,
+		ability,
+		units,
+		wall_cells
+	)
+
+
+func get_caster_movement_path_from(
+	caster: TacticalCharacter,
+	caster_cell: Vector2i,
+	selected_cell: Vector2i,
+	ability: AbilityDefinition,
+	units: Array[TacticalCharacter],
+	wall_cells: Dictionary = {}
+) -> Array[Vector2i]:
+	var empty_path: Array[Vector2i] = []
+	if not _is_living(caster) or ability == null:
+		return empty_path
+	if not ability.moves_caster():
+		return ability.get_caster_movement_path(
+			caster_cell,
+			selected_cell,
+			grid_size,
+			wall_cells
+		)
+	var target := _get_living_unit_at_from(selected_cell, units, caster, caster_cell)
+	if target == null or target == caster or not _matches_unit_flag(caster, target, ability):
+		return empty_path
+	var blocked_cells := wall_cells.duplicate()
+	for unit in units:
+		if not is_instance_valid(unit) or unit == caster or unit == target:
+			continue
+		# Match runtime pathfinding: defeated units remain occupied until removal exists.
+		blocked_cells[unit.grid_cell] = true
+	return ability.get_caster_movement_path(
+		caster_cell,
+		selected_cell,
+		grid_size,
+		blocked_cells
+	)
 
 
 func get_affected_cells(

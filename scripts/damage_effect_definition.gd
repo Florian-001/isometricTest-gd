@@ -63,7 +63,7 @@ func estimate_for_ai(
 
 func estimate_for_ability(
 	caster: TacticalCharacter,
-	target: TacticalCharacter,
+	_target: TacticalCharacter,
 	simulated_health: int,
 	source_ability: AbilityDefinition
 ) -> Dictionary:

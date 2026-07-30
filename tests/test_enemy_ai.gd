@@ -414,25 +414,89 @@ func test_candidate_search_is_capped_and_never_generates_split_movement() -> voi
 		assert_ne(candidate.sequence, EnemyTurnPlan.Sequence.MOVE_CAST_MOVE, "split movement should remain serialized but never be generated")
 
 
-func test_counterplay_forecast_chooses_safer_plan_without_mutation() -> void:
+func test_action_first_filters_non_action_plans_when_a_positive_cast_exists() -> void:
+	var shot := _make_damage_ability("Committed Shot", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 12)
+	var counter := _make_damage_ability("Long Counter", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 100)
+	var enemy := _make_unit(false, Vector2i(0, 1), 3.0, [shot], _profile(2.0))
+	var target := _make_unit(true, Vector2i(4, 1), 0.0, [counter])
+	var units: Array[TacticalCharacter] = [enemy, target]
+	var pathfinder := GridPathfinderScript.new(Vector2i(7, 4)) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(pathfinder.grid_size) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+
+	var plan := planner.choose_plan(enemy, units, pathfinder, targeting)
+
+	assert_eq(plan.ability, shot, "maximum risk aversion should not suppress an available positive action")
+	for candidate in planner.ranked_candidates:
+		assert_ne(candidate.ability, null, "non-action plans should be filtered whenever an actionable plan exists")
+
+
+func test_action_first_requires_a_move_cast_even_when_counterplay_is_lethal() -> void:
 	var shot := _make_damage_ability("Committed Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 40)
 	var counter := _make_damage_ability("Counter Strike", AbilityDefinition.DeliveryType.MELEE, 1.0, 100)
 	var enemy := _make_unit(false, Vector2i(0, 1), 3.0, [shot])
 	var target := _make_unit(true, Vector2i(4, 1), 0.0, [counter])
 	var units: Array[TacticalCharacter] = [enemy, target]
 
-	enemy.enemy_ai_profile = _profile(0.0)
-	var aggressive := _choose(enemy, units, Vector2i(6, 4))
-	var aggressive_distance := AbilityTargetingScript.new(Vector2i(6, 4)).get_weighted_distance(aggressive.get_end_cell(enemy.grid_cell), target.grid_cell)
-
 	enemy.enemy_ai_profile = _profile(2.0)
-	var cautious := _choose(enemy, units, Vector2i(6, 4))
-	var cautious_distance := AbilityTargetingScript.new(Vector2i(6, 4)).get_weighted_distance(cautious.get_end_cell(enemy.grid_cell), target.grid_cell)
-	assert_true(cautious_distance > aggressive_distance, "two-ply scoring should avoid an otherwise lethal adjacent counterattack")
-	assert_true(cautious.score_breakdown.has("counterplay"), "counterplay should be represented in the score breakdown")
+	var plan := _choose(enemy, units, Vector2i(6, 4))
+	assert_eq(plan.ability, shot, "an action requiring movement should still beat Hold at maximum risk aversion")
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_CAST, "the enemy should move into range and perform the action")
+	assert_true(plan.counterplay_score > plan.effect_score, "the regression scenario should retain its punishing exact reply")
+	assert_true(plan.score_breakdown.has("counterplay"), "counterplay should remain represented in the score breakdown")
 	assert_eq(enemy.grid_cell, Vector2i(0, 1), "planning must not mutate the enemy position")
 	assert_eq(enemy.current_health, 100, "planning must not mutate live health")
 	assert_eq(target.current_health, 100, "forecast damage must remain side-effect-free")
+
+
+func test_action_first_allows_cautious_post_cast_repositioning() -> void:
+	var shot := _make_damage_ability("Point Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
+	var counter := _make_damage_ability("Short Counter", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
+	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [shot], _profile(2.0))
+	var target := _make_unit(true, Vector2i(3, 3), 0.0, [counter])
+	var start_distance := AbilityTargetingScript.new(Vector2i(7, 6)).get_weighted_distance(enemy.grid_cell, target.grid_cell)
+	var plan := _choose(enemy, [enemy, target], Vector2i(7, 6))
+	var end_distance := AbilityTargetingScript.new(Vector2i(7, 6)).get_weighted_distance(plan.get_end_cell(enemy.grid_cell), target.grid_cell)
+
+	assert_eq(plan.ability, shot, "the cautious enemy should perform its available action")
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.CAST_MOVE, "remaining movement should stay available after the action")
+	assert_true(end_distance > start_distance, "risk aversion should still reward safer post-action positioning")
+
+
+func test_action_first_preserves_movement_when_the_action_is_spent() -> void:
+	var shot := _make_damage_ability("Spent Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
+	var counter := _make_damage_ability("Short Counter", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
+	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [shot], _profile(2.0))
+	var target := _make_unit(true, Vector2i(3, 3), 0.0, [counter])
+	enemy.spend_ability_action()
+	var plan := _choose(enemy, [enemy, target], Vector2i(7, 6))
+
+	assert_eq(plan.ability, null, "a spent action should not fabricate an ability plan")
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "movement-only behavior should remain available when no action can be taken")
+
+
+func test_melee_enemy_pursues_attack_range_instead_of_retreating_from_ranged_threat() -> void:
+	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
+	var counter := _make_damage_ability("Long Counter", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 35)
+	var enemy := _make_unit(false, Vector2i(7, 11), 2.0, [slash], _profile(2.0))
+	var target := _make_unit(true, Vector2i(4, 7), 6.0, [counter])
+	var grid_size := Vector2i(12, 12)
+	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
+	var start_distance := targeting.get_weighted_distance(enemy.grid_cell, target.grid_cell)
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var plan := planner.choose_plan(
+		enemy,
+		_typed_units([enemy, target]),
+		GridPathfinderScript.new(grid_size),
+		targeting
+	)
+	var end_distance := targeting.get_weighted_distance(plan.get_end_cell(enemy.grid_cell), target.grid_cell)
+
+	assert_eq(plan.ability, null, "the melee enemy should still be unable to attack this turn")
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "the melee enemy should spend its turn pursuing")
+	assert_true(end_distance < start_distance, "melee pursuit should reduce the distance to attack range")
+	assert_eq(plan.get_end_cell(enemy.grid_cell), Vector2i(6, 10), "the sample melee enemy should take its best gap-closing step")
+	assert_eq(planner.ranked_candidates.size(), 1, "retreat and Hold should not compete with a valid melee pursuit")
 
 
 func test_threat_forecast_prefers_an_equally_effective_safe_destination() -> void:

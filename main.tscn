@@ -21,7 +21,7 @@
 [ext_resource type="PackedScene" path="res://scenes/inventory_screen.tscn" id="19_inventory_screen"]
 [ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/iron_sword.tres" id="20_sword"]
 [ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/ranger_armor.tres" id="21_armor"]
-[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="21_qsp4k"]
+[ext_resource type="Resource" uid="uid://c04280vi2qtp2" path="res://resources/ai/general_ai.tres" id="21_qsp4k"]
 [ext_resource type="Resource" uid="uid://pghwydiamt0o" path="res://resources/items/sage_charm.tres" id="22_charm"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="22_xuqvo"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="23_item_type"]
@@ -101,35 +101,36 @@ wall_height = 20.0
 [node name="Characters" type="Node2D" parent="." unique_id=557259408]
 
 [node name="FriendA" type="Node2D" parent="Characters" unique_id=1740941279]
-z_index = 111
+z_index = 114
 script = ExtResource("3_character")
 definition = ExtResource("5_friendly")
-max_health_override = 100
+max_health_override = 48
 movement_range_override = 6.0
 speed_override = 12
 starting_equipment_overrides = Array[ExtResource("23_item_type")]([ExtResource("26_frost_bow")])
-starting_grid_cell = Vector2i(4, 7)
+starting_grid_cell = Vector2i(5, 9)
+
+[node name="RangedEnemy" parent="Characters" unique_id=1457671969 instance=ExtResource("12_ranged_enemy")]
+z_index = 113
+enemy_ai_profile = ExtResource("21_qsp4k")
+override_template_abilities = true
+ability_overrides = Array[ExtResource("22_xuqvo")]([ExtResource("23_qsp4k")])
+starting_grid_cell = Vector2i(4, 9)
+
+[node name="MeleeEnemy" parent="Characters" unique_id=921107907 instance=ExtResource("6_enemy")]
+z_index = 116
+enemy_ai_profile = ExtResource("21_qsp4k")
+movement_range_override = 2.0
+starting_grid_cell = Vector2i(7, 9)
 
 [node name="FriendB" type="Node2D" parent="Characters" unique_id=2129219972]
-z_index = 114
+z_index = 117
 script = ExtResource("3_character")
 definition = ExtResource("5_friendly")
 max_health_override = 100
 movement_range_override = 5.0
 speed_override = 8
-starting_grid_cell = Vector2i(4, 10)
-
-[node name="RangedEnemy" parent="Characters" unique_id=1457671969 instance=ExtResource("12_ranged_enemy")]
-z_index = 111
-enemy_ai_profile = ExtResource("21_qsp4k")
-override_template_abilities = true
-ability_overrides = Array[ExtResource("22_xuqvo")]([ExtResource("23_qsp4k")])
-starting_grid_cell = Vector2i(1, 10)
-
-[node name="MeleeEnemy" parent="Characters" unique_id=921107907 instance=ExtResource("6_enemy")]
-z_index = 118
-movement_range_override = 2.0
-starting_grid_cell = Vector2i(7, 11)
+starting_grid_cell = Vector2i(8, 9)
 
 [node name="TurnManager" type="Node" parent="." unique_id=226977299]
 script = ExtResource("7_turn_manager")

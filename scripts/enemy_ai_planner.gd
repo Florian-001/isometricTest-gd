@@ -289,12 +289,20 @@ func _generate_candidates(
 			if cast_move != null:
 				_append_unique(candidates, seen, cast_move, start)
 
-	var has_useful_cast := false
+	var has_action_candidate := false
 	for plan in candidates:
 		if plan.ability != null:
-			has_useful_cast = true
+			has_action_candidate = true
 			break
-	if not has_useful_cast and candidates.size() < MAX_CANDIDATES:
+	# Safety can choose among useful actions, but it must not replace one with inactivity.
+	if has_action_candidate:
+		var action_candidates: Array[EnemyTurnPlan] = []
+		for plan in candidates:
+			if plan.ability != null:
+				action_candidates.append(plan)
+		return action_candidates
+
+	if candidates.size() < MAX_CANDIDATES:
 		var pursue := _build_pursuit_candidate(
 			actor,
 			start,
@@ -307,6 +315,10 @@ func _generate_candidates(
 		)
 		if pursue != null:
 			_append_unique(candidates, seen, pursue, start)
+			# A melee-focused unit gains nothing by replacing progress toward attack
+			# range with a safer retreat. Fall back to safety only when pursuit fails.
+			if _has_only_usable_melee_hostile_abilities(actor):
+				return [pursue]
 
 	if candidates.size() < MAX_CANDIDATES and _quick_cell_danger(
 		actor,
@@ -1602,6 +1614,24 @@ func _has_usable_hostile_ability(actor: TacticalCharacter, snapshot: AIBoardSnap
 	return false
 
 
+func _has_only_usable_melee_hostile_abilities(actor: TacticalCharacter) -> bool:
+	var has_melee := false
+	for ability in actor.get_abilities():
+		if (
+			ability == null
+			or not ability.can_be_used_by(actor)
+			or not (
+				ability.has_target_flag(AbilityDefinition.TargetFlags.ENEMY)
+				or ability.has_target_flag(AbilityDefinition.TargetFlags.CELL)
+			)
+		):
+			continue
+		if ability.delivery_type != AbilityDefinition.DeliveryType.MELEE:
+			return false
+		has_melee = true
+	return has_melee
+
+
 func _nearest_opponent_distance(
 	actor: TacticalCharacter,
 	cell: Vector2i,
@@ -1933,7 +1963,7 @@ func _get_snapshot_key(snapshot: AIBoardSnapshot) -> String:
 
 
 func _get_best_current_cast(candidates: Array[EnemyTurnPlan]) -> EnemyTurnPlan:
-	var best: EnemyTurnPlan
+	var best: EnemyTurnPlan = null
 	for plan in candidates:
 		if plan.sequence != EnemyTurnPlan.Sequence.CAST_ONLY or plan.ability == null:
 			continue

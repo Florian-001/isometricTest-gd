@@ -8,15 +8,17 @@ func _init() -> void:
 
 
 func _run() -> void:
-	var main_scene := load("res://main.tscn") as PackedScene
+	var main_scene := load("res://scenes/battle.tscn") as PackedScene
+	var terrain_showcase := load("res://resources/maps/terrain_showcase.tres") as BattleMapDefinition
 	var main := main_scene.instantiate()
+	main.map_definition = terrain_showcase
 	root.add_child(main)
 	await process_frame
 
 	var inventory := main.get_node("GeneralInventory") as GeneralInventory
 	var screen := main.get_node("HUD/InventoryScreen") as InventoryScreen
-	var friend_a := main.get_node("Characters/FriendA") as TacticalCharacter
-	var friend_b := main.get_node("Characters/FriendB") as TacticalCharacter
+	var friend_a := main.characters_container.get_node("FriendA") as TacticalCharacter
+	var friend_b := main.characters_container.get_node("FriendB") as TacticalCharacter
 	var equipment_entries := screen.equipment_entries
 
 	var starting_property := _get_property_info(inventory, &"starting_items")
@@ -24,7 +26,7 @@ func _run() -> void:
 	_check(starting_property.get("type") == TYPE_ARRAY, "GeneralInventory Starting Items should be an array")
 	_check(bool(int(starting_property.get("usage", 0)) & PROPERTY_USAGE_EDITOR), "GeneralInventory Starting Items should be Inspector-editable")
 	_check(String(starting_property.get("hint_string", "")).contains("ItemDefinition"), "GeneralInventory Starting Items should accept only ItemDefinition resources")
-	_check(_get_property_info(main, &"starting_items").is_empty(), "Main should not duplicate the inventory-owned starting-item field")
+	_check(_get_property_info(main, &"starting_items").is_empty(), "the Battle root should not duplicate the inventory-owned starting-item field")
 	_check(inventory.starting_items.size() == 6, "GeneralInventory should expose all configured unused sample items")
 	_check(
 		inventory.starting_items.map(func(item: ItemDefinition): return item.display_name)
@@ -42,7 +44,7 @@ func _run() -> void:
 	_check(_find_item_button(screen, "Frost Bow").tooltip_text.contains("Reduce Movement Range by 30%"), "weapon tooltips should describe their applied status")
 	_check(_find_item_button(screen, "Iron Sword").text.contains("20 DMG"), "unused weapons should show their damage")
 	_check(screen.stats_entries.get_child_count() == 7, "character details should show all seven combat-stat rows")
-	_check(_stat_value(screen, "health") == "100 / 100", "the selected character should show current and maximum Health")
+	_check(_stat_value(screen, "health") == "48 / 48", "the selected character should show current and maximum Health")
 	_check(_stat_value(screen, "movement") == "6.5", "Movement should include the selected character's Speed adjustment")
 	_check(_stat_value(screen, "strength") == "10", "FriendA should lose the inherited Iron Sword Strength bonus")
 	_check(_stat_change(screen, "strength").is_empty(), "Frost Bow should not add Strength")
@@ -109,7 +111,7 @@ func _run() -> void:
 	_check(not _ability_tooltip(screen, "Arrow").contains("Weapon applies Slow"), "swapping weapons should immediately remove the old weapon status tooltip")
 
 	friend_a.apply_damage(5)
-	_check(_stat_value(screen, "health") == "95 / 100", "health signals should refresh an open character-details panel")
+	_check(_stat_value(screen, "health") == "43 / 48", "health signals should refresh an open character-details panel")
 	friend_a.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
 	_check(_stat_value(screen, "weapon_damage") == "0", "direct equipment changes should refresh the open Inventory")
 	_check((screen.equipment_entries.get_child(0) as Button).disabled, "direct equipment changes should also refresh the equipment slots")
@@ -182,6 +184,7 @@ func _run() -> void:
 	await process_frame
 
 	var empty_main := main_scene.instantiate()
+	empty_main.map_definition = terrain_showcase
 	var empty_starting_items: Array[ItemDefinition] = []
 	(empty_main.get_node("GeneralInventory") as GeneralInventory).starting_items = empty_starting_items
 	root.add_child(empty_main)
@@ -191,7 +194,7 @@ func _run() -> void:
 		"an empty GeneralInventory Starting Items array should create an empty unused inventory"
 	)
 	_check(
-		(empty_main.get_node("Characters/FriendA") as TacticalCharacter).get_equipped_items().size() == 3,
+		(empty_main.characters_container.get_node("FriendA") as TacticalCharacter).get_equipped_items().size() == 3,
 		"an empty unused inventory should not change character starting equipment"
 	)
 	empty_main.queue_free()

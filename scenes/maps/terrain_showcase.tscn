@@ -1,0 +1,100 @@
+[gd_scene load_steps=17 format=3]
+
+[ext_resource type="Script" path="res://scripts/battle_map.gd" id="1_map"]
+[ext_resource type="Script" path="res://scripts/isometric_grid.gd" id="2_grid"]
+[ext_resource type="Script" path="res://scripts/tactical_terrain.gd" id="3_terrain"]
+[ext_resource type="Script" path="res://scripts/tactical_tile.gd" id="4_tile"]
+[ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="5_palette"]
+[ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="6_mud"]
+[ext_resource type="Resource" path="res://resources/tiles/fire.tres" id="7_fire"]
+[ext_resource type="Resource" path="res://resources/tiles/ice.tres" id="8_ice"]
+[ext_resource type="Script" path="res://scripts/tactical_wall.gd" id="9_wall"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="10_friend_a"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="11_friend_b"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_warrior.tscn" id="12_warrior"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_archer.tscn" id="13_archer"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="14_general_ai"]
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="15_ability_type"]
+[ext_resource type="Resource" path="res://resources/abilities/arrow.tres" id="16_arrow"]
+
+[node name="TerrainShowcase" type="Node2D"]
+script = ExtResource("1_map")
+
+[node name="Grid" type="Node2D" parent="."]
+position = Vector2(640, 96)
+script = ExtResource("2_grid")
+
+[node name="Terrain" type="Node" parent="."]
+script = ExtResource("3_terrain")
+palette = ExtResource("5_palette")
+
+[node name="Mud_3_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("6_mud")
+grid_cell = Vector2i(3, 4)
+
+[node name="Mud_4_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("6_mud")
+grid_cell = Vector2i(4, 4)
+
+[node name="Fire_6_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("7_fire")
+grid_cell = Vector2i(6, 4)
+
+[node name="Fire_7_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("7_fire")
+grid_cell = Vector2i(7, 4)
+
+[node name="Ice_8_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("8_ice")
+grid_cell = Vector2i(8, 4)
+
+[node name="Ice_9_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("8_ice")
+grid_cell = Vector2i(9, 4)
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="Wall_5_4" type="Node2D" parent="Walls"]
+z_index = 109
+position = Vector2(688, 312)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 4)
+wall_height = 20.0
+
+[node name="Wall_5_5" type="Node2D" parent="Walls"]
+z_index = 110
+position = Vector2(640, 336)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 5)
+wall_height = 20.0
+
+[node name="Wall_5_6" type="Node2D" parent="Walls"]
+z_index = 111
+position = Vector2(592, 360)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 6)
+wall_height = 20.0
+
+[node name="Characters" type="Node2D" parent="."]
+
+[node name="FriendA" parent="Characters" instance=ExtResource("10_friend_a")]
+starting_grid_cell = Vector2i(5, 9)
+
+[node name="RangedEnemy" parent="Characters" instance=ExtResource("13_archer")]
+enemy_ai_profile = ExtResource("14_general_ai")
+override_template_abilities = true
+ability_overrides = Array[ExtResource("15_ability_type")]([ExtResource("16_arrow")])
+starting_grid_cell = Vector2i(4, 9)
+
+[node name="MeleeEnemy" parent="Characters" instance=ExtResource("12_warrior")]
+movement_range_override = 2.0
+starting_grid_cell = Vector2i(7, 9)
+
+[node name="FriendB" parent="Characters" instance=ExtResource("11_friend_b")]
+starting_grid_cell = Vector2i(8, 9)

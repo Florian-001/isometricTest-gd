@@ -79,11 +79,12 @@ func _run() -> void:
 	_check(manager.current_unit == survivor, "combat should advance past a unit defeated by turn-start status damage")
 	_check(started_units == [survivor], "a unit defeated during turn-start processing should not emit an actionable turn")
 
-	var main_scene := load("res://main.tscn") as PackedScene
+	var main_scene := load("res://scenes/battle.tscn") as PackedScene
 	var main := main_scene.instantiate()
+	main.map_definition = load("res://resources/maps/terrain_showcase.tres") as BattleMapDefinition
 	get_root().add_child(main)
 	await process_frame
-	var friend_a := main.get_node("Characters/FriendA") as TacticalCharacter
+	var friend_a := main.characters_container.get_node("FriendA") as TacticalCharacter
 	var movement_before := friend_a.remaining_movement
 	var mud_path: Array[Vector2i] = [Vector2i(2, 3), Vector2i(3, 4)]
 	await main._begin_friendly_move(mud_path)

@@ -23,6 +23,7 @@ const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_
 const StatusCatalogScript = preload("res://addons/tile_painter/status_effect_catalog.gd")
 const ItemCatalogScript = preload("res://addons/tile_painter/item_definition_catalog.gd")
 const ItemArrayModelScript = preload("res://addons/tile_painter/item_array_editor_model.gd")
+const ItemModifierModelScript = preload("res://addons/tile_painter/item_modifier_editor_model.gd")
 
 
 func suite_name() -> String:
@@ -325,6 +326,90 @@ func test_ability_resources_and_sample_assignment() -> void:
 	item.slot = ItemDefinition.EquipmentSlot.ACCESSORY
 	assert_false(_has_editor_property(item, &"weapon_type"), "Weapon Type should be hidden for Accessory items")
 	assert_false(_has_editor_property(item, &"status_effect"), "Status Effect should be hidden for Accessory items")
+
+
+func test_inline_item_modifier_inspector_model_and_resources() -> void:
+	var strength := StatModifierDefinition.new()
+	strength.stat = UnitStat.Type.STRENGTH
+	strength.operation = StatModifierDefinition.Operation.FLAT
+	strength.value = 2.0
+	var initial: Array[StatModifierDefinition] = [strength, null]
+	var copied := ItemModifierModelScript.copy_modifiers(initial)
+	assert_eq(copied.size(), 2, "the inline editor should preserve every modifier row")
+	assert_eq(copied[0], strength, "copying should preserve shared modifier resources")
+	assert_eq(copied[1], null, "copying should preserve null modifier positions")
+	assert_eq(copied.get_typed_script(), load("res://scripts/stat_modifier_definition.gd"), "modifier edits should retain the typed array element script")
+
+	var appended := ItemModifierModelScript.append_default(initial)
+	assert_eq(appended.size(), 3, "Add Modifier should append one row")
+	assert_eq(appended[2].stat, UnitStat.Type.STRENGTH, "new modifier rows should default to Strength")
+	assert_eq(appended[2].operation, StatModifierDefinition.Operation.FLAT, "new modifier rows should default to Flat")
+	assert_true(is_zero_approx(appended[2].value), "new modifier rows should default to zero")
+	assert_eq(initial.size(), 2, "editor model operations should not mutate the source array")
+
+	var repaired := ItemModifierModelScript.replace_null(initial, 1)
+	assert_true(repaired[1] is StatModifierDefinition, "Create should repair a null modifier row")
+	assert_eq(ItemModifierModelScript.remove_entry(repaired, 0).size(), 1, "Remove should delete only the selected modifier row")
+	assert_true(
+		is_equal_approx(
+			ItemModifierModelScript.to_display_value(0.25, StatModifierDefinition.Operation.PERCENT_ADD),
+			25.0
+		),
+		"percentage-add values should display as human percentages"
+	)
+	assert_true(
+		is_equal_approx(
+			ItemModifierModelScript.to_stored_value(-30.0, StatModifierDefinition.Operation.PERCENT_MULTIPLY),
+			-0.3
+		),
+		"negative human percentages should convert back to decimal storage"
+	)
+	assert_true(
+		is_equal_approx(
+			ItemModifierModelScript.to_display_value(-1.5, StatModifierDefinition.Operation.FLAT),
+			-1.5
+		),
+		"flat values should display without conversion"
+	)
+	assert_eq(ItemModifierModelScript.get_operation_label(StatModifierDefinition.Operation.FLAT), "Flat", "flat operations should have a concise label")
+	assert_eq(ItemModifierModelScript.get_operation_label(StatModifierDefinition.Operation.PERCENT_ADD), "Add %", "additive percentages should have a concise label")
+	assert_eq(ItemModifierModelScript.get_operation_label(StatModifierDefinition.Operation.PERCENT_MULTIPLY), "Multiply %", "multiplicative percentages should have a concise label")
+
+	var inspector_source := FileAccess.get_file_as_string("res://addons/tile_painter/item_modifier_inspector.gd")
+	var property_source := FileAccess.get_file_as_string("res://addons/tile_painter/item_modifier_editor_property.gd")
+	var plugin_source := FileAccess.get_file_as_string("res://addons/tile_painter/tile_painter_plugin.gd")
+	assert_true(inspector_source.contains('name != "modifiers"'), "the custom Inspector should replace only ItemDefinition.modifiers")
+	assert_true(inspector_source.contains("object is ItemDefinition"), "the modifier Inspector should handle ItemDefinition resources")
+	assert_true(property_source.contains("Add Modifier"), "the inline editor should expose Add Modifier")
+	assert_true(property_source.contains("add_do_property") and property_source.contains("add_undo_property"), "inline field edits should participate in Inspector undo/redo")
+	assert_true(plugin_source.contains("ItemModifierInspector"), "the enabled editor plugin should register the modifier Inspector")
+
+	var iron_sword := load("res://resources/items/iron_sword.tres") as ItemDefinition
+	assert_eq(iron_sword.modifiers.size(), 1, "existing item modifier arrays should remain intact")
+	assert_eq(iron_sword.modifiers[0].stat, UnitStat.Type.STRENGTH, "Iron Sword should retain its Strength modifier")
+	assert_eq(iron_sword.modifiers[0].operation, StatModifierDefinition.Operation.FLAT, "Iron Sword should retain its Flat operation")
+	assert_true(is_equal_approx(iron_sword.modifiers[0].value, 2.0), "Iron Sword should retain its +2 value")
+	var goblin_club := load("res://resources/items/goblin_club.tres") as ItemDefinition
+	assert_eq(goblin_club.modifiers[0].stat, UnitStat.Type.SPEED, "Goblin Club should retain its Speed modifier")
+	assert_true(is_equal_approx(goblin_club.modifiers[0].value, -1.0), "Goblin Club should retain its negative value")
+
+	var round_trip_item := ItemDefinition.new()
+	var percent_modifier := StatModifierDefinition.new()
+	percent_modifier.stat = UnitStat.Type.MOVEMENT_RANGE
+	percent_modifier.operation = StatModifierDefinition.Operation.PERCENT_ADD
+	percent_modifier.value = -0.3
+	var round_trip_modifiers: Array[StatModifierDefinition] = [percent_modifier]
+	round_trip_item.modifiers = round_trip_modifiers
+	var round_trip_path := "res://Godot/item_modifier_round_trip.tres"
+	assert_eq(ResourceSaver.save(round_trip_item, round_trip_path), OK, "item modifiers should save successfully")
+	var loaded_item := ResourceLoader.load(round_trip_path, "", ResourceLoader.CACHE_MODE_REPLACE) as ItemDefinition
+	assert_true(loaded_item != null, "saved item modifiers should reload successfully")
+	if loaded_item != null:
+		assert_eq(loaded_item.modifiers.size(), 1, "reloaded items should retain modifier rows")
+		assert_eq(loaded_item.modifiers[0].stat, UnitStat.Type.MOVEMENT_RANGE, "reloaded modifiers should retain their stat")
+		assert_eq(loaded_item.modifiers[0].operation, StatModifierDefinition.Operation.PERCENT_ADD, "reloaded modifiers should retain their operation")
+		assert_true(is_equal_approx(loaded_item.modifiers[0].value, -0.3), "reloaded modifiers should retain decimal percentage storage")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(round_trip_path))
 
 
 func test_weapon_compatibility_is_independent_from_damage_type_and_delivery() -> void:
@@ -1324,7 +1409,7 @@ func test_walls_block_area_effects_and_beams() -> void:
 
 
 func test_sample_scene_contains_editable_wall_barrier() -> void:
-	var scene := load("res://main.tscn") as PackedScene
+	var scene := load("res://scenes/maps/terrain_showcase.tscn") as PackedScene
 	var root: Node = track(scene.instantiate())
 	var walls: Node = root.get_node("Walls")
 	var cells: Array[Vector2i] = []

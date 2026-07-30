@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/initiative_actor.gd" id="1_actor"]
+[ext_resource type="Resource" path="res://resources/friendly_spellcaster.tres" id="2_definition"]
+
+[node name="FriendB" type="Node2D"]
+script = ExtResource("1_actor")
+definition = ExtResource("2_definition")
+max_health_override = 100
+movement_range_override = 5.0
+speed_override = 8

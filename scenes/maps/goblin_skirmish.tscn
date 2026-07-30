@@ -1,0 +1,39 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/battle_map.gd" id="1_map"]
+[ext_resource type="Script" path="res://scripts/isometric_grid.gd" id="2_grid"]
+[ext_resource type="Script" path="res://scripts/tactical_terrain.gd" id="3_terrain"]
+[ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="4_palette"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="5_friend_a"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="6_friend_b"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_warrior.tscn" id="7_warrior"]
+
+[node name="GoblinSkirmish" type="Node2D"]
+script = ExtResource("1_map")
+
+[node name="Grid" type="Node2D" parent="."]
+position = Vector2(640, 96)
+script = ExtResource("2_grid")
+
+[node name="Terrain" type="Node" parent="."]
+script = ExtResource("3_terrain")
+palette = ExtResource("4_palette")
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="Characters" type="Node2D" parent="."]
+
+[node name="FriendA" parent="Characters" instance=ExtResource("5_friend_a")]
+starting_grid_cell = Vector2i(4, 9)
+
+[node name="FriendB" parent="Characters" instance=ExtResource("6_friend_b")]
+starting_grid_cell = Vector2i(7, 9)
+
+[node name="GoblinWarriorA" parent="Characters" instance=ExtResource("7_warrior")]
+starting_grid_cell = Vector2i(3, 2)
+
+[node name="GoblinWarriorB" parent="Characters" instance=ExtResource("7_warrior")]
+starting_grid_cell = Vector2i(6, 2)
+
+[node name="GoblinWarriorC" parent="Characters" instance=ExtResource("7_warrior")]
+starting_grid_cell = Vector2i(9, 2)

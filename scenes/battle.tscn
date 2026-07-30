@@ -1,0 +1,220 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/initiative_battle_controller.gd" id="1_controller"]
+[ext_resource type="Script" path="res://scripts/initiative_turn_manager.gd" id="2_turn_manager"]
+[ext_resource type="Script" path="res://scripts/tactical_camera_controller.gd" id="3_camera"]
+[ext_resource type="PackedScene" path="res://scenes/turn_order_bar.tscn" id="4_order_bar"]
+[ext_resource type="PackedScene" path="res://scenes/ability_bar.tscn" id="5_ability_bar"]
+[ext_resource type="Script" path="res://scripts/general_inventory.gd" id="6_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/inventory_screen.tscn" id="7_inventory_screen"]
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="8_item_type"]
+[ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="9_sword"]
+[ext_resource type="Resource" path="res://resources/items/ranger_armor.tres" id="10_armor"]
+[ext_resource type="Resource" path="res://resources/items/sage_charm.tres" id="11_charm"]
+[ext_resource type="Resource" path="res://resources/items/wooden_sword.tres" id="12_wooden_sword"]
+[ext_resource type="Resource" path="res://resources/items/ranger_bow.tres" id="13_ranger_bow"]
+[ext_resource type="Resource" path="res://resources/items/frost_bow.tres" id="14_frost_bow"]
+
+[node name="Battle" type="Node2D"]
+script = ExtResource("1_controller")
+
+[node name="MapContainer" type="Node2D" parent="."]
+
+[node name="GeneralInventory" type="Node" parent="."]
+script = ExtResource("6_inventory")
+starting_items = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("10_armor"), ExtResource("11_charm"), ExtResource("12_wooden_sword"), ExtResource("13_ranger_bow"), ExtResource("14_frost_bow")])
+
+[node name="TurnManager" type="Node" parent="."]
+script = ExtResource("2_turn_manager")
+
+[node name="TacticalCamera" type="Camera2D" parent="."]
+position = Vector2(640, 360)
+script = ExtResource("3_camera")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="TurnOrderBar" parent="HUD" instance=ExtResource("4_order_bar")]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -284.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 106.0
+grow_horizontal = 0
+
+[node name="AbilityBar" parent="HUD" instance=ExtResource("5_ability_bar")]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -242.0
+offset_top = -98.0
+offset_right = 242.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="HelpBackground" type="ColorRect" parent="HUD"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 420.0
+offset_bottom = 78.0
+mouse_filter = 2
+color = Color(0.025, 0.047, 0.075, 0.9)
+
+[node name="TurnPanel" type="PanelContainer" parent="HUD"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -360.0
+offset_top = -138.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="HUD/TurnPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="HUD/TurnPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="TurnStatus" type="Label" parent="HUD/TurnPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 18
+text = "Preparing battle..."
+
+[node name="MovementStatus" type="Label" parent="HUD/TurnPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = ""
+
+[node name="EndTurnButton" type="Button" parent="HUD/TurnPanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "End Turn"
+
+[node name="DevButton" type="Button" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -56.0
+offset_right = 104.0
+offset_bottom = -16.0
+grow_vertical = 0
+tooltip_text = "Show AI decision score history"
+theme_override_font_sizes/font_size = 15
+text = "Dev"
+
+[node name="InventoryButton" type="Button" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 116.0
+offset_top = -56.0
+offset_right = 226.0
+offset_bottom = -16.0
+grow_vertical = 0
+tooltip_text = "Open the general inventory and character equipment"
+theme_override_font_sizes/font_size = 15
+toggle_mode = true
+text = "Inventory"
+
+[node name="LevelsButton" type="Button" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 238.0
+offset_top = -56.0
+offset_right = 332.0
+offset_bottom = -16.0
+grow_vertical = 0
+tooltip_text = "Return to level selection"
+theme_override_font_sizes/font_size = 15
+text = "Levels"
+
+[node name="DevHistoryPanel" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -610.0
+offset_right = 666.0
+offset_bottom = -70.0
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="HUD/DevHistoryPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="HUD/DevHistoryPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="HBoxContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 18
+text = "AI Debug Score History"
+
+[node name="Spacer" type="Control" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CloseHint" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.68, 0.78, 1)
+theme_override_font_sizes/font_size = 12
+text = "Press Dev to close"
+
+[node name="HistoryScroll" type="ScrollContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 480)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="DebugText" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/HistoryScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "No AI decisions recorded yet."
+autowrap_mode = 2
+
+[node name="InventoryScreen" parent="HUD" instance=ExtResource("7_inventory_screen")]
+
+[node name="ReturnToLevelsDialog" type="ConfirmationDialog" parent="HUD"]
+process_mode = 3
+title = "Return to Level Select?"
+dialog_text = "Leave this battle? Current progress will be lost."
+ok_button_text = "Return"
+
+[node name="HelpText" type="Label" parent="HUD"]
+offset_left = 28.0
+offset_top = 25.0
+offset_right = 410.0
+offset_bottom = 70.0
+theme_override_colors/font_color = Color(0.86, 0.93, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "Select a blue character, hover a highlighted cell, then click to move.\nWASD or middle-drag to pan  •  Mouse wheel to zoom  •  Esc to clear"

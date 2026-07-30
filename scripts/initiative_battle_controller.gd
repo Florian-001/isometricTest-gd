@@ -1,24 +1,30 @@
+class_name TacticalBattle
 extends Node2D
 
 const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
+const BattleMapDefinitionScript = preload("res://scripts/battle_map_definition.gd")
+const BattleMapScript = preload("res://scripts/battle_map.gd")
 
+signal return_to_level_select_requested
+
+@export_category("Battle Map")
+@export var map_definition: BattleMapDefinitionScript
 @export var center_camera_on_start := true
 @export_category("Developer Tools")
 @export var enable_dev_tools := true
 @export_range(1, 10, 1) var ai_debug_candidate_count := 5
 @export_range(1, 100, 1) var ai_debug_history_limit := 30
 
-@onready var grid: IsometricGrid = $Grid
-@onready var terrain: TacticalTerrain = $Terrain
-@onready var walls_container: Node2D = $Walls
-@onready var characters_container: Node2D = $Characters
+@onready var map_container: Node2D = $MapContainer
 @onready var turn_manager: TurnManager = $TurnManager
 @onready var tactical_camera: TacticalCameraController = $TacticalCamera
 @onready var turn_order_bar: TurnOrderBar = $HUD/TurnOrderBar
 @onready var ability_bar: AbilityBar = $HUD/AbilityBar
 @onready var general_inventory: GeneralInventory = $GeneralInventory
 @onready var inventory_button: Button = $HUD/InventoryButton
+@onready var levels_button: Button = $HUD/LevelsButton
 @onready var inventory_screen: InventoryScreen = $HUD/InventoryScreen
+@onready var return_to_levels_dialog: ConfirmationDialog = $HUD/ReturnToLevelsDialog
 @onready var turn_status: Label = $HUD/TurnPanel/Margin/VBox/TurnStatus
 @onready var movement_status: Label = $HUD/TurnPanel/Margin/VBox/MovementStatus
 @onready var end_turn_button: Button = $HUD/TurnPanel/Margin/VBox/EndTurnButton
@@ -30,6 +36,11 @@ var _pathfinder: GridPathfinder
 var _enemy_ai_planner: EnemyAIPlanner
 var _ability_targeting: AbilityTargeting
 var _ability_executor: AbilityExecutor
+var battle_map: BattleMapScript
+var grid: IsometricGrid
+var terrain: TacticalTerrain
+var walls_container: Node2D
+var characters_container: Node2D
 var _characters: Array[TacticalCharacter] = []
 var _walls: Array[TacticalWall] = []
 var _selected_character: TacticalCharacter
@@ -45,9 +56,20 @@ var _has_mouse_screen_position := false
 var _ai_debug_history: Array[String] = []
 var _combat_over := false
 var _combat_result_text := ""
+var _return_dialog_paused_battle := false
 
 
 func _ready() -> void:
+	levels_button.pressed.connect(_on_levels_button_pressed)
+	return_to_levels_dialog.confirmed.connect(_on_return_to_levels_confirmed)
+	return_to_levels_dialog.canceled.connect(_on_return_to_levels_canceled)
+	if not _instantiate_battle_map():
+		_combat_over = true
+		_combat_result_text = "Invalid Level"
+		_movement_locked = true
+		_refresh_ability_bar()
+		_update_turn_hud()
+		return
 	_pathfinder = GridPathfinder.new(grid.grid_size)
 	_enemy_ai_planner = EnemyAIPlanner.new()
 	_ability_targeting = AbilityTargeting.new(grid.grid_size)
@@ -93,6 +115,45 @@ func _ready() -> void:
 	if not _check_combat_end():
 		turn_manager.start_combat(_characters)
 	_update_turn_hud()
+
+
+func _exit_tree() -> void:
+	_resume_after_return_dialog()
+
+
+func shutdown_battle() -> void:
+	_resume_after_return_dialog()
+	if _combat_over and turn_manager.current_unit == null:
+		return
+	_combat_over = true
+	_movement_locked = true
+	_selected_character = null
+	_selected_ability = null
+	turn_manager.stop_combat()
+	if grid != null:
+		grid.clear_overlays()
+	set_process(false)
+
+
+func _instantiate_battle_map() -> bool:
+	if map_definition == null or map_definition.map_scene == null:
+		push_error("TacticalBattle requires a configured BattleMapDefinition.")
+		return false
+	var instance := map_definition.map_scene.instantiate()
+	if not instance is BattleMapScript:
+		instance.free()
+		push_error("Level scene must use BattleMap as its root type.")
+		return false
+	map_container.add_child(instance)
+	battle_map = instance as BattleMapScript
+	if not battle_map.is_configured():
+		push_error("Level scene is missing one or more required map containers.")
+		return false
+	grid = battle_map.get_grid()
+	terrain = battle_map.get_terrain()
+	walls_container = battle_map.get_walls()
+	characters_container = battle_map.get_characters()
+	return true
 
 
 func _process(_delta: float) -> void:
@@ -590,6 +651,31 @@ func _on_dev_button_pressed() -> void:
 	if not enable_dev_tools:
 		return
 	dev_history_panel.visible = not dev_history_panel.visible
+
+
+func _on_levels_button_pressed() -> void:
+	if not _return_dialog_paused_battle:
+		_return_dialog_paused_battle = true
+		get_tree().paused = true
+	return_to_levels_dialog.popup_centered()
+
+
+func _on_return_to_levels_confirmed() -> void:
+	_resume_after_return_dialog()
+	shutdown_battle()
+	return_to_level_select_requested.emit()
+
+
+func _on_return_to_levels_canceled() -> void:
+	_resume_after_return_dialog()
+
+
+func _resume_after_return_dialog() -> void:
+	if not _return_dialog_paused_battle:
+		return
+	_return_dialog_paused_battle = false
+	if get_tree() != null:
+		get_tree().paused = false
 
 
 func _on_inventory_button_toggled(open: bool) -> void:

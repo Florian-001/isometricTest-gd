@@ -78,6 +78,13 @@ func _find_grid() -> IsometricGrid:
 		return _grid
 	if not is_inside_tree():
 		return null
+	var ancestor := get_parent()
+	while ancestor != null:
+		var nearby_grid := ancestor.get_node_or_null("Grid") as IsometricGrid
+		if nearby_grid != null:
+			_grid = nearby_grid
+			return _grid
+		ancestor = ancestor.get_parent()
 	var root := get_tree().edited_scene_root if Engine.is_editor_hint() else null
 	if root == null:
 		root = get_tree().current_scene

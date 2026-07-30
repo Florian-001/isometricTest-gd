@@ -279,7 +279,7 @@ func test_counterplay_forecast_applies_responder_turn_start_fire() -> void:
 
 
 func test_sample_scene_and_tile_painter_are_configured() -> void:
-	var scene := load("res://main.tscn") as PackedScene
+	var scene := load("res://scenes/maps/terrain_showcase.tscn") as PackedScene
 	var root := track(scene.instantiate())
 	assert_true(root.has_node("Terrain"), "the battlefield should expose a TacticalTerrain container")
 	var terrain := root.get_node("Terrain") as TacticalTerrain

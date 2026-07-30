@@ -864,7 +864,7 @@ func test_starter_enemy_archetype_plans_are_deterministic() -> void:
 
 
 func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
-	var scene := ResourceLoader.load("res://main.tscn", "", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
+	var scene := ResourceLoader.load("res://scenes/maps/terrain_showcase.tscn", "", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
 	var root: Node = track(scene.instantiate())
 	var melee := root.get_node("Characters/MeleeEnemy") as TacticalCharacter
 	var ranged := root.get_node("Characters/RangedEnemy") as TacticalCharacter
@@ -876,12 +876,13 @@ func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
 	assert_eq(ranged.get_enemy_ai_profile().display_name, "General AI", "the sample ranged enemy should resolve the general profile")
 	assert_eq(melee.get_abilities().size(), 1, "the Goblin Warrior should expose only Enemy Slash")
 	assert_eq(ranged.get_abilities().size(), 1, "the sample Goblin Archer override should remain unchanged")
-	assert_eq(melee.starting_grid_cell, Vector2i(7, 11), "sample melee placement should stay unchanged")
-	assert_eq(ranged.starting_grid_cell, Vector2i(1, 10), "sample ranged placement should stay unchanged")
-	assert_true(root.has_node("HUD/DevButton"), "the sample HUD should expose the Dev button")
-	assert_eq(root.get_node("HUD/DevButton").text, "Dev", "the developer history button should have a clear compact label")
-	assert_true(root.has_node("HUD/DevHistoryPanel"), "the sample HUD should contain an AI score history panel")
-	assert_false(root.get_node("HUD/DevHistoryPanel").visible, "AI scores should stay off the battlefield until Dev is pressed")
+	assert_eq(melee.starting_grid_cell, Vector2i(7, 9), "sample melee placement should stay unchanged")
+	assert_eq(ranged.starting_grid_cell, Vector2i(4, 9), "sample ranged placement should stay unchanged")
+	var battle := track((load("res://scenes/battle.tscn") as PackedScene).instantiate())
+	assert_true(battle.has_node("HUD/DevButton"), "the shared battle HUD should expose the Dev button")
+	assert_eq(battle.get_node("HUD/DevButton").text, "Dev", "the developer history button should have a clear compact label")
+	assert_true(battle.has_node("HUD/DevHistoryPanel"), "the shared battle HUD should contain an AI score history panel")
+	assert_false(battle.get_node("HUD/DevHistoryPanel").visible, "AI scores should stay off the battlefield until Dev is pressed")
 
 
 func _assert_enemy_definition(

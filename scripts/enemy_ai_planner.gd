@@ -842,7 +842,7 @@ func _score_effect_estimate(
 	var after := clampi(
 		before + int(estimate.get("health_delta", 0)),
 		0,
-		recipient.get_max_health()
+		snapshot.get_max_health(recipient)
 	)
 	var actual_delta := after - before
 	var is_opponent := recipient.is_friendly() != caster.is_friendly()
@@ -852,19 +852,19 @@ func _score_effect_estimate(
 		if is_opponent:
 			score += damage
 			if after == 0 and before > 0:
-				score += recipient.get_max_health() * IMMEDIATE_DEFEAT_RATIO
+				score += snapshot.get_max_health(recipient) * IMMEDIATE_DEFEAT_RATIO
 		else:
 			score -= damage * FRIENDLY_DAMAGE_PENALTY
 			if after == 0 and before > 0:
-				score -= recipient.get_max_health() * IMMEDIATE_DEFEAT_RATIO
+				score -= snapshot.get_max_health(recipient) * IMMEDIATE_DEFEAT_RATIO
 	elif actual_delta > 0:
 		var healing := float(actual_delta)
 		if is_opponent:
 			score -= healing
 		else:
 			var missing_ratio := (
-				float(recipient.get_max_health() - before)
-				/ float(maxi(1, recipient.get_max_health()))
+				float(snapshot.get_max_health(recipient) - before)
+				/ float(maxi(1, snapshot.get_max_health(recipient)))
 			)
 			score += healing * missing_ratio
 	score += float(estimate.get("utility_hint", 0.0))
@@ -903,7 +903,7 @@ func _apply_coordination_scores(
 			var followup_damage := maxi(0, int(followup.get("damage", 0)))
 			coordination += SHARED_PRESSURE_WEIGHT * minf(followup_value, float(remaining))
 			if actor_damage < before and followup_damage >= remaining:
-				coordination += target.get_max_health() * SETUP_DEFEAT_RATIO
+				coordination += initial_state.get_max_health(target) * SETUP_DEFEAT_RATIO
 		plan.coordination_score = coordination
 		plan.immediate_score += coordination
 		plan.total_score = plan.immediate_score
@@ -1116,7 +1116,7 @@ func _estimate_unit_action_against_target(
 		var after := action_state.get_health(target)
 		var damage := maxi(0, before - after)
 		var defeat_bonus := (
-			target.get_max_health() * IMMEDIATE_DEFEAT_RATIO
+			action_state.get_max_health(target) * IMMEDIATE_DEFEAT_RATIO
 			if after == 0 and before > 0
 			else 0.0
 		)
@@ -1413,18 +1413,18 @@ func _score_terrain_estimate(
 	var after := clampi(
 		before + int(estimate.get("health_delta", 0)),
 		0,
-		unit.get_max_health()
+		snapshot.get_max_health(unit)
 	)
 	snapshot.set_health(unit, after)
 	var score := float(estimate.get("utility_hint", 0.0))
 	if after < before:
 		score -= float(before - after) * FRIENDLY_DAMAGE_PENALTY
 		if after == 0:
-			score -= unit.get_max_health() * IMMEDIATE_DEFEAT_RATIO
+			score -= snapshot.get_max_health(unit) * IMMEDIATE_DEFEAT_RATIO
 	elif after > before:
 		var missing_ratio := (
-			float(unit.get_max_health() - before)
-			/ float(maxi(1, unit.get_max_health()))
+			float(snapshot.get_max_health(unit) - before)
+			/ float(maxi(1, snapshot.get_max_health(unit)))
 		)
 		score += float(after - before) * missing_ratio
 	return score
@@ -1531,15 +1531,15 @@ func _rough_unit_priority(
 		var damage := mini(health, ability.calculate_primary_effect_amount(caster))
 		score += damage
 		if damage >= health:
-			score += target.get_max_health() * IMMEDIATE_DEFEAT_RATIO
+			score += snapshot.get_max_health(target) * IMMEDIATE_DEFEAT_RATIO
 	elif ability.effect == AbilityDefinition.PrimaryEffect.HEAL:
 		var healing := mini(
-			target.get_max_health() - health,
+			snapshot.get_max_health(target) - health,
 			ability.calculate_primary_effect_amount(caster)
 		)
 		var missing_ratio := (
-			float(target.get_max_health() - health)
-			/ float(maxi(1, target.get_max_health()))
+			float(snapshot.get_max_health(target) - health)
+			/ float(maxi(1, snapshot.get_max_health(target)))
 		)
 		score += healing * missing_ratio
 	if ability.status_effect != null:

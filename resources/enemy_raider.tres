@@ -11,6 +11,7 @@
 script = ExtResource("1_definition")
 display_name = "Enemy Raider"
 faction = 1
+constitution = 25
 movement_range = 5.0
 starting_equipment = Array[ExtResource("5_item_type")]([ExtResource("6_weapon")])
 body_color = Color(0.95, 0.24, 0.29, 1)

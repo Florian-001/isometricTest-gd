@@ -361,7 +361,7 @@ func _make_unit(
 ) -> TacticalCharacter:
 	var definition := CharacterDefinitionScript.new() as CharacterDefinition
 	definition.faction = CharacterDefinition.Faction.FRIENDLY if friendly else CharacterDefinition.Faction.ENEMY
-	definition.max_health = 100
+	definition.constitution = 25
 	definition.movement_range = movement
 	var abilities: Array[AbilityDefinition] = []
 	for ability in abilities_value:

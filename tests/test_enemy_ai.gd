@@ -805,31 +805,31 @@ func test_representative_planning_meets_the_shallow_search_budget() -> void:
 func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> void:
 	var ranger := _assert_enemy_definition(
 		"res://resources/enemies/ranger.tres",
-		"Ranger", 90, 6.0, [8, 14, 8, 12],
+		"Ranger", 92, 6.0, [8, 14, 8, 23, 12],
 		["Ranger Bow", "Ranger Armor"],
 		["Enemy Shot", "Focus"]
 	)
 	var warrior := _assert_enemy_definition(
 		"res://resources/enemies/goblin_warrior.tres",
-		"Goblin Warrior", 115, 5.0, [12, 8, 5, 9],
+		"Goblin Warrior", 116, 5.0, [12, 8, 5, 29, 9],
 		["Goblin Sword"],
 		["Enemy Slash"]
 	)
 	var archer := _assert_enemy_definition(
 		"res://resources/enemies/goblin_archer.tres",
-		"Goblin Archer", 75, 6.0, [7, 11, 6, 11],
+		"Goblin Archer", 76, 6.0, [7, 11, 6, 19, 11],
 		["Goblin Bow"],
 		["Enemy Shot"]
 	)
 	var wolf := _assert_enemy_definition(
 		"res://resources/enemies/wolf.tres",
-		"Wolf", 85, 7.0, [14, 10, 4, 14],
+		"Wolf", 88, 7.0, [14, 10, 4, 22, 14],
 		["Wolf Claws"],
 		["Strike"]
 	)
 	var mage := _assert_enemy_definition(
 		"res://resources/enemies/mage.tres",
-		"Mage", 70, 5.0, [5, 8, 15, 9],
+		"Mage", 72, 5.0, [5, 8, 15, 18, 9],
 		["Mage Staff"],
 		["Fireball", "Ice Shard", "Heal", "Slow"]
 	)
@@ -873,7 +873,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_eq(sword_goblin.get_initiative(), 9, "Sword Goblin should keep Speed 9")
 	sword_goblin.apply_damage(20)
 	sword_goblin.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
-	assert_eq(second_sword_goblin.current_health, 115, "repeated scene instances should have independent health")
+	assert_eq(second_sword_goblin.current_health, 116, "repeated scene instances should have independent health")
 	assert_eq(second_sword_goblin.get_weapon_damage(), 8, "runtime equipment changes should not affect another instance")
 	assert_eq(sword_goblin.definition.starting_equipment[0].display_name, "Goblin Sword", "runtime changes should not mutate the shared definition")
 
@@ -1023,7 +1023,7 @@ func _assert_enemy_definition(
 	assert_eq(definition.faction, CharacterDefinition.Faction.ENEMY, "%s should default to the Enemy faction" % expected_name)
 	assert_eq(definition.max_health, expected_health, "%s should keep its configured HP" % expected_name)
 	assert_true(is_equal_approx(definition.movement_range, expected_movement), "%s should keep its configured base movement" % expected_name)
-	assert_eq([definition.strength, definition.dexterity, definition.intelligence, definition.speed], expected_stats, "%s should keep its configured core stats" % expected_name)
+	assert_eq([definition.strength, definition.dexterity, definition.intelligence, definition.constitution, definition.speed], expected_stats, "%s should keep its configured core stats" % expected_name)
 	assert_true(definition.ai_profile != null, "%s should bundle an AI profile" % expected_name)
 	assert_eq(definition.ai_profile.display_name, "General AI", "%s should bundle the general ability-driven AI" % expected_name)
 	var item_names: Array[String] = []
@@ -1076,7 +1076,7 @@ func _make_unit(
 ) -> TacticalCharacter:
 	var definition := CharacterDefinitionScript.new() as CharacterDefinition
 	definition.faction = CharacterDefinition.Faction.FRIENDLY if friendly else CharacterDefinition.Faction.ENEMY
-	definition.max_health = 100
+	definition.constitution = 25
 	definition.movement_range = movement
 	var abilities: Array[AbilityDefinition] = []
 	for ability in abilities_value:

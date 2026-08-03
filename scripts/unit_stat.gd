@@ -2,12 +2,13 @@ class_name UnitStat
 extends RefCounted
 
 enum Type {
-	NONE,
-	STRENGTH,
-	DEXTERITY,
-	INTELLIGENCE,
-	SPEED,
-	MOVEMENT_RANGE,
+	NONE = 0,
+	STRENGTH = 1,
+	DEXTERITY = 2,
+	INTELLIGENCE = 3,
+	CONSTITUTION = 7,
+	SPEED = 4,
+	MOVEMENT_RANGE = 5,
 }
 
 
@@ -19,6 +20,8 @@ static func get_display_name(stat: Type) -> String:
 			return "Dexterity"
 		Type.INTELLIGENCE:
 			return "Intelligence"
+		Type.CONSTITUTION:
+			return "Constitution"
 		Type.SPEED:
 			return "Speed"
 		Type.MOVEMENT_RANGE:

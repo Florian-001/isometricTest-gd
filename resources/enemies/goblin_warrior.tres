@@ -11,7 +11,7 @@
 script = ExtResource("1_enemy")
 display_name = "Goblin Warrior"
 faction = 1
-max_health = 115
+constitution = 29
 movement_range = 5.0
 strength = 12
 dexterity = 8

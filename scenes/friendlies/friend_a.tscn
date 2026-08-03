@@ -8,7 +8,7 @@
 [node name="FriendA" type="Node2D"]
 script = ExtResource("1_actor")
 definition = ExtResource("2_definition")
-max_health_override = 48
+constitution_override = 12
 movement_range_override = 6.0
 speed_override = 12
 starting_equipment_overrides = Array[ExtResource("3_item_type")]([ExtResource("4_frost_bow")])

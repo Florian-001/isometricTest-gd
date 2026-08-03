@@ -19,7 +19,13 @@ signal equipment_changed(slot: ItemDefinition.EquipmentSlot, item: ItemDefinitio
 signal statuses_changed
 
 @export_category("Character Template")
-@export var definition: CharacterDefinition
+@export var definition: CharacterDefinition:
+	set(value):
+		definition = value
+		_runtime_stats_initialized = false
+		if Engine.is_editor_hint():
+			notify_property_list_changed()
+		queue_redraw()
 
 @export_category("Enemy AI")
 ## Optional per-unit override. EnemyDefinition resources provide the normal bundled profile.
@@ -30,14 +36,22 @@ signal statuses_changed
 			update_configuration_warnings()
 
 @export_category("Unit Stats")
-## Set above zero to override the template's maximum health for this unit.
-## Set to zero to inherit the value from Character Template.
-@export_range(0, 999, 1, "or_greater") var max_health_override: int = 0:
+## Set to zero or higher to override the template's Constitution for this unit.
+## Set to -1 to inherit the value from Character Template.
+@export_range(-1, 999, 1, "or_greater") var constitution_override: int = -1:
 	set(value):
-		max_health_override = maxi(0, value)
+		constitution_override = maxi(-1, value)
 		if Engine.is_editor_hint():
-			current_health = get_max_health()
+			notify_property_list_changed()
 		queue_redraw()
+
+@export_custom(
+	PROPERTY_HINT_RANGE,
+	"4,3996,1,or_greater",
+	PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY
+) var max_health: int:
+	get:
+		return get_max_health()
 
 ## Set to zero or higher to override the template's movement range for this unit.
 ## Set to -1 to inherit the value from Character Template.
@@ -227,6 +241,10 @@ func _get_base_stat_for_sources(stat: UnitStat.Type, include_equipment: bool) ->
 			if intelligence_override >= 0:
 				return float(intelligence_override)
 			return float(definition.intelligence) if definition != null else 0.0
+		UnitStat.Type.CONSTITUTION:
+			if constitution_override >= 0:
+				return float(constitution_override)
+			return float(definition.constitution) if definition != null else 1.0
 		UnitStat.Type.SPEED:
 			if speed_override >= 0:
 				return float(speed_override)
@@ -277,10 +295,11 @@ func equip_item(item: ItemDefinition) -> ItemDefinition:
 		return null
 	_initialize_runtime_stats()
 	var previous_movement := get_movement_range()
+	var previous_max_health := get_max_health()
 	var replaced := get_equipped_item(item.slot)
 	_equipped_items[item.slot] = item
 	equipment_changed.emit(item.slot, item)
-	_notify_stats_changed(previous_movement)
+	_notify_stats_changed(previous_movement, previous_max_health)
 	return replaced
 
 
@@ -289,10 +308,11 @@ func unequip_item(slot: ItemDefinition.EquipmentSlot) -> ItemDefinition:
 	if not _equipped_items.has(slot):
 		return null
 	var previous_movement := get_movement_range()
+	var previous_max_health := get_max_health()
 	var removed := _equipped_items[slot] as ItemDefinition
 	_equipped_items.erase(slot)
 	equipment_changed.emit(slot, null)
-	_notify_stats_changed(previous_movement)
+	_notify_stats_changed(previous_movement, previous_max_health)
 	return removed
 
 
@@ -585,9 +605,7 @@ func heal(amount: int) -> void:
 
 
 func get_max_health() -> int:
-	if max_health_override > 0:
-		return max_health_override
-	return definition.max_health if definition != null else 1
+	return roundi(maxf(1.0, get_effective_stat(UnitStat.Type.CONSTITUTION)) * 4.0)
 
 
 func _get_configuration_warnings() -> PackedStringArray:
@@ -653,18 +671,20 @@ func _get_all_modifiers(include_equipment: bool = true) -> Array[StatModifierDef
 	return result
 
 
-func _notify_stats_changed(previous_movement: float) -> void:
+func _notify_stats_changed(previous_movement: float, previous_max_health: int) -> void:
 	var new_movement := get_movement_range()
 	if _remaining_movement > new_movement:
 		_remaining_movement = new_movement
 	if not is_equal_approx(previous_movement, new_movement):
 		movement_remaining_changed.emit(_remaining_movement, new_movement)
+	_reconcile_health_after_max_change(previous_max_health)
 	stats_changed.emit()
 
 
 func _capture_status_state() -> Dictionary:
 	return {
 		"movement_range": get_movement_range(),
+		"max_health": get_max_health(),
 		"remaining_movement": remaining_movement,
 		"ability_available": ability_available,
 		"opportunity_reaction_available": opportunity_reaction_available,
@@ -695,7 +715,17 @@ func _notify_statuses_changed(previous_state: Dictionary) -> void:
 	))
 	if previous_reaction != opportunity_reaction_available:
 		opportunity_reaction_availability_changed.emit(opportunity_reaction_available)
+	_reconcile_health_after_max_change(int(previous_state.get("max_health", get_max_health())))
 	stats_changed.emit()
+
+
+func _reconcile_health_after_max_change(previous_max_health: int) -> void:
+	var previous_current_health := current_health
+	var maximum_health := get_max_health()
+	current_health = clampi(current_health, 0, maximum_health)
+	if current_health != previous_current_health or maximum_health != previous_max_health:
+		health_changed.emit(current_health, maximum_health)
+		queue_redraw()
 
 
 func _show_damage_number(amount: int) -> void:

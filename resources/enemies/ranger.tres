@@ -13,7 +13,7 @@
 script = ExtResource("1_enemy")
 display_name = "Ranger"
 faction = 1
-max_health = 90
+constitution = 23
 movement_range = 6.0
 strength = 8
 dexterity = 14

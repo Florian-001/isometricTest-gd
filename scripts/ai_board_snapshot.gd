@@ -7,6 +7,7 @@ var terrain_definitions: Dictionary = {}
 var units: Array[TacticalCharacter] = []
 var unit_cells: Dictionary = {}
 var unit_health: Dictionary = {}
+var unit_max_health: Dictionary = {}
 var unit_movement_ranges: Dictionary = {}
 var unit_remaining_movement: Dictionary = {}
 var unit_opportunity_reactions: Dictionary = {}
@@ -30,6 +31,7 @@ static func from_battle(
 		snapshot.units.append(unit)
 		snapshot.unit_cells[unit] = unit.grid_cell
 		snapshot.unit_health[unit] = unit.current_health
+		snapshot.unit_max_health[unit] = unit.get_max_health()
 		snapshot.unit_movement_ranges[unit] = unit.get_movement_range()
 		snapshot.unit_remaining_movement[unit] = unit.remaining_movement
 		snapshot.unit_opportunity_reactions[unit] = unit.opportunity_reaction_available
@@ -55,6 +57,7 @@ func duplicate_state() -> AIBoardSnapshot:
 	result.units = units.duplicate()
 	result.unit_cells = unit_cells.duplicate()
 	result.unit_health = unit_health.duplicate()
+	result.unit_max_health = unit_max_health.duplicate()
 	result.unit_movement_ranges = unit_movement_ranges.duplicate()
 	result.unit_remaining_movement = unit_remaining_movement.duplicate()
 	result.unit_opportunity_reactions = unit_opportunity_reactions.duplicate()
@@ -85,9 +88,15 @@ func get_health(unit: TacticalCharacter) -> int:
 	return int(unit_health.get(unit, 0))
 
 
+func get_max_health(unit: TacticalCharacter) -> int:
+	if unit_max_health.has(unit):
+		return maxi(1, int(unit_max_health[unit]))
+	return unit.get_max_health() if is_instance_valid(unit) else 1
+
+
 func set_health(unit: TacticalCharacter, value: int) -> void:
 	if unit_health.has(unit):
-		unit_health[unit] = clampi(value, 0, unit.get_max_health())
+		unit_health[unit] = clampi(value, 0, get_max_health(unit))
 
 
 func get_movement_range(unit: TacticalCharacter) -> float:
@@ -178,8 +187,10 @@ func forecast_status_application(
 		added_turns
 	)
 	var statuses := unit_statuses.get(target, {}) as Dictionary
+	var health_before_constitution_change := get_health(target)
 	if existing_turns <= 0:
 		_apply_new_status_movement_modifiers(target, status_effect)
+		_apply_new_status_constitution_modifiers(target, status_effect)
 	statuses[status_effect.status_id] = {
 		"definition": status_effect,
 		"remaining_turns": duration,
@@ -190,7 +201,10 @@ func forecast_status_application(
 		unit_stunned[target] = true
 		unit_remaining_movement[target] = 0.0
 	return {
-		"health_delta": int(estimate.get("health_delta", 0)),
+		"health_delta": (
+			int(estimate.get("health_delta", 0))
+			+ mini(0, get_max_health(target) - health_before_constitution_change)
+		),
 		"utility_hint": (
 			float(estimate.get("utility_hint", 0.0)) + base_utility
 		) * duration_fraction,
@@ -226,6 +240,33 @@ func _apply_new_status_movement_modifiers(
 		get_remaining_movement(unit),
 		get_movement_range(unit)
 	)
+
+
+func _apply_new_status_constitution_modifiers(
+	unit: TacticalCharacter,
+	status_effect: StatusEffectDefinition
+) -> void:
+	var constitution := float(get_max_health(unit)) / 4.0
+	var flat_total := 0.0
+	var percent_add_total := 0.0
+	var percent_multiplier := 1.0
+	for modifier in status_effect.get_stat_modifiers():
+		if modifier == null or modifier.stat != UnitStat.Type.CONSTITUTION:
+			continue
+		match modifier.operation:
+			StatModifierDefinition.Operation.FLAT:
+				flat_total += modifier.value
+			StatModifierDefinition.Operation.PERCENT_ADD:
+				percent_add_total += modifier.value
+			StatModifierDefinition.Operation.PERCENT_MULTIPLY:
+				percent_multiplier *= maxf(0.0, 1.0 + modifier.value)
+	var adjusted := maxf(
+		1.0,
+		(constitution + flat_total)
+		* maxf(0.0, 1.0 + percent_add_total)
+		* percent_multiplier
+	)
+	unit_max_health[unit] = roundi(adjusted * 4.0)
 
 
 func get_terrain(cell: Vector2i) -> TileDefinition:

@@ -71,7 +71,7 @@ func test_occupied_cells_and_corner_cutting() -> void:
 
 func test_character_health_and_defeat_signal() -> void:
 	var definition = CharacterDefinitionScript.new()
-	definition.max_health = 100
+	definition.constitution = 25
 	var character = track(TacticalCharacterScript.new())
 	character.definition = definition
 	character._ready()
@@ -92,25 +92,25 @@ func test_character_health_and_defeat_signal() -> void:
 
 func test_per_unit_stat_overrides() -> void:
 	var definition = CharacterDefinitionScript.new()
-	definition.max_health = 100
+	definition.constitution = 25
 	definition.movement_range = 6.0
 	definition.speed = 9
 	var character = track(TacticalCharacterScript.new())
 	character.definition = definition
-	character.max_health_override = 140
+	character.constitution_override = 35
 	character.movement_range_override = 7.5
 	character.speed_override = 14
 	character._ready()
 
-	assert_eq(character.get_max_health(), 140, "unit health override should replace the template value")
-	assert_eq(character.current_health, 140, "current health should initialize from the unit override")
+	assert_eq(character.get_max_health(), 140, "unit Constitution override should replace the template value")
+	assert_eq(character.current_health, 140, "current health should initialize from the Constitution override")
 	assert_true(is_equal_approx(character.get_movement_range(), 8.5), "Speed should modify the overridden base movement")
 	assert_eq(character.get_initiative(), 14, "unit Speed override should determine initiative")
 
-	character.max_health_override = 0
+	character.constitution_override = -1
 	character.movement_range_override = -1.0
 	character.speed_override = -1
-	assert_eq(character.get_max_health(), 100, "zero health override should fall back to the template")
+	assert_eq(character.get_max_health(), 100, "negative Constitution override should fall back to the template")
 	assert_true(is_equal_approx(character.get_movement_range(), 5.75), "inherited Speed should modify inherited base movement")
 	assert_eq(character.get_initiative(), 9, "negative Speed override should fall back to the template")
 
@@ -1668,7 +1668,7 @@ func _get_editor_property_hint(object: Object, property_name: StringName) -> Str
 func _make_unit(friendly: bool, cell: Vector2i, movement: float, speed: int = 10) -> TacticalCharacter:
 	var definition = CharacterDefinitionScript.new()
 	definition.faction = CharacterDefinition.Faction.FRIENDLY if friendly else CharacterDefinition.Faction.ENEMY
-	definition.max_health = 100
+	definition.constitution = 25
 	definition.movement_range = movement
 	var character = track(TacticalCharacterScript.new()) as TacticalCharacter
 	character.definition = definition

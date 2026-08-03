@@ -6,6 +6,6 @@
 [node name="FriendB" type="Node2D"]
 script = ExtResource("1_actor")
 definition = ExtResource("2_definition")
-max_health_override = 100
+constitution_override = 25
 movement_range_override = 5.0
 speed_override = 8

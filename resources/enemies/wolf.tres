@@ -11,7 +11,7 @@
 script = ExtResource("1_enemy")
 display_name = "Wolf"
 faction = 1
-max_health = 85
+constitution = 22
 movement_range = 7.0
 strength = 14
 dexterity = 10

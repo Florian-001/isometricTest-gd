@@ -111,7 +111,7 @@ func _run() -> void:
 func _make_character(friendly: bool, cell: Vector2i) -> TacticalCharacter:
 	var definition := CharacterDefinition.new()
 	definition.faction = CharacterDefinition.Faction.FRIENDLY if friendly else CharacterDefinition.Faction.ENEMY
-	definition.max_health = 100
+	definition.constitution = 25
 	definition.movement_range = 6.0
 	var character := TacticalCharacter.new()
 	character.definition = definition

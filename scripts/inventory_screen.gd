@@ -162,6 +162,7 @@ func _build_stat_entries() -> void:
 	_add_effective_stat_row("strength", "Strength", UnitStat.Type.STRENGTH)
 	_add_effective_stat_row("dexterity", "Dexterity", UnitStat.Type.DEXTERITY)
 	_add_effective_stat_row("intelligence", "Intelligence", UnitStat.Type.INTELLIGENCE)
+	_add_effective_stat_row("constitution", "Constitution", UnitStat.Type.CONSTITUTION)
 	_add_effective_stat_row("speed", "Speed", UnitStat.Type.SPEED)
 	_add_stat_row(
 		"weapon_damage",

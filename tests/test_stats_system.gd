@@ -101,6 +101,103 @@ func test_effective_stats_without_equipment_keep_statuses_and_speed_movement_rul
 	assert_true(is_equal_approx(unit.get_effective_stat_without_equipment(UnitStat.Type.MOVEMENT_RANGE), 7.0), "equipment-free Movement should recalculate from Speed without equipment")
 
 
+func test_constitution_drives_health_modifiers_inspector_and_ai_snapshots() -> void:
+	assert_eq(
+		[
+			UnitStat.Type.NONE,
+			UnitStat.Type.STRENGTH,
+			UnitStat.Type.DEXTERITY,
+			UnitStat.Type.INTELLIGENCE,
+			UnitStat.Type.SPEED,
+			UnitStat.Type.MOVEMENT_RANGE,
+		],
+		[0, 1, 2, 3, 4, 5],
+		"existing unit-stat serialization ids should remain unchanged"
+	)
+	assert_eq(UnitStat.Type.CONSTITUTION, 7, "Constitution should use the new serialization-safe stat id")
+	assert_eq(DamageCalculator.ScalingSource.WEAPON, 6, "Weapon scaling must retain its serialized id")
+	assert_eq(DamageCalculator.ScalingSource.CONSTITUTION, 7, "ability scaling should share Constitution's stat id")
+	assert_eq(UnitStat.get_display_name(UnitStat.Type.CONSTITUTION), "Constitution", "Constitution should have an Inspector-facing name")
+	assert_true(DamageCalculator.UNIT_STAT_SCALING_OPTIONS.contains("Constitution:7"), "ability scaling should expose Constitution")
+
+	var definition := CharacterDefinitionScript.new() as CharacterDefinition
+	definition.constitution = 25
+	assert_eq(definition.max_health, 100, "definition Max Health should be Constitution x4")
+	var constitution_property := _get_property_info(definition, &"constitution")
+	var definition_health_property := _get_property_info(definition, &"max_health")
+	assert_true(bool(int(constitution_property.usage) & PROPERTY_USAGE_EDITOR), "Constitution should be editable in the definition Inspector")
+	assert_true(bool(int(constitution_property.usage) & PROPERTY_USAGE_STORAGE), "Constitution should be stored in resources")
+	assert_true(bool(int(definition_health_property.usage) & PROPERTY_USAGE_EDITOR), "derived Max Health should remain visible in the definition Inspector")
+	assert_true(bool(int(definition_health_property.usage) & PROPERTY_USAGE_READ_ONLY), "definition Max Health should be Inspector-read-only")
+	assert_false(bool(int(definition_health_property.usage) & PROPERTY_USAGE_STORAGE), "derived Max Health should not be serialized")
+
+	var unit := _make_unit(definition)
+	assert_eq(unit.current_health, 100, "units should initialize at their Constitution-derived maximum")
+	assert_eq(unit.get_max_health(), 100, "runtime Max Health should start from effective Constitution")
+	var unit_health_property := _get_property_info(unit, &"max_health")
+	assert_true(bool(int(unit_health_property.usage) & PROPERTY_USAGE_READ_ONLY), "unit Max Health should be Inspector-read-only")
+	assert_false(bool(int(unit_health_property.usage) & PROPERTY_USAGE_STORAGE), "unit Max Health should not be serialized")
+	assert_false(_get_property_info(unit, &"constitution_override").is_empty(), "units should expose Constitution Override")
+	assert_true(_get_property_info(unit, &"max_health_override").is_empty(), "the legacy health override should be removed")
+
+	var health_events: Array[Vector2i] = []
+	var stat_events := [0]
+	unit.health_changed.connect(func(current: int, maximum: int): health_events.append(Vector2i(current, maximum)))
+	unit.stats_changed.connect(func(): stat_events[0] += 1)
+	var constitution_item := ItemDefinitionScript.new() as ItemDefinition
+	constitution_item.modifiers = [
+		_make_modifier(UnitStat.Type.CONSTITUTION, StatModifierDefinition.Operation.FLAT, 5.0),
+		_make_modifier(UnitStat.Type.CONSTITUTION, StatModifierDefinition.Operation.PERCENT_ADD, 0.2),
+		_make_modifier(UnitStat.Type.CONSTITUTION, StatModifierDefinition.Operation.PERCENT_MULTIPLY, 0.5),
+	]
+	unit.equip_item(constitution_item)
+	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.CONSTITUTION), 54.0), "Constitution should use the shared flat/additive/multiplicative order")
+	assert_eq(unit.get_max_health(), 216, "fractional stat operations should round only after multiplying Constitution by four")
+	assert_eq(unit.current_health, 100, "raising Max Health should not grant current HP")
+	assert_eq(health_events[-1], Vector2i(100, 216), "Max Health changes should emit health_changed")
+
+	var crushing_item := ItemDefinitionScript.new() as ItemDefinition
+	crushing_item.modifiers = [
+		_make_modifier(UnitStat.Type.CONSTITUTION, StatModifierDefinition.Operation.FLAT, -100.0)
+	]
+	unit.equip_item(crushing_item)
+	assert_eq(unit.get_effective_stat(UnitStat.Type.CONSTITUTION), 0.0, "the generic effective stat should retain its zero floor")
+	assert_eq(unit.get_max_health(), 4, "Max Health should use a minimum effective Constitution of one")
+	assert_eq(unit.current_health, 4, "lowering Max Health should clamp current HP")
+	unit.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
+	assert_eq(unit.get_max_health(), 100, "removing a Constitution penalty should restore Max Health")
+	assert_eq(unit.current_health, 4, "restoring Max Health should not restore current HP")
+	assert_eq(stat_events[0], 3, "each Constitution equipment change should emit stats_changed")
+
+	var status_unit := _make_unit(definition)
+	var constitution_penalty := _make_status(
+		&"frail",
+		2,
+		[_make_modifier(UnitStat.Type.CONSTITUTION, StatModifierDefinition.Operation.FLAT, -10.0)]
+	)
+	assert_true(status_unit.apply_status(constitution_penalty, status_unit), "living units should accept Constitution statuses")
+	assert_eq(status_unit.get_max_health(), 60, "Constitution status penalties should reduce Max Health")
+	assert_eq(status_unit.current_health, 60, "Constitution status penalties should clamp current HP")
+	status_unit.remove_status(&"frail")
+	assert_eq(status_unit.get_max_health(), 100, "removing a Constitution status should restore Max Health")
+	assert_eq(status_unit.current_health, 60, "removing the status should not heal the previous clamp")
+
+	var scaling_amount := DamageCalculator.calculate_amount(
+		status_unit,
+		DamageCalculator.Type.MAGICAL,
+		0,
+		DamageCalculator.ScalingSource.CONSTITUTION,
+		100.0,
+		DamageCalculator.NO_WEAPON_REQUIRED
+	)
+	assert_eq(scaling_amount, 25, "abilities should be able to scale from effective Constitution")
+	status_unit.current_health = 100
+	var snapshot := AIBoardSnapshot.from_battle([status_unit], Vector2i(4, 4))
+	var forecast := snapshot.forecast_status_application(status_unit, status_unit, constitution_penalty)
+	assert_eq(snapshot.get_max_health(status_unit), 60, "AI snapshots should simulate Constitution-derived Max Health")
+	assert_eq(forecast.health_delta, -40, "AI forecasts should report HP clamped by a Constitution penalty")
+
+
 func test_status_refresh_stacking_expiration_removal_and_dead_rejection() -> void:
 	var unit := _make_unit(CharacterDefinitionScript.new())
 	var focus := _make_status(
@@ -559,3 +656,10 @@ func _make_status(
 		modifiers.append(modifier as StatModifierDefinition)
 	status.modifiers = modifiers
 	return status
+
+
+func _get_property_info(object: Object, property_name: StringName) -> Dictionary:
+	for property_info in object.get_property_list():
+		if StringName(property_info.name) == property_name:
+			return property_info
+	return {}

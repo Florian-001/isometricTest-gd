@@ -7,20 +7,23 @@ enum Type {
 	MAGICAL,
 }
 
-## Ability-facing scaling sources preserve UnitStat.Type's serialized values and
-## append Weapon without exposing it to item or status stat-modifier Inspectors.
+## Ability-facing scaling sources preserve UnitStat.Type's serialized values.
+## Weapon keeps its legacy ability-only id 6; Constitution safely uses id 7.
 enum ScalingSource {
-	NONE,
-	STRENGTH,
-	DEXTERITY,
-	INTELLIGENCE,
-	SPEED,
-	MOVEMENT_RANGE,
-	WEAPON,
+	NONE = 0,
+	STRENGTH = 1,
+	DEXTERITY = 2,
+	INTELLIGENCE = 3,
+	CONSTITUTION = 7,
+	SPEED = 4,
+	MOVEMENT_RANGE = 5,
+	WEAPON = 6,
 }
 
-const UNIT_STAT_SCALING_OPTIONS := "None,Strength,Dexterity,Intelligence,Speed,Movement Range"
-const WEAPON_SCALING_OPTIONS := UNIT_STAT_SCALING_OPTIONS + ",Weapon"
+const UNIT_STAT_SCALING_OPTIONS := (
+	"None:0,Strength:1,Dexterity:2,Intelligence:3,Constitution:7,Speed:4,Movement Range:5"
+)
+const WEAPON_SCALING_OPTIONS := UNIT_STAT_SCALING_OPTIONS + ",Weapon:6"
 
 ## Legacy callers derive weapon usage from Physical/Magical damage type.
 const USE_DAMAGE_TYPE_WEAPON_RULE := -2
@@ -57,7 +60,7 @@ static func calculate_amount(
 
 
 static func is_unit_stat_scaling_source(scaling_stat: int) -> bool:
-	return scaling_stat >= ScalingSource.NONE and scaling_stat <= ScalingSource.MOVEMENT_RANGE
+	return UnitStat.Type.values().has(scaling_stat)
 
 
 static func get_scaling_source_display_name(scaling_stat: int) -> String:

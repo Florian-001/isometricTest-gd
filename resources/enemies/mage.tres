@@ -14,7 +14,7 @@
 script = ExtResource("1_enemy")
 display_name = "Mage"
 faction = 1
-max_health = 70
+constitution = 18
 movement_range = 5.0
 strength = 5
 dexterity = 8

@@ -109,7 +109,7 @@ func _run() -> void:
 
 func _make_unit(cell: Vector2i, grid: IsometricGrid) -> TacticalCharacter:
 	var definition := CharacterDefinition.new()
-	definition.max_health = 100
+	definition.constitution = 25
 	var unit := TacticalCharacter.new()
 	unit.definition = definition
 	unit.starting_grid_cell = cell

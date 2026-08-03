@@ -18,6 +18,7 @@ func _run() -> void:
 
 	var caster := _make_character(true, Vector2i(1, 1))
 	var target := _make_character(false, Vector2i(2, 1))
+	caster.initial_facing = TacticalCharacter.Facing.LEFT
 	battlefield.add_child(caster)
 	battlefield.add_child(target)
 	caster.initialize(grid)
@@ -63,6 +64,7 @@ func _run() -> void:
 	_check(not caster.ability_available, "Strike should consume the ability action")
 	_check(caster.grid_cell == original_cell, "Strike must not change grid occupancy")
 	_check(caster.global_position.is_equal_approx(original_position), "The caster should return to its exact starting position")
+	_check(caster.current_facing == TacticalCharacter.Facing.RIGHT, "using an ability should face the caster toward a target on screen-right")
 	_check(is_equal_approx(caster.remaining_movement, original_movement), "Strike must not consume movement")
 	_check(signal_order == ["started", "impact", "finished"], "Melee signals should fire once in order")
 	_check(not battlefield.has_node("MeleeSlash"), "The slash visual should be cleaned up")

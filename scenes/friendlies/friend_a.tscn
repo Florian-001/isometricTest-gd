@@ -1,9 +1,11 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/initiative_actor.gd" id="1_actor"]
 [ext_resource type="Resource" path="res://resources/friendly_spellcaster.tres" id="2_definition"]
 [ext_resource type="Script" path="res://scripts/item_definition.gd" id="3_item_type"]
 [ext_resource type="Resource" path="res://resources/items/frost_bow.tres" id="4_frost_bow"]
+[ext_resource type="Texture2D" path="res://assets/characters/friendly_frost_archer_left.png" id="5_left"]
+[ext_resource type="Texture2D" path="res://assets/characters/friendly_frost_archer_right.png" id="6_right"]
 
 [node name="FriendA" type="Node2D"]
 script = ExtResource("1_actor")
@@ -12,3 +14,6 @@ constitution_override = 12
 movement_range_override = 6.0
 speed_override = 12
 starting_equipment_overrides = Array[ExtResource("3_item_type")]([ExtResource("4_frost_bow")])
+facing_left_texture = ExtResource("5_left")
+facing_right_texture = ExtResource("6_right")
+initial_facing = 1

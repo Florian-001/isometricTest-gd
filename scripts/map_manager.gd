@@ -11,12 +11,28 @@ const TacticalBattleScript = preload("res://scripts/initiative_battle_controller
 @onready var level_select: CanvasLayer = $LevelSelect
 @onready var level_buttons: VBoxContainer = $LevelSelect/Root/Center/Panel/Margin/VBox/LevelButtons
 @onready var empty_state: Label = $LevelSelect/Root/Center/Panel/Margin/VBox/EmptyState
+@onready var show_map_button: Button = $LevelSelect/Root/Center/Panel/Margin/VBox/ShowMapButton
+@onready var run_map_screen: RunMapScreen = $RunMapLayer/RunMapScreen
 
 var current_battle: TacticalBattleScript
 
 
 func _ready() -> void:
+	show_map_button.pressed.connect(show_run_map)
+	run_map_screen.close_requested.connect(hide_run_map)
 	_rebuild_level_buttons()
+	_show_level_select()
+
+
+func show_run_map() -> void:
+	if is_instance_valid(current_battle):
+		return
+	level_select.hide()
+	run_map_screen.open_map()
+
+
+func hide_run_map() -> void:
+	run_map_screen.close_map()
 	_show_level_select()
 
 
@@ -54,7 +70,7 @@ func return_to_level_select() -> void:
 func _rebuild_level_buttons() -> void:
 	for child in level_buttons.get_children():
 		child.queue_free()
-	var first_button: Button
+	var first_button: Button = null
 	for definition in levels:
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(520.0, 72.0)
@@ -71,6 +87,7 @@ func _rebuild_level_buttons() -> void:
 
 
 func _show_level_select() -> void:
+	run_map_screen.close_map()
 	level_select.show()
 
 

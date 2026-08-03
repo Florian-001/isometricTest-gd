@@ -90,6 +90,48 @@ func test_character_health_and_defeat_signal() -> void:
 	assert_eq(defeated_calls[0], 1, "defeat should not repeat while already defeated")
 
 
+func test_directional_character_artwork_and_facing() -> void:
+	var character = track(TacticalCharacterScript.new()) as TacticalCharacter
+	character.facing_left_texture = GradientTexture1D.new()
+	character.facing_right_texture = GradientTexture1D.new()
+	character.initial_facing = TacticalCharacter.Facing.RIGHT
+	character._ready()
+
+	assert_true(character.has_directional_artwork(), "either directional texture should enable character artwork")
+	assert_eq(character.current_facing, TacticalCharacter.Facing.RIGHT, "the exported initial facing should initialize presentation")
+	character.face_toward_world_position(Vector2(-10.0, 5.0))
+	assert_eq(character.current_facing, TacticalCharacter.Facing.LEFT, "a target to screen-left should select the left texture")
+	character.face_toward_world_position(Vector2(0.0, 50.0))
+	assert_eq(character.current_facing, TacticalCharacter.Facing.LEFT, "purely vertical screen movement should preserve facing")
+	character.face_toward_world_position(Vector2(10.0, 5.0))
+	assert_eq(character.current_facing, TacticalCharacter.Facing.RIGHT, "a target to screen-right should select the right texture")
+
+	var fallback = track(TacticalCharacterScript.new()) as TacticalCharacter
+	assert_false(fallback.has_directional_artwork(), "synthetic units without textures should retain the fallback marker")
+
+
+func test_character_scenes_assign_game_ready_texture_pairs() -> void:
+	var scene_expectations := {
+		"res://scenes/friendlies/friend_a.tscn": TacticalCharacter.Facing.RIGHT,
+		"res://scenes/friendlies/friend_b.tscn": TacticalCharacter.Facing.RIGHT,
+		"res://scenes/enemies/goblin_warrior.tscn": TacticalCharacter.Facing.LEFT,
+		"res://scenes/enemies/goblin_warrior_club.tscn": TacticalCharacter.Facing.LEFT,
+		"res://scenes/enemies/goblin_archer.tscn": TacticalCharacter.Facing.LEFT,
+		"res://scenes/enemies/mage.tscn": TacticalCharacter.Facing.LEFT,
+		"res://scenes/enemies/ranger.tscn": TacticalCharacter.Facing.LEFT,
+		"res://scenes/enemies/wolf.tscn": TacticalCharacter.Facing.LEFT,
+	}
+	for scene_path: String in scene_expectations:
+		var packed_scene := load(scene_path) as PackedScene
+		assert_true(packed_scene != null, "%s should load" % scene_path)
+		var character := track(packed_scene.instantiate()) as TacticalCharacter
+		assert_true(character.facing_left_texture != null, "%s should assign a left texture" % scene_path)
+		assert_true(character.facing_right_texture != null, "%s should assign a right texture" % scene_path)
+		assert_eq(character.facing_left_texture.get_size(), Vector2(256.0, 256.0), "%s left texture should be game-ready" % scene_path)
+		assert_eq(character.facing_right_texture.get_size(), Vector2(256.0, 256.0), "%s right texture should be game-ready" % scene_path)
+		assert_eq(character.initial_facing, scene_expectations[scene_path], "%s should use its faction-facing default" % scene_path)
+
+
 func test_per_unit_stat_overrides() -> void:
 	var definition = CharacterDefinitionScript.new()
 	definition.constitution = 25

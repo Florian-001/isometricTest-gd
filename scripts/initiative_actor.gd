@@ -2,9 +2,19 @@
 class_name TacticalCharacter
 extends Node2D
 
+enum Facing {
+	LEFT,
+	RIGHT,
+}
+
 const STATUS_ICON_SIZE := 18.0
 const STATUS_ICON_GAP := 3.0
-const STATUS_ICON_TOP := -79.0
+const FALLBACK_STATUS_ICON_TOP := -79.0
+const ARTWORK_STATUS_ICON_TOP := -139.0
+const CHARACTER_ART_RECT := Rect2(-56.0, -104.0, 112.0, 112.0)
+const CHARACTER_ART_HIT_RECT := Rect2(-36.0, -100.0, 72.0, 98.0)
+const FALLBACK_HEALTH_BAR_RECT := Rect2(-23.0, -57.0, 46.0, 7.0)
+const ARTWORK_HEALTH_BAR_RECT := Rect2(-27.0, -117.0, 54.0, 7.0)
 
 signal health_changed(current_health: int, max_health: int)
 signal movement_started(character)
@@ -76,6 +86,19 @@ signal statuses_changed
 @export var starting_equipment_overrides: Array[ItemDefinition] = []
 
 @export_category("Placement and Presentation")
+@export var facing_left_texture: Texture2D:
+	set(value):
+		facing_left_texture = value
+		queue_redraw()
+@export var facing_right_texture: Texture2D:
+	set(value):
+		facing_right_texture = value
+		queue_redraw()
+@export var initial_facing: Facing = Facing.RIGHT:
+	set(value):
+		initial_facing = value
+		current_facing = value
+		queue_redraw()
 @export var starting_grid_cell: Vector2i = Vector2i.ZERO:
 	set(value):
 		starting_grid_cell = value
@@ -86,6 +109,7 @@ signal statuses_changed
 
 var current_health: int = 0
 var grid_cell: Vector2i = Vector2i.ZERO
+var current_facing: Facing = Facing.RIGHT
 var is_moving := false
 var remaining_movement: float:
 	get:
@@ -112,6 +136,7 @@ var _editor_cell_sync_queued := false
 func _ready() -> void:
 	_initialize_runtime_stats()
 	grid_cell = starting_grid_cell
+	current_facing = initial_facing
 	current_health = get_max_health()
 	if Engine.is_editor_hint():
 		set_notify_transform(true)
@@ -192,6 +217,7 @@ func initialize(grid: IsometricGrid) -> void:
 	_initialize_runtime_stats()
 	_grid = grid
 	grid_cell = starting_grid_cell
+	current_facing = initial_facing
 	global_position = _grid.grid_to_global(grid_cell)
 	_update_sorting()
 	queue_redraw()
@@ -199,6 +225,35 @@ func initialize(grid: IsometricGrid) -> void:
 
 func is_friendly() -> bool:
 	return definition != null and definition.faction == CharacterDefinition.Faction.FRIENDLY
+
+
+func set_facing(value: Facing) -> void:
+	if current_facing == value:
+		return
+	current_facing = value
+	queue_redraw()
+
+
+func face_toward_world_position(world_position: Vector2) -> void:
+	var horizontal_delta := world_position.x - global_position.x
+	if is_zero_approx(horizontal_delta):
+		return
+	set_facing(Facing.LEFT if horizontal_delta < 0.0 else Facing.RIGHT)
+
+
+func has_directional_artwork() -> bool:
+	return facing_left_texture != null or facing_right_texture != null
+
+
+func _get_facing_texture() -> Texture2D:
+	var preferred := (
+		facing_left_texture
+		if current_facing == Facing.LEFT
+		else facing_right_texture
+	)
+	if preferred != null:
+		return preferred
+	return facing_right_texture if facing_right_texture != null else facing_left_texture
 
 
 func get_enemy_ai_profile() -> EnemyAIProfile:
@@ -538,6 +593,8 @@ func spend_opportunity_reaction() -> bool:
 
 
 func contains_global_point(point: Vector2) -> bool:
+	if has_directional_artwork():
+		return CHARACTER_ART_HIT_RECT.has_point(to_local(point))
 	var body_center := global_position + Vector2(0.0, -29.0)
 	return body_center.distance_to(point) <= 23.0
 
@@ -557,6 +614,7 @@ func move_along(path: Array[Vector2i], before_step: Callable = Callable()) -> vo
 			if not can_continue or not can_move():
 				break
 		var target_position := _grid.grid_to_global(next_cell)
+		face_toward_world_position(target_position)
 		var distance := global_position.distance_to(target_position)
 		var duration := maxf(0.04, distance / movement_animation_speed)
 		var tween := create_tween()
@@ -735,7 +793,7 @@ func _show_damage_number(amount: int) -> void:
 	label.text = "-%d" % amount
 	label.set_meta("damage_number", true)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.position = Vector2(-36.0, -88.0)
+	label.position = Vector2(-36.0, -148.0) if has_directional_artwork() else Vector2(-36.0, -88.0)
 	label.size = Vector2(72.0, 28.0)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.z_index = 300
@@ -765,18 +823,33 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, 18.0, shadow_color)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	draw_circle(Vector2(0.0, -29.0), 19.0, Color(0.04, 0.07, 0.11, 1.0))
-	draw_circle(Vector2(0.0, -29.0), 16.0, body_color)
-	draw_circle(Vector2(-5.0, -34.0), 4.0, body_color.lightened(0.35))
+	var facing_texture := _get_facing_texture()
+	if facing_texture != null:
+		draw_texture_rect(facing_texture, CHARACTER_ART_RECT, false)
+	else:
+		draw_circle(Vector2(0.0, -29.0), 19.0, Color(0.04, 0.07, 0.11, 1.0))
+		draw_circle(Vector2(0.0, -29.0), 16.0, body_color)
+		draw_circle(Vector2(-5.0, -34.0), 4.0, body_color.lightened(0.35))
 
-	var bar_rect := Rect2(-23.0, -57.0, 46.0, 7.0)
+	var bar_rect := ARTWORK_HEALTH_BAR_RECT if facing_texture != null else FALLBACK_HEALTH_BAR_RECT
 	draw_rect(bar_rect, Color(0.025, 0.035, 0.05, 0.95), true)
 	var ratio := clampf(float(current_health) / float(get_max_health()), 0.0, 1.0)
-	draw_rect(Rect2(bar_rect.position + Vector2(1.0, 1.0), Vector2(44.0 * ratio, 5.0)), health_color, true)
+	draw_rect(
+		Rect2(
+			bar_rect.position + Vector2(1.0, 1.0),
+			Vector2((bar_rect.size.x - 2.0) * ratio, bar_rect.size.y - 2.0)
+		),
+		health_color,
+		true
+	)
 
 	var health_text := str(current_health)
 	var health_font := ThemeDB.fallback_font
-	var health_position := Vector2(-65.0, -48.5)
+	var health_position := (
+		Vector2(-70.0, -108.5)
+		if facing_texture != null
+		else Vector2(-65.0, -48.5)
+	)
 	draw_string_outline(
 		health_font,
 		health_position,
@@ -838,12 +911,13 @@ func _get_status_icon_entries() -> Array[Dictionary]:
 		+ float(definitions.size() - 1) * STATUS_ICON_GAP
 	)
 	var start_x := -total_width * 0.5
+	var status_icon_top := ARTWORK_STATUS_ICON_TOP if has_directional_artwork() else FALLBACK_STATUS_ICON_TOP
 	for index in range(definitions.size()):
 		result.append({
 			"definition": definitions[index],
 			"rect": Rect2(
 				start_x + float(index) * (STATUS_ICON_SIZE + STATUS_ICON_GAP),
-				STATUS_ICON_TOP,
+				status_icon_top,
 				STATUS_ICON_SIZE,
 				STATUS_ICON_SIZE
 			),

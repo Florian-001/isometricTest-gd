@@ -110,6 +110,7 @@ func _perform(
 			)
 		):
 			return false
+	caster.face_toward_world_position(grid.grid_to_global(selected_cell))
 	match ability.delivery_type:
 		AbilityDefinition.DeliveryType.PROJECTILE:
 			var projectile_arrived := await projectile_delivery.launch(

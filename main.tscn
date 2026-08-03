@@ -5,6 +5,7 @@
 [ext_resource type="Resource" path="res://resources/maps/terrain_showcase.tres" id="3_terrain_showcase"]
 [ext_resource type="Resource" path="res://resources/maps/goblin_skirmish.tres" id="4_goblin_skirmish"]
 [ext_resource type="PackedScene" path="res://scenes/battle.tscn" id="5_battle"]
+[ext_resource type="PackedScene" path="res://scenes/run_map_screen.tscn" id="6_run_map"]
 
 [node name="Main" type="Node" unique_id=1967285414]
 script = ExtResource("1_manager")
@@ -72,9 +73,21 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_constants/separation = 12
 
+[node name="ShowMapButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(520, 58)
+layout_mode = 2
+tooltip_text = "Open the branching road map"
+theme_override_font_sizes/font_size = 17
+text = "Show Map"
+
 [node name="EmptyState" type="Label" parent="LevelSelect/Root/Center/Panel/Margin/VBox" unique_id=1151119057]
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.9, 0.45, 0.4, 1)
 text = "No levels are configured."
 horizontal_alignment = 1
+
+[node name="RunMapLayer" type="CanvasLayer" parent="."]
+layer = 30
+
+[node name="RunMapScreen" parent="RunMapLayer" instance=ExtResource("6_run_map")]

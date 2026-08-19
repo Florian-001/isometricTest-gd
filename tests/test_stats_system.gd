@@ -201,6 +201,8 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	var definition := load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
 	var unit := _make_unit(definition)
 	assert_eq(definition.starting_equipment.size(), 3, "the sample friendly should have three starting items")
+	for item in definition.starting_equipment:
+		assert_true(item.icon != null, "%s should have an equipment icon" % item.display_name)
 	assert_eq(unit.get_equipped_items().size(), 3, "starting equipment should copy into runtime slots")
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.STRENGTH), 12.0), "Iron Sword should grant Strength")
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.DEXTERITY), 12.0), "Ranger Armor should grant Dexterity")

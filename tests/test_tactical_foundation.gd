@@ -508,7 +508,7 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	var entries: HBoxContainer = bar.get_node("Margin/HBox")
 	assert_eq(entries.get_child_count(), 5, "the ability bar should create one button per configured ability")
 	assert_true(entries.get_child(0).text.contains("32 DMG"), "damage buttons should show their caster-scaled total damage")
-	assert_true(entries.get_child(1).text.contains("27 DMG"), "Dexterity-scaled damage should show on its button")
+	assert_eq(entries.get_child(1).get_node("DamageLabel").text, "27 DMG", "icon buttons should overlay their caster-scaled damage")
 	assert_false(entries.get_child(2).text.contains("DMG"), "non-damaging ability buttons should remain uncluttered")
 	assert_false(entries.get_child(0).disabled, "ability buttons should be enabled while the action is available")
 	unit.spend_ability_action()

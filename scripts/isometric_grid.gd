@@ -16,7 +16,10 @@ extends Node2D
 @export var cell_color: Color = Color("17273b")
 @export var alternate_cell_color: Color = Color("1b3048")
 @export var grid_line_color: Color = Color("55718f")
-@export_range(0.5, 6.0, 0.5) var grid_line_width: float = 1.5
+@export_range(0.0, 6.0, 0.5) var grid_line_width: float = 1.5:
+	set(value):
+		grid_line_width = maxf(0.0, value)
+		queue_redraw()
 
 @export_group("Movement Overlay")
 @export var reachable_color: Color = Color(0.16, 0.78, 0.88, 0.38)
@@ -236,6 +239,6 @@ func _draw_cell(cell: Vector2i, fill_color: Color, draw_outline: bool) -> void:
 		center + Vector2(-half_width, 0.0),
 	])
 	draw_colored_polygon(points, fill_color)
-	if draw_outline:
+	if draw_outline and grid_line_width > 0.0:
 		points.append(points[0])
 		draw_polyline(points, grid_line_color, grid_line_width, true)

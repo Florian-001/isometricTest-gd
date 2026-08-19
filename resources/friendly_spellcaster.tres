@@ -15,6 +15,7 @@
 [resource]
 script = ExtResource("1_definition")
 display_name = "Friendly Adventurer"
+movement_range = 15.5
 starting_equipment = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("10_armor"), ExtResource("11_charm")])
 body_color = Color(0.16, 0.53, 1, 1)
 health_bar_color = Color(0.2, 0.92, 0.42, 1)

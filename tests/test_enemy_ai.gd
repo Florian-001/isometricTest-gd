@@ -850,15 +850,22 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 		["Mage Staff"],
 		["Fireball", "Ice Shard", "Heal", "Slow"]
 	)
+	var shaman := _assert_enemy_definition(
+		"res://resources/enemies/goblin_shaman.tres",
+		"Goblin Shaman", 72, 5.0, [5, 7, 12, 18, 8],
+		[],
+		["Spirit Bolt", "Heal"]
+	)
 	var body_colors := {
 		ranger.body_color: true,
 		warrior.body_color: true,
 		archer.body_color: true,
 		wolf.body_color: true,
 		mage.body_color: true,
+		shaman.body_color: true,
 	}
-	assert_eq(body_colors.size(), 5, "every starter archetype should have a distinct body color")
-	for definition in [ranger, warrior, archer, wolf, mage]:
+	assert_eq(body_colors.size(), 6, "every starter archetype should have a distinct body color")
+	for definition in [ranger, warrior, archer, wolf, mage, shaman]:
 		assert_eq(definition.health_bar_color, Color(0.96, 0.62, 0.18, 1), "%s should use the standard enemy health-bar color" % definition.display_name)
 
 	var scene_expectations := {
@@ -866,6 +873,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 		"res://scenes/enemies/goblin_warrior.tscn": "Goblin Warrior",
 		"res://scenes/enemies/goblin_warrior_club.tscn": "Goblin Warrior",
 		"res://scenes/enemies/goblin_archer.tscn": "Goblin Archer",
+		"res://scenes/enemies/goblin_shaman.tscn": "Goblin Shaman",
 		"res://scenes/enemies/wolf.tscn": "Wolf",
 		"res://scenes/enemies/mage.tscn": "Mage",
 	}
@@ -931,6 +939,19 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_eq(mage_unit.get_abilities()[2].calculate_primary_effect_amount(mage_unit), 42, "Mage Heal should restore 25 plus effective Intelligence")
 	for ability in mage_unit.get_abilities():
 		assert_true(ability.can_be_used_by(mage_unit), "Mage abilities should remain usable despite the Staff being a Melee weapon")
+	var shaman_unit := track((load("res://scenes/enemies/goblin_shaman.tscn") as PackedScene).instantiate()) as TacticalCharacter
+	shaman_unit._ready()
+	assert_true(shaman_unit.facing_left_texture != null, "Goblin Shaman should load its left-facing generated sprite")
+	assert_true(shaman_unit.facing_right_texture != null, "Goblin Shaman should load its right-facing generated sprite")
+	assert_eq(shaman_unit.facing_left_texture.get_size(), Vector2(256, 256), "Goblin Shaman left sprite should be normalized to 256x256")
+	assert_eq(shaman_unit.facing_right_texture.get_size(), Vector2(256, 256), "Goblin Shaman right sprite should be normalized to 256x256")
+	assert_true(shaman_unit.get_equipped_items().is_empty(), "Goblin Shaman should not create an inventory item for its visual staff")
+	assert_eq(shaman_unit.get_abilities()[0].calculate_damage(shaman_unit), 22, "Spirit Bolt should deal 10 plus Intelligence 12")
+	assert_eq(shaman_unit.get_abilities()[0].range, 5.0, "Spirit Bolt should have range 5")
+	assert_true(shaman_unit.get_abilities()[0].has_target_flag(AbilityDefinition.TargetFlags.ENEMY), "Spirit Bolt should target enemies")
+	assert_eq(shaman_unit.get_abilities()[1].calculate_primary_effect_amount(shaman_unit), 37, "Goblin Shaman Heal should restore 25 plus Intelligence 12")
+	assert_true(shaman_unit.get_abilities()[1].has_target_flag(AbilityDefinition.TargetFlags.FRIEND), "Goblin Shaman Heal should target allies")
+	assert_true(shaman_unit.get_abilities()[1].has_target_flag(AbilityDefinition.TargetFlags.SELF), "Goblin Shaman Heal should allow self-healing")
 
 	var ranger_variant := track(TacticalCharacterScript.new()) as TacticalCharacter
 	ranger_variant.definition = ranger
@@ -955,10 +976,52 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_false(legacy_raider.get_abilities()[1].can_be_used_by(legacy_raider), "Enemy Shot should remain visible but unavailable to the Melee Raider")
 
 
+func test_goblin_shaman_ai_heals_wounded_allies_and_self_then_attacks() -> void:
+	var shaman_scene := load("res://scenes/enemies/goblin_shaman.tscn") as PackedScene
+	var ally_scene := load("res://scenes/enemies/goblin_warrior.tscn") as PackedScene
+	var grid_size := Vector2i(7, 5)
+
+	var ally_healer := track(shaman_scene.instantiate()) as TacticalCharacter
+	ally_healer.starting_grid_cell = Vector2i(1, 2)
+	ally_healer._ready()
+	ally_healer.reset_movement()
+	ally_healer.reset_ability_action()
+	var wounded_ally := track(ally_scene.instantiate()) as TacticalCharacter
+	wounded_ally.starting_grid_cell = Vector2i(2, 2)
+	wounded_ally._ready()
+	wounded_ally.current_health = 1
+	var ally_case_target := _make_unit(true, Vector2i(4, 2), 0.0, [])
+	var ally_heal_plan := _choose(ally_healer, [ally_healer, wounded_ally, ally_case_target], grid_size)
+	assert_eq(ally_heal_plan.ability.display_name, "Heal", "Goblin Shaman should prefer healing a critically wounded ally over Spirit Bolt")
+	assert_eq(ally_heal_plan.target_cell, wounded_ally.grid_cell, "Goblin Shaman should target the wounded allied goblin")
+
+	var self_healer := track(shaman_scene.instantiate()) as TacticalCharacter
+	self_healer.starting_grid_cell = Vector2i(1, 2)
+	self_healer._ready()
+	self_healer.current_health = 1
+	self_healer.reset_movement()
+	self_healer.reset_ability_action()
+	var self_case_target := _make_unit(true, Vector2i(4, 2), 0.0, [])
+	var self_heal_plan := _choose(self_healer, [self_healer, self_case_target], grid_size)
+	assert_eq(self_heal_plan.ability.display_name, "Heal", "Goblin Shaman should heal itself when critically wounded")
+	assert_eq(self_heal_plan.target_cell, self_healer.grid_cell, "self-healing should target the Goblin Shaman's own cell")
+
+	var attacker := track(shaman_scene.instantiate()) as TacticalCharacter
+	attacker.starting_grid_cell = Vector2i(1, 2)
+	attacker._ready()
+	attacker.reset_movement()
+	attacker.reset_ability_action()
+	var attack_case_target := _make_unit(true, Vector2i(4, 2), 0.0, [])
+	var attack_plan := _choose(attacker, [attacker, attack_case_target], grid_size)
+	assert_eq(attack_plan.ability.display_name, "Spirit Bolt", "Goblin Shaman should attack when no healing has value")
+	assert_eq(attack_plan.target_cell, attack_case_target.grid_cell, "Spirit Bolt should target the opposing unit")
+
+
 func test_starter_enemy_archetype_plans_are_deterministic() -> void:
 	var scene_paths: Array[String] = [
 		"res://scenes/enemies/goblin_warrior.tscn",
 		"res://scenes/enemies/goblin_archer.tscn",
+		"res://scenes/enemies/goblin_shaman.tscn",
 		"res://scenes/enemies/mage.tscn",
 		"res://scenes/enemies/ranger.tscn",
 		"res://scenes/enemies/wolf.tscn",

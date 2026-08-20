@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="2_ability_type"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="3_ai"]
+[ext_resource type="Resource" path="res://resources/abilities/spirit_bolt.tres" id="4_spirit_bolt"]
+[ext_resource type="Resource" path="res://resources/abilities/heal.tres" id="5_heal"]
+
+[resource]
+script = ExtResource("1_enemy")
+ai_profile = ExtResource("3_ai")
+display_name = "Goblin Shaman"
+faction = 1
+constitution = 18
+movement_range = 5.0
+strength = 5
+dexterity = 7
+intelligence = 12
+speed = 8
+body_color = Color(0.18, 0.72, 0.48, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("4_spirit_bolt"), ExtResource("5_heal")])

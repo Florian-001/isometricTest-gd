@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="1_item"]
+[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/orc_axe.png" id="3_icon"]
+
+[sub_resource type="Resource" id="StrengthBonus"]
+script = ExtResource("2_modifier")
+value = 1.0
+
+[sub_resource type="Resource" id="SpeedPenalty"]
+script = ExtResource("2_modifier")
+stat = 4
+value = -1.0
+
+[resource]
+script = ExtResource("1_item")
+display_name = "Orc Axe"
+icon = ExtResource("3_icon")
+weapon_damage = 12
+modifiers = Array[ExtResource("2_modifier")]([SubResource("StrengthBonus"), SubResource("SpeedPenalty")])

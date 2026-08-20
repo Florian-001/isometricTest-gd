@@ -177,7 +177,7 @@ func _test_item_icon_catalog() -> void:
 		if filename.ends_with(".tres"):
 			item_paths.append("res://resources/items/%s" % filename)
 	item_paths.sort()
-	_check(item_paths.size() == 13, "the current catalog should contain thirteen saved items")
+	_check(item_paths.size() == 14, "the current catalog should contain fourteen saved items")
 	for path in item_paths:
 		var item := load(path) as ItemDefinition
 		_check(item != null and item.icon != null, "%s should load a generated icon" % path)

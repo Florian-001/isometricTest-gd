@@ -856,6 +856,12 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 		[],
 		["Spirit Bolt", "Heal"]
 	)
+	var orc := _assert_enemy_definition(
+		"res://resources/enemies/orc.tres",
+		"Orc", 140, 5.0, [15, 7, 4, 35, 7],
+		["Orc Axe"],
+		["Enemy Slash"]
+	)
 	var body_colors := {
 		ranger.body_color: true,
 		warrior.body_color: true,
@@ -863,9 +869,10 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 		wolf.body_color: true,
 		mage.body_color: true,
 		shaman.body_color: true,
+		orc.body_color: true,
 	}
-	assert_eq(body_colors.size(), 6, "every starter archetype should have a distinct body color")
-	for definition in [ranger, warrior, archer, wolf, mage, shaman]:
+	assert_eq(body_colors.size(), 7, "every starter archetype should have a distinct body color")
+	for definition in [ranger, warrior, archer, wolf, mage, shaman, orc]:
 		assert_eq(definition.health_bar_color, Color(0.96, 0.62, 0.18, 1), "%s should use the standard enemy health-bar color" % definition.display_name)
 
 	var scene_expectations := {
@@ -874,6 +881,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 		"res://scenes/enemies/goblin_warrior_club.tscn": "Goblin Warrior",
 		"res://scenes/enemies/goblin_archer.tscn": "Goblin Archer",
 		"res://scenes/enemies/goblin_shaman.tscn": "Goblin Shaman",
+		"res://scenes/enemies/orc.tscn": "Orc",
 		"res://scenes/enemies/wolf.tscn": "Wolf",
 		"res://scenes/enemies/mage.tscn": "Mage",
 	}
@@ -952,6 +960,19 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_eq(shaman_unit.get_abilities()[1].calculate_primary_effect_amount(shaman_unit), 37, "Goblin Shaman Heal should restore 25 plus Intelligence 12")
 	assert_true(shaman_unit.get_abilities()[1].has_target_flag(AbilityDefinition.TargetFlags.FRIEND), "Goblin Shaman Heal should target allies")
 	assert_true(shaman_unit.get_abilities()[1].has_target_flag(AbilityDefinition.TargetFlags.SELF), "Goblin Shaman Heal should allow self-healing")
+	var orc_unit := track((load("res://scenes/enemies/orc.tscn") as PackedScene).instantiate()) as TacticalCharacter
+	orc_unit._ready()
+	assert_true(orc_unit.facing_left_texture != null, "Orc should load its left-facing generated sprite")
+	assert_true(orc_unit.facing_right_texture != null, "Orc should load its right-facing generated sprite")
+	assert_eq(orc_unit.facing_left_texture.get_size(), Vector2(256, 256), "Orc left sprite should be normalized to 256x256")
+	assert_eq(orc_unit.facing_right_texture.get_size(), Vector2(256, 256), "Orc right sprite should be normalized to 256x256")
+	assert_eq(orc_unit.get_equipped_weapon().display_name, "Orc Axe", "Orc should equip its dedicated Axe")
+	assert_eq(orc_unit.get_equipped_weapon_type(), ItemDefinition.WeaponType.MELEE, "Orc Axe should be a Melee weapon")
+	assert_eq(orc_unit.get_weapon_damage(), 12, "Orc Axe should provide 12 weapon damage")
+	assert_true(is_equal_approx(orc_unit.get_effective_stat(UnitStat.Type.STRENGTH), 16.0), "Orc Axe should raise effective Strength to 16")
+	assert_eq(orc_unit.get_initiative(), 6, "Orc Axe should reduce effective Speed to 6")
+	assert_eq(orc_unit.get_abilities()[0].calculate_damage(orc_unit), 44, "Orc Slash should deal 12 plus 200% of effective Strength 16")
+	assert_eq(orc_unit.get_equipped_weapon().icon.get_size(), Vector2(256, 256), "Orc Axe should load its normalized inventory icon")
 
 	var ranger_variant := track(TacticalCharacterScript.new()) as TacticalCharacter
 	ranger_variant.definition = ranger
@@ -1022,6 +1043,7 @@ func test_starter_enemy_archetype_plans_are_deterministic() -> void:
 		"res://scenes/enemies/goblin_warrior.tscn",
 		"res://scenes/enemies/goblin_archer.tscn",
 		"res://scenes/enemies/goblin_shaman.tscn",
+		"res://scenes/enemies/orc.tscn",
 		"res://scenes/enemies/mage.tscn",
 		"res://scenes/enemies/ranger.tscn",
 		"res://scenes/enemies/wolf.tscn",

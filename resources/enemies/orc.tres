@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="2_ability_type"]
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="3_item_type"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="4_ai"]
+[ext_resource type="Resource" path="res://resources/abilities/enemy_slash.tres" id="5_slash"]
+[ext_resource type="Resource" path="res://resources/items/orc_axe.tres" id="6_axe"]
+
+[resource]
+script = ExtResource("1_enemy")
+ai_profile = ExtResource("4_ai")
+display_name = "Orc"
+faction = 1
+constitution = 35
+movement_range = 5.0
+strength = 15
+dexterity = 7
+intelligence = 4
+speed = 7
+starting_equipment = Array[ExtResource("3_item_type")]([ExtResource("6_axe")])
+body_color = Color(0.32, 0.56, 0.18, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("5_slash")])

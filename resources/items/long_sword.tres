@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3 uid="uid://d1ongsw0rd001"]
+
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="1_item"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
+[ext_resource type="Resource" path="res://resources/abilities/charge.tres" id="3_charge"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/long_sword.png" id="4_icon"]
+
+[resource]
+script = ExtResource("1_item")
+display_name = "Long Sword"
+icon = ExtResource("4_icon")
+weapon_damage = 20
+granted_abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_charge")])

@@ -31,6 +31,10 @@ enum WeaponType {
 ## Guaranteed reusable status applied by surviving targets of damaging abilities that use this weapon.
 @export var status_effect: StatusEffectDefinition
 
+@export_category("Abilities")
+## Abilities added to a unit's loadout while this item is equipped.
+@export var granted_abilities: Array[AbilityDefinition] = []
+
 @export_category("Stat Modifiers")
 @export var modifiers: Array[StatModifierDefinition] = []
 

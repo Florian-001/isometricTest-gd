@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/initiative_battle_controller.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/initiative_turn_manager.gd" id="2_turn_manager"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/inventory_screen.tscn" id="7_inventory_screen"]
 [ext_resource type="Script" path="res://scripts/item_definition.gd" id="8_item_type"]
 [ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="9_sword"]
+[ext_resource type="Resource" uid="uid://d1ongsw0rd001" path="res://resources/items/long_sword.tres" id="15_long_sword"]
 [ext_resource type="Resource" path="res://resources/items/ranger_armor.tres" id="10_armor"]
 [ext_resource type="Resource" path="res://resources/items/sage_charm.tres" id="11_charm"]
 [ext_resource type="Resource" path="res://resources/items/wooden_sword.tres" id="12_wooden_sword"]
@@ -22,7 +23,7 @@ script = ExtResource("1_controller")
 
 [node name="GeneralInventory" type="Node" parent="."]
 script = ExtResource("6_inventory")
-starting_items = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("10_armor"), ExtResource("11_charm"), ExtResource("12_wooden_sword"), ExtResource("13_ranger_bow"), ExtResource("14_frost_bow")])
+starting_items = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("15_long_sword"), ExtResource("10_armor"), ExtResource("11_charm"), ExtResource("12_wooden_sword"), ExtResource("13_ranger_bow"), ExtResource("14_frost_bow")])
 
 [node name="TurnManager" type="Node" parent="."]
 script = ExtResource("2_turn_manager")

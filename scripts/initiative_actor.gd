@@ -539,12 +539,26 @@ func advance_status_durations() -> void:
 
 
 func get_abilities() -> Array[AbilityDefinition]:
+	var result: Array[AbilityDefinition] = []
+	var base_abilities: Array[AbilityDefinition] = []
 	if override_template_abilities:
-		return ability_overrides
-	if definition != null:
-		return definition.abilities
-	var empty_abilities: Array[AbilityDefinition] = []
-	return empty_abilities
+		base_abilities = ability_overrides
+	elif definition != null:
+		base_abilities = definition.abilities
+	_append_unique_abilities(result, base_abilities)
+	for item in get_equipped_items():
+		if item != null:
+			_append_unique_abilities(result, item.granted_abilities)
+	return result
+
+
+func _append_unique_abilities(
+	result: Array[AbilityDefinition],
+	abilities: Array[AbilityDefinition]
+) -> void:
+	for ability in abilities:
+		if ability != null and not result.has(ability):
+			result.append(ability)
 
 
 func reset_movement() -> void:

@@ -745,7 +745,10 @@ func _on_inventory_equipment_updated(character: TacticalCharacter) -> void:
 	if (
 		character == _selected_character
 		and _selected_ability != null
-		and not _selected_ability.can_be_used_by(character)
+		and (
+			not character.get_abilities().has(_selected_ability)
+			or not _selected_ability.can_be_used_by(character)
+		)
 	):
 		_cancel_ability_targeting()
 	if character == turn_manager.current_unit:

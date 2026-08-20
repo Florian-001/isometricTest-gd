@@ -25,6 +25,8 @@ const StatusCatalogScript = preload("res://addons/tile_painter/status_effect_cat
 const ItemCatalogScript = preload("res://addons/tile_painter/item_definition_catalog.gd")
 const ItemArrayModelScript = preload("res://addons/tile_painter/item_array_editor_model.gd")
 const ItemModifierModelScript = preload("res://addons/tile_painter/item_modifier_editor_model.gd")
+const AbilityCatalogScript = preload("res://addons/tile_painter/ability_definition_catalog.gd")
+const AbilityArrayModelScript = preload("res://addons/tile_painter/ability_array_editor_model.gd")
 
 
 func suite_name() -> String:
@@ -292,11 +294,11 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_eq(ability.get_effective_area_span(), 5, "normalized area span should be exposed to targeting")
 
 	var friendly_definition = load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
-	assert_eq(friendly_definition.abilities.size(), 7, "the friendly template should expose seven sample abilities")
+	assert_eq(friendly_definition.abilities.size(), 8, "the friendly template should expose eight sample abilities")
 	var names: Array[String] = []
 	for sample in friendly_definition.abilities:
 		names.append(sample.display_name)
-	assert_eq(names, ["Fireball", "Arrow", "Heal", "Beam", "Strike", "Ice Shard", "Charge"], "Charge should be the final sample ability")
+	assert_eq(names, ["Fireball", "Arrow", "Heal", "Beam", "Strike", "Ice Shard", "Charge", "Searing Dagger"], "the friendly template should retain the complete authored sample loadout")
 	assert_eq(friendly_definition.abilities[0].innate_damage, 20, "Fireball innate damage should be editable directly on the ability")
 	assert_eq(friendly_definition.abilities[4].innate_damage, 0, "Strike should expose zero innate damage directly on the ability")
 	var ice_shard := friendly_definition.abilities[5] as AbilityDefinition
@@ -395,7 +397,7 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_true(status_inspector_source.contains("object is ItemDefinition"), "the saved-status dropdown should handle ItemDefinition resources")
 	assert_eq(
 		StatusCatalogScript.get_statuses().map(func(saved_status: StatusEffectDefinition): return saved_status.display_name),
-		["Burning", "Focus", "Slow", "Stun"],
+		["Bleeding", "Burning", "Focus", "Slow", "Stun"],
 		"the weapon status dropdown should discover every saved status deterministically"
 	)
 	item.slot = ItemDefinition.EquipmentSlot.ARMOR
@@ -715,6 +717,7 @@ func test_automatic_item_catalog_and_typed_array_editor_model() -> void:
 		"Goblin Club",
 		"Goblin Sword",
 		"Iron Sword",
+		"Long Sword",
 		"Mage Staff",
 		"Raider Weapon",
 		"Ranger Armor",
@@ -752,6 +755,126 @@ func test_automatic_item_catalog_and_typed_array_editor_model() -> void:
 	var editor_source := FileAccess.get_file_as_string("res://addons/tile_painter/item_array_editor_property.gd")
 	assert_true(editor_source.contains("filesystem_changed.connect"), "visible item selectors should refresh after filesystem changes")
 	assert_true(editor_source.contains("emit_changed"), "selector edits should use Godot Inspector undo/redo changes")
+
+
+func test_item_granted_ability_catalog_inspector_and_runtime_merge() -> void:
+	var catalog := AbilityCatalogScript.get_abilities()
+	var names: Array[String] = []
+	for ability in catalog:
+		names.append(ability.display_name)
+		assert_true(ability.resource_path.begins_with("res://resources/abilities/"), "the ability catalog should include only saved ability resources")
+	var sorted_names := names.duplicate()
+	sorted_names.sort_custom(func(a: String, b: String) -> bool: return a.naturalnocasecmp_to(b) < 0)
+	assert_eq(names, sorted_names, "the automatic ability catalog should sort saved abilities by display name")
+	assert_true(names.has("Charge"), "the ability picker should discover Charge")
+	assert_eq(AbilityCatalogScript.get_labels(catalog), names, "unique ability names should appear directly in selector rows")
+	var external := AbilityDefinition.new()
+	external.display_name = "External Technique"
+	assert_eq(AbilityCatalogScript.get_external_label(external), "External Technique (external)", "out-of-catalog abilities should remain visible")
+
+	var charge := load("res://resources/abilities/charge.tres") as AbilityDefinition
+	var strike := load("res://resources/abilities/strike.tres") as AbilityDefinition
+	var initial: Array[AbilityDefinition] = [charge, null, strike, charge]
+	var selected := AbilityArrayModelScript.replace_entry(initial, 1, strike)
+	assert_true(selected.is_typed(), "ability selector edits should preserve a typed array")
+	assert_eq(selected.get_typed_script(), load("res://scripts/ability_definition.gd"), "selector arrays should retain their AbilityDefinition element type")
+	assert_eq(selected, [charge, strike, strike, charge], "selecting an ability should replace only its row")
+	assert_eq(initial[1], null, "ability selector operations should not mutate the Inspector source array")
+	var appended := AbilityArrayModelScript.append_empty(selected)
+	assert_eq(appended.size(), 5, "Add Ability should append one empty selector row")
+	var moved := AbilityArrayModelScript.move_entry(appended, 3, -1)
+	assert_eq(moved[2], charge, "reordering should preserve repeated ability resources")
+	assert_eq(AbilityArrayModelScript.remove_entry(moved, 4).size(), 4, "Remove should delete only the selected ability row")
+
+	var item := ItemDefinition.new()
+	var granted_property: Dictionary = {}
+	for property_info in item.get_property_list():
+		if StringName(property_info.name) == &"granted_abilities":
+			granted_property = property_info
+			break
+	assert_false(granted_property.is_empty(), "items should expose Granted Abilities")
+	assert_true(bool(int(granted_property.usage) & PROPERTY_USAGE_EDITOR), "Granted Abilities should be Inspector-editable")
+	assert_true(bool(int(granted_property.usage) & PROPERTY_USAGE_STORAGE), "Granted Abilities should be stored in item resources")
+	assert_true(String(granted_property.hint_string).contains("AbilityDefinition"), "Granted Abilities should accept only AbilityDefinition resources")
+	var inspector_source := FileAccess.get_file_as_string("res://addons/tile_painter/item_ability_inspector.gd")
+	assert_true(inspector_source.contains('name != "granted_abilities"'), "the ability Inspector should replace only ItemDefinition.granted_abilities")
+	var property_source := FileAccess.get_file_as_string("res://addons/tile_painter/ability_array_editor_property.gd")
+	assert_true(property_source.contains("filesystem_changed.connect"), "visible ability selectors should refresh after filesystem changes")
+	assert_true(property_source.contains("emit_changed"), "ability selector edits should participate in Inspector undo/redo")
+	var plugin_source := FileAccess.get_file_as_string("res://addons/tile_painter/tile_painter_plugin.gd")
+	assert_true(plugin_source.contains("ItemAbilityInspector"), "the enabled editor plugin should register the ability Inspector")
+
+	var innate := AbilityDefinition.new()
+	innate.display_name = "Innate"
+	var weapon_grant := AbilityDefinition.new()
+	weapon_grant.display_name = "Weapon Grant"
+	var armor_grant := AbilityDefinition.new()
+	armor_grant.display_name = "Armor Grant"
+	var accessory_grant := AbilityDefinition.new()
+	accessory_grant.display_name = "Accessory Grant"
+	var same_name_but_distinct := AbilityDefinition.new()
+	same_name_but_distinct.display_name = "Weapon Grant"
+	var unit := _make_unit(true, Vector2i.ZERO, 6.0)
+	unit.definition.abilities = [innate, charge, null, innate]
+	var weapon := ItemDefinition.new()
+	weapon.slot = ItemDefinition.EquipmentSlot.WEAPON
+	weapon.granted_abilities = [charge, weapon_grant, null]
+	var armor := ItemDefinition.new()
+	armor.slot = ItemDefinition.EquipmentSlot.ARMOR
+	armor.granted_abilities = [armor_grant]
+	var accessory := ItemDefinition.new()
+	accessory.slot = ItemDefinition.EquipmentSlot.ACCESSORY
+	accessory.granted_abilities = [weapon_grant, accessory_grant, same_name_but_distinct]
+	unit.equip_item(accessory)
+	unit.equip_item(armor)
+	unit.equip_item(weapon)
+	assert_eq(
+		unit.get_abilities(),
+		[innate, charge, weapon_grant, armor_grant, accessory_grant, same_name_but_distinct],
+		"abilities should keep the first resource occurrence in base, Weapon, Armor, Accessory order"
+	)
+	var override_ability := AbilityDefinition.new()
+	override_ability.display_name = "Override"
+	unit.override_template_abilities = true
+	unit.ability_overrides = [override_ability, weapon_grant]
+	assert_eq(
+		unit.get_abilities(),
+		[override_ability, weapon_grant, charge, armor_grant, accessory_grant, same_name_but_distinct],
+		"equipment grants should append to the active per-unit override while preserving first occurrences"
+	)
+	unit.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
+	assert_false(unit.get_abilities().has(charge), "unequipping an item should immediately remove its unique granted ability")
+
+	var long_sword := load("res://resources/items/long_sword.tres") as ItemDefinition
+	assert_true(long_sword != null, "the reusable Long Sword resource should load")
+	var long_sword_uid := ResourceUID.text_to_id("uid://d1ongsw0rd001")
+	assert_ne(long_sword_uid, ResourceUID.INVALID_ID, "Long Sword should have a valid stable resource UID")
+	assert_eq(ResourceUID.get_id_path(long_sword_uid), "res://resources/items/long_sword.tres", "Long Sword UID should resolve to its saved resource")
+	assert_eq(long_sword.display_name, "Long Sword", "the new item should use the corrected display name")
+	assert_eq(long_sword.slot, ItemDefinition.EquipmentSlot.WEAPON, "Long Sword should occupy the Weapon slot")
+	assert_eq(long_sword.weapon_type, ItemDefinition.WeaponType.MELEE, "Long Sword should be Melee")
+	assert_eq(long_sword.weapon_damage, 20, "Long Sword should deal 20 weapon damage")
+	assert_true(long_sword.modifiers.is_empty(), "Long Sword should not grant stat modifiers")
+	assert_eq(long_sword.status_effect, null, "Long Sword should not apply a status")
+	assert_eq(long_sword.granted_abilities, [charge], "Long Sword should grant Charge")
+	assert_true(ItemCatalogScript.get_tooltip(long_sword).contains("Grants: Charge"), "item catalog tooltips should identify granted abilities")
+
+	var untrained := _make_unit(true, Vector2i.ONE, 6.0)
+	assert_true(untrained.get_abilities().is_empty(), "the grant fixture should start without abilities")
+	untrained.equip_item(long_sword)
+	assert_eq(untrained.get_abilities(), [charge], "equipping Long Sword should grant Charge to an untrained unit")
+	assert_eq(OpportunityAttackSystemScript.get_opportunity_attack_ability(untrained), null, "item-granted Charge should remain excluded from opportunity attacks because it moves the caster")
+	untrained.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
+	assert_true(untrained.get_abilities().is_empty(), "unequipping Long Sword should remove Charge from an untrained unit")
+
+	var friendly_definition := load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
+	var friendly := track(TacticalCharacterScript.new()) as TacticalCharacter
+	friendly.definition = friendly_definition
+	friendly._ready()
+	friendly.equip_item(long_sword)
+	assert_eq(friendly.get_abilities().count(charge), 1, "innate and item-granted Charge should appear only once")
+	var controller_source := FileAccess.get_file_as_string("res://scripts/initiative_battle_controller.gd")
+	assert_true(controller_source.contains("not character.get_abilities().has(_selected_ability)"), "equipment refresh should cancel targeting when an item-granted ability is removed")
 
 
 func test_weapon_status_applies_to_every_surviving_weapon_damage_target() -> void:
@@ -1452,7 +1575,7 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	var bar = track(AbilityBarScene.instantiate())
 	bar.rebuild(unit, true)
 	var entries: HBoxContainer = bar.get_node("Margin/HBox")
-	assert_eq(entries.get_child_count(), 7, "the ability bar should create one button per configured ability")
+	assert_eq(entries.get_child_count(), 8, "the ability bar should create one button per configured ability")
 	assert_true(entries.get_child(0).text.contains("32 DMG"), "damage buttons should show their caster-scaled total damage")
 	assert_true(entries.get_child(1).text.contains("Requires a Ranged weapon"), "the Ability Bar summary should show the incompatible weapon reason")
 	assert_true(entries.get_child(1).disabled, "Arrow should remain visible but disabled with a Melee weapon")

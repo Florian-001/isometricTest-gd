@@ -36,7 +36,7 @@ func _run() -> void:
 	first_friend.apply_damage(5)
 	var first_inventory_item := first_battle.general_inventory.get_items()[0]
 	_check(first_battle.general_inventory.take_item(first_inventory_item), "the first battle inventory should be mutable at runtime")
-	_check(first_battle.general_inventory.get_items().size() == 5, "the first battle should retain its own inventory state")
+	_check(first_battle.general_inventory.get_items().size() == 6, "the first battle should retain its own inventory state")
 	var active_before_dialog := first_battle.turn_manager.current_unit
 	first_battle.levels_button.pressed.emit()
 	await process_frame
@@ -59,7 +59,7 @@ func _run() -> void:
 	var second_battle := manager.current_battle
 	_check(is_instance_valid(second_battle), "selecting Goblin Skirmish should create a battle")
 	_check(second_battle.map_definition == manager.levels[1], "the second battle should receive Goblin Skirmish")
-	_check(second_battle.general_inventory.get_items().size() == 6, "a new level should receive fresh General Inventory contents")
+	_check(second_battle.general_inventory.get_items().size() == 7, "a new level should receive fresh General Inventory contents")
 	_check(second_battle.grid.grid_size == Vector2i(12, 12), "Goblin Skirmish should use a 12x12 grid")
 	_check(second_battle.terrain.get_child_count() == 0, "Goblin Skirmish should have no special tiles")
 	_check(second_battle.walls_container.get_child_count() == 0, "Goblin Skirmish should have no walls")

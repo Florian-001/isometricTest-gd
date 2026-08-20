@@ -335,22 +335,27 @@ func test_snapshot_scores_status_refreshes_by_added_duration_without_live_mutati
 	var slow := load("res://resources/statuses/slow.tres") as StatusEffectDefinition
 	var focus := load("res://resources/statuses/focus.tres") as StatusEffectDefinition
 	var burning := load("res://resources/statuses/burning.tres") as StatusEffectDefinition
+	var bleeding := load("res://resources/statuses/bleeding.tres") as StatusEffectDefinition
 	var units: Array[TacticalCharacter] = [caster, target]
 
 	var new_snapshot := AIBoardSnapshot.from_battle(units, Vector2i(4, 4))
 	var new_slow := new_snapshot.forecast_status_application(caster, target, slow)
 	var new_focus := new_snapshot.forecast_status_application(caster, target, focus, 12.0)
 	var new_burning := new_snapshot.forecast_status_application(caster, target, burning)
+	var new_bleeding := new_snapshot.forecast_status_application(caster, target, bleeding)
 	assert_true(is_equal_approx(new_slow.utility_hint, 8.0), "a new Slow should receive its full configured utility")
 	assert_true(is_equal_approx(new_focus.utility_hint, 12.0), "a new Focus should receive its full configured utility")
 	assert_eq(new_burning.health_delta, -2, "a new Burning forecast should count its full future damage")
+	assert_eq(new_bleeding.health_delta, -4, "a new Bleeding forecast should count both fixed damage ticks")
 	assert_true(is_zero_approx(new_snapshot.forecast_status_application(caster, target, slow).utility_hint), "a full-duration Slow refresh should be redundant")
 	assert_true(is_zero_approx(new_snapshot.forecast_status_application(caster, target, focus, 12.0).utility_hint), "a full-duration Focus refresh should be redundant")
 	assert_eq(new_snapshot.forecast_status_application(caster, target, burning).health_delta, 0, "a full-duration Burning refresh should add no future damage")
+	assert_eq(new_snapshot.forecast_status_application(caster, target, bleeding).health_delta, 0, "a full-duration Bleeding refresh should add no future damage")
 
 	assert_true(target.apply_status(slow, caster, caster), "the live target should accept Slow")
 	assert_true(target.apply_status(focus, caster, caster), "the live target should accept Focus")
 	assert_true(target.apply_status(burning, caster, caster), "the live target should accept Burning")
+	assert_true(target.apply_status(bleeding, caster, caster), "the live target should accept Bleeding")
 	for active_status in target.get_active_statuses():
 		active_status.remaining_turns = 1
 		active_status.processed_this_turn = true
@@ -365,9 +370,11 @@ func test_snapshot_scores_status_refreshes_by_added_duration_without_live_mutati
 	var refreshed_slow := refresh_snapshot.forecast_status_application(caster, target, slow)
 	var refreshed_focus := refresh_snapshot.forecast_status_application(caster, target, focus, 12.0)
 	var refreshed_burning := refresh_snapshot.forecast_status_application(caster, target, burning)
+	var refreshed_bleeding := refresh_snapshot.forecast_status_application(caster, target, bleeding)
 	assert_true(is_equal_approx(refreshed_slow.utility_hint, 4.0), "a one-turn Slow extension should receive half utility")
 	assert_true(is_equal_approx(refreshed_focus.utility_hint, 6.0), "a one-turn Focus extension should receive half utility")
 	assert_eq(refreshed_burning.health_delta, -1, "a one-turn Burning extension should count only one extra tick")
+	assert_eq(refreshed_bleeding.health_delta, -2, "a one-turn Bleeding extension should count only one extra tick")
 	assert_eq(refresh_snapshot.get_status_remaining(target, slow.status_id), 2, "a simulated refresh should record the new duration")
 	assert_false(refresh_snapshot.get_status_state(target, slow.status_id).processed_this_turn, "a simulated refresh should reset the processed state")
 	assert_eq(target.current_health, 100, "status forecasting must not mutate live health")
@@ -475,6 +482,16 @@ func test_general_ai_prioritizes_the_highest_value_usable_ability() -> void:
 	var plan := _choose(enemy, [enemy, target], Vector2i(7, 7))
 	assert_eq(plan.ability, slash, "general AI should prefer the stronger legal result without a Melee style bonus")
 	assert_true(plan.effect_score >= 30.0, "the chosen attack should forecast its centralized damage")
+
+
+func test_general_ai_uses_an_item_granted_ability() -> void:
+	var item_only := _make_damage_ability("Granted Bolt", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 18)
+	var enemy := _make_unit(false, Vector2i(2, 2), 3.0, [], _profile(0.0))
+	enemy.get_equipped_weapon().granted_abilities = [item_only]
+	var target := _make_unit(true, Vector2i(3, 2), 3.0, [])
+	assert_eq(enemy.get_abilities(), [item_only], "the AI fixture should receive its only ability from equipment")
+	var plan := _choose(enemy, [enemy, target], Vector2i(7, 7))
+	assert_eq(plan.ability, item_only, "general AI should consider abilities supplied by equipped items")
 
 
 func test_general_ai_uses_an_available_fallback_from_its_loadout() -> void:

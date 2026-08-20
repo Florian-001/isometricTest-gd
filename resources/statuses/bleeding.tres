@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3 uid="uid://dbleed4tick2"]
+
+[ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="1_status"]
+[ext_resource type="Texture2D" uid="uid://ca7lndiagiasu" path="res://assets/status_icons/bleeding.svg" id="2_icon"]
+
+[resource]
+script = ExtResource("1_status")
+status_id = &"bleeding"
+display_name = "Bleeding"
+duration_turns = 2
+effect = 1
+damage_type = 0
+damage_per_turn = 2
+icon = ExtResource("2_icon")
+color = Color(0.72, 0.06, 0.12, 1)

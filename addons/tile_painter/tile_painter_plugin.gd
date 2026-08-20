@@ -4,6 +4,7 @@ extends EditorPlugin
 const TileScript = preload("res://scripts/tactical_tile.gd")
 const TileStatusInspector = preload("res://addons/tile_painter/tile_status_inspector.gd")
 const ItemArrayInspector = preload("res://addons/tile_painter/item_array_inspector.gd")
+const ItemAbilityInspector = preload("res://addons/tile_painter/item_ability_inspector.gd")
 const ItemModifierInspector = preload("res://addons/tile_painter/item_modifier_inspector.gd")
 
 var _paint_button: Button
@@ -16,6 +17,7 @@ var _hover_valid := false
 var _palette_tiles: Array[TileDefinition] = []
 var _tile_status_inspector: EditorInspectorPlugin
 var _item_array_inspector: EditorInspectorPlugin
+var _item_ability_inspector: EditorInspectorPlugin
 var _item_modifier_inspector: EditorInspectorPlugin
 
 
@@ -26,6 +28,9 @@ func _enter_tree() -> void:
 	_item_array_inspector = ItemArrayInspector.new()
 	_item_array_inspector.setup(get_editor_interface().get_resource_filesystem())
 	add_inspector_plugin(_item_array_inspector)
+	_item_ability_inspector = ItemAbilityInspector.new()
+	_item_ability_inspector.setup(get_editor_interface().get_resource_filesystem())
+	add_inspector_plugin(_item_ability_inspector)
 	_item_modifier_inspector = ItemModifierInspector.new()
 	_item_modifier_inspector.setup(get_undo_redo())
 	add_inspector_plugin(_item_modifier_inspector)
@@ -47,6 +52,9 @@ func _exit_tree() -> void:
 	if _item_modifier_inspector != null:
 		remove_inspector_plugin(_item_modifier_inspector)
 		_item_modifier_inspector = null
+	if _item_ability_inspector != null:
+		remove_inspector_plugin(_item_ability_inspector)
+		_item_ability_inspector = null
 	if _item_array_inspector != null:
 		remove_inspector_plugin(_item_array_inspector)
 		_item_array_inspector = null

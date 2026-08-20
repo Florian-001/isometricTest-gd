@@ -48,6 +48,12 @@ static func get_tooltip(item: ItemDefinition) -> String:
 	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
 		lines.append("Weapon type: %s" % ItemDefinition.WeaponType.keys()[item.weapon_type].capitalize())
 		lines.append("Damage: %d" % item.weapon_damage)
+	var granted_names: Array[String] = []
+	for ability in item.granted_abilities:
+		if ability != null and not granted_names.has(ability.display_name):
+			granted_names.append(ability.display_name)
+	if not granted_names.is_empty():
+		lines.append("Grants: %s" % ", ".join(granted_names))
 	if not item.resource_path.is_empty():
 		lines.append(item.resource_path)
 	else:

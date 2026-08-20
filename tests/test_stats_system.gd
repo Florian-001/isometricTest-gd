@@ -399,6 +399,56 @@ func test_central_physical_magical_damage_scaling_descriptions_and_ai_forecasts(
 	target.process_status_turn_start()
 	assert_eq(target.current_health, 99, "status damage should ignore the caster's weapon and stats")
 
+	var bleeding := load("res://resources/statuses/bleeding.tres") as StatusEffectDefinition
+	assert_eq(bleeding.status_id, &"bleeding", "Bleeding should expose its stable status id")
+	assert_eq(bleeding.display_name, "Bleeding", "Bleeding should expose its display name")
+	assert_eq(bleeding.effect, StatusEffectDefinition.Effect.DAMAGE_EACH_TURN, "Bleeding should deal damage each turn")
+	assert_eq(bleeding.damage_type, DamageCalculator.Type.PHYSICAL, "Bleeding should be classified as Physical damage")
+	assert_eq(bleeding.damage_per_turn, 2, "Bleeding should deal two fixed damage per tick")
+	assert_eq(bleeding.duration_turns, 2, "Bleeding should last for two processed turns")
+	assert_eq(
+		bleeding.get_description(),
+		"Bleeding: 2 physical damage at turn start for 2 turns",
+		"Bleeding should describe its complete tick behavior"
+	)
+	assert_true(bleeding.icon != null, "Bleeding should provide a status icon")
+	for existing_status_path in [
+		"res://resources/statuses/burning.tres",
+		"res://resources/statuses/focus.tres",
+		"res://resources/statuses/slow.tres",
+		"res://resources/statuses/stun.tres",
+	]:
+		var existing_status := load(existing_status_path) as StatusEffectDefinition
+		assert_ne(
+			bleeding.icon.resource_path,
+			existing_status.icon.resource_path,
+			"Bleeding should use an icon distinct from %s" % existing_status.display_name
+		)
+	assert_eq(bleeding.color, Color(0.72, 0.06, 0.12, 1), "Bleeding should use its dark-red presentation color")
+	assert_true(
+		ResourceLoader.get_resource_uid("res://resources/statuses/bleeding.tres")
+		!= ResourceUID.INVALID_ID,
+		"Bleeding should have a stable resource UID"
+	)
+	var bleeding_target := _make_unit(CharacterDefinitionScript.new())
+	assert_true(bleeding_target.apply_status(bleeding, caster, caster), "Bleeding should apply to a living unit")
+	assert_eq(bleeding_target.current_health, 100, "Bleeding should not deal immediate damage")
+	bleeding_target.process_status_turn_start()
+	assert_eq(bleeding_target.current_health, 98, "Bleeding should deal two damage on its first tick")
+	bleeding_target.advance_status_durations()
+	bleeding_target.process_status_turn_start()
+	assert_eq(bleeding_target.current_health, 96, "Bleeding should deal two damage on its second tick")
+	bleeding_target.advance_status_durations()
+	assert_true(bleeding_target.get_active_statuses().is_empty(), "Bleeding should expire after two processed turns")
+	bleeding_target.process_status_turn_start()
+	assert_eq(bleeding_target.current_health, 96, "expired Bleeding should not deal a third tick")
+	var refresh_target := _make_unit(CharacterDefinitionScript.new())
+	assert_true(refresh_target.apply_status(bleeding, caster, caster), "Bleeding should apply before refresh")
+	refresh_target.get_active_statuses()[0].remaining_turns = 1
+	assert_true(refresh_target.apply_status(bleeding, caster, caster), "Bleeding should refresh successfully")
+	assert_eq(refresh_target.get_active_statuses().size(), 1, "reapplying Bleeding should not create a second stack")
+	assert_eq(refresh_target.get_active_statuses()[0].remaining_turns, 2, "reapplying Bleeding should restore its full duration")
+
 
 func test_status_flat_percentage_direction_and_different_id_stacking() -> void:
 	var unit := _make_unit(CharacterDefinitionScript.new())
@@ -551,7 +601,7 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.DEXTERITY), 12.0), "Ranger Armor should grant Dexterity")
 	assert_true(is_equal_approx(unit.get_effective_stat(UnitStat.Type.INTELLIGENCE), 12.0), "Sage Charm should grant Intelligence")
 	assert_eq(unit.get_weapon_damage(), 20, "Iron Sword should provide the physical weapon-damage contribution")
-	assert_eq(unit.get_abilities().size(), 7, "Charge should expand the sample loadout to seven abilities")
+	assert_eq(unit.get_abilities().size(), 8, "Charge and Searing Dagger should expand the sample loadout to eight abilities")
 
 	var expected_stats := [
 		UnitStat.Type.INTELLIGENCE,
@@ -561,8 +611,9 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 		UnitStat.Type.STRENGTH,
 		UnitStat.Type.INTELLIGENCE,
 		UnitStat.Type.STRENGTH,
+		UnitStat.Type.INTELLIGENCE,
 	]
-	var expected_amounts := [32, 7, 37, 22, 32, 27, 32]
+	var expected_amounts := [32, 7, 37, 22, 32, 27, 32, 27]
 	for index in range(unit.get_abilities().size()):
 		var ability := unit.get_abilities()[index]
 		if index == 2:
@@ -578,6 +629,7 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	assert_eq(unit.get_abilities()[4].damage_type, DamageCalculator.Type.PHYSICAL, "Strike should be physical")
 	assert_eq(unit.get_abilities()[5].damage_type, DamageCalculator.Type.MAGICAL, "Ice Shard should be magical")
 	assert_eq(unit.get_abilities()[6].damage_type, DamageCalculator.Type.PHYSICAL, "Charge should be physical")
+	assert_eq(unit.get_abilities()[7].damage_type, DamageCalculator.Type.MAGICAL, "Searing Dagger should be magical")
 	var expected_ability_types := [
 		AbilityDefinition.AbilityType.MAGIC,
 		AbilityDefinition.AbilityType.RANGED,
@@ -586,6 +638,7 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 		AbilityDefinition.AbilityType.MELEE,
 		AbilityDefinition.AbilityType.MAGIC,
 		AbilityDefinition.AbilityType.MELEE,
+		AbilityDefinition.AbilityType.MAGIC,
 	]
 	for index in range(expected_ability_types.size()):
 		assert_eq(unit.get_abilities()[index].ability_type, expected_ability_types[index], "sample ability type should match its migrated role")
@@ -604,6 +657,7 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	var status_icon_paths: Array[String] = []
 	var unique_status_icon_paths: Dictionary = {}
 	for status_path in [
+		"res://resources/statuses/bleeding.tres",
 		"res://resources/statuses/burning.tres",
 		"res://resources/statuses/slow.tres",
 		"res://resources/statuses/focus.tres",

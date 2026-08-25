@@ -10,6 +10,7 @@ enum EquipmentSlot {
 
 @export_category("Item")
 @export var display_name: String = "New Item"
+@export_multiline var description: String = ""
 @export var slot: EquipmentSlot = EquipmentSlot.WEAPON
 @export var icon: Texture2D
 

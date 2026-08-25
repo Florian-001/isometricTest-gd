@@ -12,8 +12,11 @@ extends Node2D
 @onready var characters_container: Node2D = $Characters
 @onready var turn_manager: TurnManager = $TurnManager
 @onready var tactical_camera: TacticalCameraController = $TacticalCamera
+@onready var party_inventory: PartyInventory = $PartyInventory
 @onready var turn_order_bar: TurnOrderBar = $HUD/TurnOrderBar
 @onready var ability_bar: AbilityBar = $HUD/AbilityBar
+@onready var inventory_panel: InventoryPanel = $HUD/InventoryPanel
+@onready var inventory_button: Button = $HUD/InventoryButton
 @onready var turn_status: Label = $HUD/TurnPanel/Margin/VBox/TurnStatus
 @onready var movement_status: Label = $HUD/TurnPanel/Margin/VBox/MovementStatus
 @onready var end_turn_button: Button = $HUD/TurnPanel/Margin/VBox/EndTurnButton
@@ -52,6 +55,8 @@ func _ready() -> void:
 	turn_manager.round_started.connect(_on_round_started)
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	ability_bar.ability_selected.connect(_on_ability_selected)
+	inventory_panel.setup(party_inventory)
+	inventory_button.pressed.connect(inventory_panel.toggle_inventory)
 	dev_button.pressed.connect(_on_dev_button_pressed)
 	terrain.terrain_changed.connect(_on_terrain_changed)
 
@@ -89,6 +94,9 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if inventory_panel != null and inventory_panel.is_open():
+		return
+
 	if event is InputEventMouse:
 		_last_mouse_screen_position = event.position
 		_has_mouse_screen_position = true

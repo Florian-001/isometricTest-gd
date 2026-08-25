@@ -17,9 +17,14 @@
 [ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="15_palette"]
 [ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="16_mud"]
 [ext_resource type="Resource" uid="uid://bvb1c027wvf5u" path="res://resources/tiles/fire.tres" id="17_fire"]
+[ext_resource type="Script" path="res://scripts/party_inventory.gd" id="18_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/inventory_panel.tscn" id="19_inventory_panel"]
 
 [node name="Main" type="Node2D" unique_id=750848398]
 script = ExtResource("1_controller")
+
+[node name="PartyInventory" type="Node" parent="."]
+script = ExtResource("18_inventory")
 
 [node name="Grid" type="Node2D" parent="." unique_id=190021511]
 position = Vector2(640, 96)
@@ -202,6 +207,22 @@ custom_minimum_size = Vector2(0, 38)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "End Turn"
+
+[node name="InventoryPanel" parent="HUD" instance=ExtResource("19_inventory_panel")]
+
+[node name="InventoryButton" type="Button" parent="HUD"]
+z_index = 101
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 112.0
+offset_top = -56.0
+offset_right = 224.0
+offset_bottom = -16.0
+grow_vertical = 0
+tooltip_text = "Open the shared party inventory (I)"
+theme_override_font_sizes/font_size = 15
+text = "Inventory"
 
 [node name="DevButton" type="Button" parent="HUD" unique_id=649615961]
 anchors_preset = 2

@@ -24,10 +24,18 @@ func _run() -> void:
 	_check(not manager.level_select.visible, "Show Map should hide level selection")
 	_check(manager.run_map_screen.visible, "Show Map should reveal the run map")
 	_check(manager.current_battle == null, "opening the run map should not create a battle")
-	_check(manager.run_map_screen.graph.tier_count == 12, "the screen should render twelve tiers")
+	_check(manager.run_map_screen.graph.tier_count == 17, "the screen should render Start, fifteen floors, and Boss")
+	_check(manager.run_map_screen.graph.lane_count == 7, "the screen should render the seven-lane room template")
+	_check(manager.run_map_screen.graph.routes.size() == 6, "the screen should render six traced routes")
+	_check(manager.run_map_screen.map_length.text == "15 floors", "the header should report the room-floor count")
+	_check(manager.run_map_screen.map_canvas.custom_minimum_size.y > 2500.0, "the sparse map canvas should grow for seventeen tiers")
 	_check(
 		manager.run_map_screen.map_canvas.node_controls.size() == manager.run_map_screen.graph.nodes.size(),
 		"the canvas should render one passive control per graph node"
+	)
+	_check(
+		manager.run_map_screen.graph.nodes.size() < 7 * 15 + 2,
+		"the canvas should omit unused rooms from the seven-by-fifteen template"
 	)
 	_check(manager.run_map_screen.map_scroll.scroll_vertical > 0, "the map should initially scroll to Start")
 	for node in manager.run_map_screen.graph.nodes:

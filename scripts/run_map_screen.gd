@@ -4,10 +4,11 @@ extends Control
 signal close_requested
 
 @export var map_seed := RunMapGenerator.DEFAULT_SEED
-@export_range(3, 24, 1) var tier_count := RunMapGenerator.DEFAULT_TIER_COUNT
+@export_range(15, 24, 1) var room_floor_count := RunMapGenerator.DEFAULT_ROOM_FLOOR_COUNT
 
 @onready var back_button: Button = $Margin/VBox/Header/BackButton
 @onready var legend: HFlowContainer = $Margin/VBox/LegendPanel/LegendMargin/Legend
+@onready var map_length: Label = $Margin/VBox/Header/MapLength
 @onready var map_scroll: ScrollContainer = $Margin/VBox/MapPanel/MapScroll
 @onready var map_canvas: RunMapCanvas = $Margin/VBox/MapPanel/MapScroll/MapCenter/MapCanvas
 
@@ -32,7 +33,8 @@ func close_map() -> void:
 
 
 func _rebuild_map() -> void:
-	graph = RunMapGenerator.new().generate(map_seed, tier_count)
+	graph = RunMapGenerator.new().generate(map_seed, room_floor_count)
+	map_length.text = "%d floors" % room_floor_count
 	map_canvas.set_graph(graph)
 
 

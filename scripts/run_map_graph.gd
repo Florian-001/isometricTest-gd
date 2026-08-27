@@ -34,11 +34,12 @@ var tier_count: int
 var lane_count: int
 var nodes: Array[NodeData] = []
 var edges: Array[Vector2i] = []
+var routes: Array[PackedInt32Array] = []
 
 var _nodes_by_id: Dictionary = {}
 
 
-func _init(tier_count_value: int = 12, lane_count_value: int = 5) -> void:
+func _init(tier_count_value: int = 17, lane_count_value: int = 7) -> void:
 	tier_count = tier_count_value
 	lane_count = lane_count_value
 
@@ -54,6 +55,10 @@ func add_edge(from_id: int, to_id: int) -> void:
 	var edge := Vector2i(from_id, to_id)
 	if not edges.has(edge):
 		edges.append(edge)
+
+
+func add_route(lanes: PackedInt32Array) -> void:
+	routes.append(lanes.duplicate())
 
 
 func get_node_by_id(id: int) -> NodeData:
@@ -75,7 +80,17 @@ func get_signature() -> String:
 	var edge_parts: Array[String] = []
 	for edge in edges:
 		edge_parts.append("%d>%d" % [edge.x, edge.y])
-	return "%s|%s" % [",".join(node_parts), ",".join(edge_parts)]
+	var route_parts: Array[String] = []
+	for route in routes:
+		var lanes: Array[String] = []
+		for lane in route:
+			lanes.append(str(lane))
+		route_parts.append(".".join(lanes))
+	return "%s|%s|%s" % [
+		",".join(node_parts),
+		",".join(edge_parts),
+		",".join(route_parts),
+	]
 
 
 static func get_type_display_name(type: int) -> String:

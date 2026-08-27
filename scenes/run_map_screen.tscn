@@ -70,7 +70,7 @@ text = "Begin at the trail marker and follow the branching paths toward the boss
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 14
-text = "12 tiers"
+text = "15 floors"
 vertical_alignment = 1
 
 [node name="LegendPanel" type="PanelContainer" parent="Margin/VBox"]
@@ -100,12 +100,12 @@ size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
 [node name="MapCenter" type="CenterContainer" parent="Margin/VBox/MapPanel/MapScroll"]
-custom_minimum_size = Vector2(1100, 1900)
+custom_minimum_size = Vector2(1100, 2630)
 layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="MapCanvas" type="Control" parent="Margin/VBox/MapPanel/MapScroll/MapCenter"]
-custom_minimum_size = Vector2(1050, 1900)
+custom_minimum_size = Vector2(1050, 2630)
 layout_mode = 2
 mouse_filter = 2
 script = ExtResource("2_canvas")

@@ -1,7 +1,8 @@
 class_name RunMapCanvas
 extends Control
 
-const CANVAS_SIZE := Vector2(1050.0, 1900.0)
+const CANVAS_WIDTH := 1050.0
+const TIER_SPACING := 150.0
 const NODE_SIZE := Vector2(88.0, 88.0)
 const MAP_PADDING := Vector2(110.0, 115.0)
 
@@ -17,10 +18,14 @@ const BOSS_ICON := preload("res://assets/map_icons/boss.png")
 var graph: RunMapGraph
 var node_positions: Dictionary = {}
 var node_controls: Dictionary = {}
+var map_size := Vector2(
+	CANVAS_WIDTH,
+	MAP_PADDING.y * 2.0 + TIER_SPACING * float(RunMapGenerator.DEFAULT_TIER_COUNT - 1)
+)
 
 
 func _ready() -> void:
-	custom_minimum_size = CANVAS_SIZE
+	custom_minimum_size = map_size
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -33,6 +38,11 @@ func set_graph(value: RunMapGraph) -> void:
 	if graph == null:
 		queue_redraw()
 		return
+	map_size = Vector2(
+		CANVAS_WIDTH,
+		MAP_PADDING.y * 2.0 + TIER_SPACING * float(graph.tier_count - 1)
+	)
+	custom_minimum_size = map_size
 	for node in graph.nodes:
 		var center := _get_node_center(node)
 		node_positions[node.id] = center
@@ -78,11 +88,11 @@ func _draw() -> void:
 
 
 func _get_node_center(node: RunMapGraph.NodeData) -> Vector2:
-	var usable_width := CANVAS_SIZE.x - MAP_PADDING.x * 2.0
-	var usable_height := CANVAS_SIZE.y - MAP_PADDING.y * 2.0
+	var usable_width := map_size.x - MAP_PADDING.x * 2.0
+	var usable_height := map_size.y - MAP_PADDING.y * 2.0
 	var x := MAP_PADDING.x + usable_width * float(node.lane) / float(graph.lane_count - 1)
 	var tier_progress := float(node.tier) / float(graph.tier_count - 1)
-	var y := CANVAS_SIZE.y - MAP_PADDING.y - usable_height * tier_progress
+	var y := map_size.y - MAP_PADDING.y - usable_height * tier_progress
 	return Vector2(x, y)
 
 

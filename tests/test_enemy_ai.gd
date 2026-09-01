@@ -1106,8 +1106,8 @@ func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
 	assert_eq(actions.get_child(1).name, "InventoryButton", "Inventory should be second in the top-right action row")
 	assert_eq(actions.get_child(2).name, "LevelsButton", "Levels should be third in the top-right action row")
 	assert_eq(actions.get_node("DevButton").text, "Dev", "the developer history button should keep its compact label")
-	assert_true(battle.has_node("HUD/DevHistoryPanel"), "the shared battle HUD should contain an AI score history panel")
-	assert_false(battle.get_node("HUD/DevHistoryPanel").visible, "AI scores should stay off the battlefield until Dev is pressed")
+	assert_true(battle.has_node("HUD/DevModePanel"), "the shared battle HUD should contain the expanded Dev drawer")
+	assert_false(battle.get_node("HUD/DevModePanel").visible, "Dev tools should stay off the battlefield until Dev is pressed")
 
 
 func _assert_enemy_definition(

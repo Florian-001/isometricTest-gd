@@ -49,12 +49,52 @@ func load_level(definition: BattleMapDefinitionScript) -> bool:
 		return false
 	current_battle = instance as TacticalBattleScript
 	current_battle.map_definition = definition
-	current_battle.return_to_level_select_requested.connect(
-		_on_return_to_level_select_requested.bind(current_battle)
-	)
+	_connect_battle(current_battle)
 	level_select.hide()
 	add_child(current_battle)
 	return true
+
+
+func _connect_battle(battle: TacticalBattleScript) -> void:
+	battle.return_to_level_select_requested.connect(
+		_on_return_to_level_select_requested.bind(battle)
+	)
+	battle.dev_snapshot_load_requested.connect(
+		_on_dev_snapshot_load_requested.bind(battle)
+	)
+
+
+func _on_dev_snapshot_load_requested(
+	snapshot: Dictionary,
+	source_battle: TacticalBattleScript
+) -> void:
+	if source_battle != current_battle or battle_scene == null:
+		return
+	var definition := load(str(snapshot.get("level_definition", ""))) as BattleMapDefinitionScript
+	if definition == null or not definition.is_configured():
+		source_battle.dev_mode_panel.set_status("Saved level is unavailable", true)
+		return
+	var instance := battle_scene.instantiate()
+	if not instance is TacticalBattleScript:
+		instance.free()
+		source_battle.dev_mode_panel.set_status("Configured battle scene is invalid", true)
+		return
+	var replacement := instance as TacticalBattleScript
+	replacement.map_definition = definition
+	replacement.pending_dev_snapshot = snapshot.duplicate(true)
+	_connect_battle(replacement)
+	source_battle.visible = false
+	add_child(replacement)
+	if not replacement.snapshot_restore_succeeded:
+		remove_child(replacement)
+		replacement.queue_free()
+		source_battle.visible = true
+		source_battle.dev_mode_panel.set_status("Save validation failed; current battle was preserved", true)
+		return
+	current_battle = replacement
+	source_battle.shutdown_battle()
+	remove_child(source_battle)
+	source_battle.queue_free()
 
 
 func return_to_level_select() -> void:

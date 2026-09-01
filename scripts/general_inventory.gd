@@ -116,6 +116,33 @@ func take_item(item: ItemDefinition) -> bool:
 	return false
 
 
+func capture_slot_paths() -> Array:
+	_resize_slots()
+	var result: Array = []
+	for item in _slots:
+		result.append(item.resource_path if item != null else null)
+	return result
+
+
+func restore_slot_paths(paths: Array) -> bool:
+	if paths.size() != CAPACITY:
+		return false
+	var restored: Array[ItemDefinition] = []
+	restored.resize(CAPACITY)
+	for index in CAPACITY:
+		var path = paths[index]
+		if path == null or str(path).is_empty():
+			restored[index] = null
+			continue
+		var resource := load(str(path))
+		if not resource is ItemDefinition:
+			return false
+		restored[index] = resource as ItemDefinition
+	_slots = restored
+	items_changed.emit()
+	return true
+
+
 func _resize_slots() -> void:
 	if _slots.size() == CAPACITY:
 		return

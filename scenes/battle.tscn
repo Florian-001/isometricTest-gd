@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/initiative_battle_controller.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/initiative_turn_manager.gd" id="2_turn_manager"]
@@ -15,6 +15,7 @@
 [ext_resource type="Resource" path="res://resources/items/wooden_sword.tres" id="12_wooden_sword"]
 [ext_resource type="Resource" path="res://resources/items/ranger_bow.tres" id="13_ranger_bow"]
 [ext_resource type="Resource" path="res://resources/items/frost_bow.tres" id="14_frost_bow"]
+[ext_resource type="Script" path="res://scripts/dev_mode_panel.gd" id="16_dev_panel"]
 
 [node name="Battle" type="Node2D"]
 script = ExtResource("1_controller")
@@ -88,7 +89,7 @@ alignment = 2
 [node name="DevButton" type="Button" parent="HUD/TopRightActions"]
 custom_minimum_size = Vector2(82, 40)
 layout_mode = 2
-tooltip_text = "Show AI decision score history"
+tooltip_text = "Open runtime battle editing tools"
 theme_override_font_sizes/font_size = 15
 text = "Dev"
 
@@ -107,60 +108,9 @@ tooltip_text = "Return to level selection"
 theme_override_font_sizes/font_size = 15
 text = "Levels"
 
-[node name="DevHistoryPanel" type="PanelContainer" parent="HUD"]
+[node name="DevModePanel" type="PanelContainer" parent="HUD"]
 visible = false
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = -610.0
-offset_right = 666.0
-offset_bottom = -70.0
-grow_vertical = 0
-
-[node name="Margin" type="MarginContainer" parent="HUD/DevHistoryPanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 10
-
-[node name="VBox" type="VBoxContainer" parent="HUD/DevHistoryPanel/Margin"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Header" type="HBoxContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
-layout_mode = 2
-
-[node name="Title" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
-theme_override_font_sizes/font_size = 18
-text = "AI Debug Score History"
-
-[node name="Spacer" type="Control" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="CloseHint" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.68, 0.78, 1)
-theme_override_font_sizes/font_size = 12
-text = "Press Dev to close"
-
-[node name="HistoryScroll" type="ScrollContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
-custom_minimum_size = Vector2(0, 480)
-layout_mode = 2
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-
-[node name="DebugText" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/HistoryScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 12
-text = "No AI decisions recorded yet."
-autowrap_mode = 2
+script = ExtResource("16_dev_panel")
 
 [node name="InventoryScreen" parent="HUD" instance=ExtResource("7_inventory_screen")]
 

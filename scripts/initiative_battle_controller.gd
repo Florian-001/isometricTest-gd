@@ -1,12 +1,15 @@
 class_name TacticalBattle
 extends Node2D
 
+const DEV_SNAPSHOT_VERSION := 1
+
 const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
 const BattleMapDefinitionScript = preload("res://scripts/battle_map_definition.gd")
 const BattleMapScript = preload("res://scripts/battle_map.gd")
 const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
 
 signal return_to_level_select_requested
+signal dev_snapshot_load_requested(snapshot: Dictionary)
 
 @export_category("Battle Map")
 @export var map_definition: BattleMapDefinitionScript
@@ -28,8 +31,7 @@ signal return_to_level_select_requested
 @onready var return_to_levels_dialog: ConfirmationDialog = $HUD/ReturnToLevelsDialog
 @onready var end_turn_button: Button = $HUD/EndTurnButton
 @onready var dev_button: Button = $HUD/TopRightActions/DevButton
-@onready var dev_history_panel: PanelContainer = $HUD/DevHistoryPanel
-@onready var ai_debug_label: Label = $HUD/DevHistoryPanel/Margin/VBox/HistoryScroll/DebugText
+@onready var dev_mode_panel: DevModePanel = $HUD/DevModePanel
 
 var _pathfinder: GridPathfinder
 var _enemy_ai_planner: EnemyAIPlanner
@@ -56,6 +58,19 @@ var _ai_debug_history: Array[String] = []
 var _combat_over := false
 var _combat_result_text := ""
 var _return_dialog_paused_battle := false
+var pending_dev_snapshot: Dictionary = {}
+var snapshot_restore_succeeded := true
+var _dev_save_repository := DevSaveRepository.new()
+var _dev_mode_open := false
+var _dev_selected_unit: TacticalCharacter
+var _dev_add_scene_path := ""
+var _dev_drag_unit: TacticalCharacter
+var _dev_drag_start_screen := Vector2.ZERO
+var _dev_drag_origin := Vector2i.ZERO
+var _dev_dragging := false
+var _dev_action_busy := false
+var _dev_pending_turn_activation := false
+var _next_dev_unit_id := 1
 
 
 func _ready() -> void:
@@ -84,27 +99,29 @@ func _ready() -> void:
 	inventory_button.toggled.connect(_on_inventory_button_toggled)
 	inventory_screen.closed.connect(_on_inventory_screen_closed)
 	dev_button.pressed.connect(_on_dev_button_pressed)
+	dev_mode_panel.close_requested.connect(_close_dev_mode)
+	dev_mode_panel.delete_unit_requested.connect(_delete_dev_selected_unit)
+	dev_mode_panel.add_archetype_selected.connect(_on_dev_add_archetype_selected)
+	dev_mode_panel.stat_changed.connect(_on_dev_stat_changed)
+	dev_mode_panel.health_changed.connect(_on_dev_health_changed)
+	dev_mode_panel.faction_changed.connect(_on_dev_faction_changed)
+	dev_mode_panel.reset_stats_requested.connect(_on_dev_reset_stats)
+	dev_mode_panel.reset_faction_requested.connect(_on_dev_reset_faction)
+	dev_mode_panel.equipment_changed.connect(_on_dev_equipment_changed)
+	dev_mode_panel.abilities_changed.connect(_on_dev_abilities_changed)
+	dev_mode_panel.reset_abilities_requested.connect(_on_dev_reset_abilities)
+	dev_mode_panel.save_requested.connect(_on_dev_save_requested)
+	dev_mode_panel.load_requested.connect(_on_dev_load_requested)
+	dev_mode_panel.delete_save_requested.connect(_on_dev_delete_save_requested)
+	dev_mode_panel.restore_recovery_requested.connect(_on_dev_restore_recovery_requested)
 	terrain.terrain_changed.connect(_on_terrain_changed)
+	if not pending_dev_snapshot.is_empty():
+		snapshot_restore_succeeded = _replace_units_for_snapshot(pending_dev_snapshot)
 
 	for child in characters_container.get_children():
 		if child is TacticalCharacter:
 			var character := child as TacticalCharacter
-			_characters.append(character)
-			character.initialize(grid)
-			character.movement_remaining_changed.connect(
-				_on_unit_movement_changed.bind(character)
-			)
-			character.ability_availability_changed.connect(
-				_on_unit_ability_availability_changed.bind(character)
-			)
-			character.statuses_changed.connect(
-				_on_character_statuses_changed.bind(character)
-			)
-			character.cell_entered.connect(_on_character_cell_entered)
-			character.defeated.connect(_on_character_defeated)
-			character.equipment_changed.connect(
-				_on_character_equipment_changed.bind(character)
-			)
+			_register_character(character)
 	inventory_screen.setup(general_inventory, _get_living_friendlies())
 	_initialize_walls()
 	terrain.initialize(grid, _get_wall_cells())
@@ -112,9 +129,11 @@ func _ready() -> void:
 	if center_camera_on_start:
 		tactical_camera.position = grid.position + grid.get_local_bounds().get_center()
 	dev_button.visible = enable_dev_tools
-	dev_history_panel.visible = false
+	dev_mode_panel.close_panel()
 	_refresh_ai_debug_history()
-	if not _check_combat_end():
+	if snapshot_restore_succeeded and not pending_dev_snapshot.is_empty():
+		snapshot_restore_succeeded = _apply_pending_snapshot(pending_dev_snapshot)
+	elif not _check_combat_end():
 		turn_manager.start_combat(_characters)
 	_update_turn_hud()
 
@@ -167,6 +186,9 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _dev_mode_open:
+		_handle_dev_input(event)
+		return
 	if inventory_screen.visible:
 		if event.is_action_pressed("ui_cancel"):
 			inventory_screen.close_screen()
@@ -420,6 +442,7 @@ func _begin_ability_cast(target_cell: Vector2i) -> void:
 		return
 
 	_set_movement_locked(true)
+	_set_dev_action_busy(true)
 	grid.clear_overlays()
 	var cast_succeeded := await _ability_executor.execute(
 		caster,
@@ -431,6 +454,7 @@ func _begin_ability_cast(target_cell: Vector2i) -> void:
 		_get_wall_cells(),
 		Callable(self, "_before_ability_movement_step")
 	)
+	_set_dev_action_busy(false)
 	_selected_ability = null
 	_ability_range_cells.clear()
 	_ability_target_cells.clear()
@@ -453,12 +477,14 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 		return
 
 	_set_movement_locked(true)
+	_set_dev_action_busy(true)
 	var moving_character := _selected_character
 	grid.clear_overlays()
 	await moving_character.move_along(
 		path,
 		Callable(self, "_before_character_movement_step")
 	)
+	_set_dev_action_busy(false)
 	var can_continue := (
 		is_instance_valid(moving_character)
 		and moving_character == turn_manager.current_unit
@@ -490,6 +516,7 @@ func _on_end_turn_pressed() -> void:
 func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 	if _combat_over or unit != turn_manager.current_unit:
 		return
+	_set_dev_action_busy(true)
 	grid.show_reachable(unit.grid_cell, {})
 
 	var plan := _enemy_ai_planner.choose_plan(
@@ -519,6 +546,7 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 		await _execute_enemy_plan(unit, plan)
 
 	grid.clear_overlays()
+	_set_dev_action_busy(false)
 	if unit == turn_manager.current_unit:
 		call_deferred("_finish_enemy_turn", unit)
 
@@ -695,10 +723,486 @@ func _update_ai_debug(
 	_refresh_ai_debug_history()
 
 
+func _register_character(character: TacticalCharacter) -> void:
+	if _characters.has(character):
+		return
+	if character.dev_runtime_id.is_empty():
+		character.dev_runtime_id = "unit_%04d" % _next_dev_unit_id
+		_next_dev_unit_id += 1
+	_characters.append(character)
+	character.initialize(grid)
+	character.movement_remaining_changed.connect(
+		_on_unit_movement_changed.bind(character)
+	)
+	character.ability_availability_changed.connect(
+		_on_unit_ability_availability_changed.bind(character)
+	)
+	character.statuses_changed.connect(
+		_on_character_statuses_changed.bind(character)
+	)
+	character.cell_entered.connect(_on_character_cell_entered)
+	character.defeated.connect(_on_character_defeated)
+	character.equipment_changed.connect(
+		_on_character_equipment_changed.bind(character)
+	)
+	character.stats_changed.connect(_on_dev_character_stats_changed.bind(character))
+	character.faction_changed.connect(_on_dev_character_faction_changed.bind(character))
+
+
+func _open_dev_mode() -> void:
+	if _dev_action_busy or _characters.any(func(unit: TacticalCharacter) -> bool: return unit.is_moving):
+		dev_button.tooltip_text = "Wait for the current movement or ability to finish"
+		return
+	if inventory_screen.visible:
+		inventory_screen.close_screen()
+	_cancel_ability_targeting()
+	clear_selection()
+	_dev_mode_open = true
+	inventory_button.disabled = true
+	levels_button.disabled = true
+	end_turn_button.disabled = true
+	_refresh_ability_bar()
+	_update_turn_hud()
+	dev_mode_panel.open_panel()
+	dev_mode_panel.refresh_saves(
+		_dev_save_repository.list_saves(),
+		_dev_save_repository.has_recovery()
+	)
+	var preferred := turn_manager.current_unit
+	if not is_instance_valid(preferred) and not _characters.is_empty():
+		preferred = _characters[0]
+	_select_dev_unit(preferred)
+
+
+func _close_dev_mode() -> void:
+	if not _dev_mode_open:
+		return
+	_dev_mode_open = false
+	_dev_drag_unit = null
+	_dev_dragging = false
+	_dev_add_scene_path = ""
+	dev_mode_panel.close_panel()
+	inventory_button.disabled = false
+	levels_button.disabled = false
+	if _dev_pending_turn_activation and not _combat_over:
+		_dev_pending_turn_activation = false
+		turn_manager.activate_reconciled_current_turn()
+	elif not _combat_over and is_instance_valid(turn_manager.current_unit):
+		if turn_manager.current_unit.is_friendly():
+			_set_movement_locked(false)
+			_select_character(turn_manager.current_unit)
+		else:
+			_set_movement_locked(true)
+	_refresh_ability_bar()
+	_update_turn_hud()
+
+
+func _handle_dev_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed:
+		var focus := get_viewport().gui_get_focus_owner()
+		if event.keycode == KEY_DELETE and not focus is LineEdit:
+			_delete_dev_selected_unit()
+			get_viewport().set_input_as_handled()
+			return
+		if event.keycode == KEY_ESCAPE:
+			if not _dev_add_scene_path.is_empty():
+				_dev_add_scene_path = ""
+				dev_mode_panel.set_status("Add placement cancelled")
+			else:
+				_close_dev_mode()
+			get_viewport().set_input_as_handled()
+			return
+	if not event is InputEventMouse:
+		return
+	var mouse_event := event as InputEventMouse
+	if event is InputEventMouseMotion:
+		if is_instance_valid(_dev_drag_unit):
+			_dev_dragging = (
+				mouse_event.position.distance_to(_dev_drag_start_screen) >= 6.0
+			)
+		return
+	if not event is InputEventMouseButton:
+		return
+	var button_event := event as InputEventMouseButton
+	if button_event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	var world := _screen_to_world(button_event.position)
+	if button_event.pressed:
+		if not _dev_add_scene_path.is_empty():
+			_add_dev_unit_at(_dev_add_scene_path, grid.global_to_grid(world))
+			get_viewport().set_input_as_handled()
+			return
+		var clicked := _get_character_at_global_point(world)
+		if is_instance_valid(clicked):
+			_select_dev_unit(clicked)
+			_dev_drag_unit = clicked
+			_dev_drag_origin = clicked.grid_cell
+			_dev_drag_start_screen = button_event.position
+			_dev_dragging = false
+			get_viewport().set_input_as_handled()
+		return
+	if is_instance_valid(_dev_drag_unit):
+		if _dev_dragging:
+			_move_dev_unit(_dev_drag_unit, grid.global_to_grid(world))
+		_dev_drag_unit = null
+		_dev_dragging = false
+		get_viewport().set_input_as_handled()
+
+
+func _select_dev_unit(unit: TacticalCharacter) -> void:
+	_dev_selected_unit = unit if is_instance_valid(unit) else null
+	dev_mode_panel.set_selected_unit(_dev_selected_unit)
+
+
+func _on_dev_add_archetype_selected(scene_path: String) -> void:
+	_dev_add_scene_path = scene_path
+	dev_mode_panel.set_status("Add armed: click any empty walkable cell; Esc cancels")
+
+
+func _add_dev_unit_at(scene_path: String, cell: Vector2i) -> bool:
+	if not _is_valid_dev_destination(cell, null):
+		dev_mode_panel.set_status("That cell is blocked, occupied, or outside the map", true)
+		return false
+	var scene := load(scene_path) as PackedScene
+	if scene == null:
+		dev_mode_panel.set_status("The selected archetype could not be loaded", true)
+		return false
+	var instance := scene.instantiate()
+	if not instance is TacticalCharacter:
+		instance.free()
+		dev_mode_panel.set_status("The selected scene is not a tactical unit", true)
+		return false
+	var unit := instance as TacticalCharacter
+	unit.starting_grid_cell = cell
+	characters_container.add_child(unit)
+	_register_character(unit)
+	_select_dev_unit(unit)
+	_reconcile_after_dev_edit()
+	dev_mode_panel.set_status("Added %s at %s" % [unit.definition.display_name, cell])
+	return true
+
+
+func _move_dev_unit(unit: TacticalCharacter, cell: Vector2i) -> bool:
+	if not _is_valid_dev_destination(cell, unit):
+		dev_mode_panel.set_status("Move rejected: destination is not available", true)
+		return false
+	if cell == unit.grid_cell:
+		return true
+	unit.grid_cell = cell
+	unit.starting_grid_cell = cell
+	unit.global_position = grid.grid_to_global(cell)
+	unit.queue_redraw()
+	_select_dev_unit(unit)
+	_reconcile_after_dev_edit()
+	dev_mode_panel.set_status("Moved %s to %s" % [unit.definition.display_name, cell])
+	return true
+
+
+func _is_valid_dev_destination(cell: Vector2i, moving_unit: TacticalCharacter) -> bool:
+	if not grid.is_in_bounds(cell) or _get_wall_cells().has(cell):
+		return false
+	var occupant := _get_character_at(cell)
+	return occupant == null or occupant == moving_unit
+
+
+func _delete_dev_selected_unit() -> void:
+	if not is_instance_valid(_dev_selected_unit):
+		dev_mode_panel.set_status("Select a unit first", true)
+		return
+	var removed := _dev_selected_unit
+	var removed_name: String = removed.definition.display_name if removed.definition != null else removed.name
+	_characters.erase(removed)
+	_dev_selected_unit = null
+	_select_dev_unit(null)
+	_reconcile_after_dev_edit()
+	characters_container.remove_child(removed)
+	removed.queue_free()
+	dev_mode_panel.set_status("Deleted %s" % removed_name)
+
+
+func _on_dev_stat_changed(stat_name: String, value: float) -> void:
+	if not is_instance_valid(_dev_selected_unit):
+		return
+	var values := {
+		"strength": _dev_selected_unit.strength_override,
+		"dexterity": _dev_selected_unit.dexterity_override,
+		"intelligence": _dev_selected_unit.intelligence_override,
+		"constitution": _dev_selected_unit.constitution_override,
+		"speed": _dev_selected_unit.speed_override,
+		"movement_range": _dev_selected_unit.movement_range_override,
+	}
+	values[stat_name] = value if stat_name == "movement_range" else roundi(value)
+	_dev_selected_unit.set_dev_base_stats(values)
+	_reconcile_after_dev_edit()
+
+
+func _on_dev_health_changed(value: int) -> void:
+	if not is_instance_valid(_dev_selected_unit):
+		return
+	_dev_selected_unit.set_dev_current_health(value)
+	_reconcile_after_dev_edit()
+
+
+func _on_dev_faction_changed(value: int) -> void:
+	if is_instance_valid(_dev_selected_unit):
+		var changed_current_faction := _dev_selected_unit == turn_manager.current_unit
+		_dev_selected_unit.set_dev_faction(value)
+		_reconcile_after_dev_edit()
+		if changed_current_faction and not _combat_over:
+			_dev_pending_turn_activation = true
+
+
+func _on_dev_reset_stats() -> void:
+	if is_instance_valid(_dev_selected_unit):
+		_dev_selected_unit.reset_dev_base_stats()
+		_reconcile_after_dev_edit()
+
+
+func _on_dev_reset_faction() -> void:
+	_on_dev_faction_changed(-1)
+
+
+func _on_dev_equipment_changed(slot: int, item: ItemDefinition) -> void:
+	if not is_instance_valid(_dev_selected_unit):
+		return
+	if item == null:
+		_dev_selected_unit.unequip_item(slot)
+	elif item.slot == slot:
+		_dev_selected_unit.equip_item(item)
+	_reconcile_after_dev_edit()
+
+
+func _on_dev_abilities_changed(abilities: Array[AbilityDefinition]) -> void:
+	if is_instance_valid(_dev_selected_unit):
+		_dev_selected_unit.set_dev_ability_loadout(abilities)
+		_reconcile_after_dev_edit()
+
+
+func _on_dev_reset_abilities() -> void:
+	if is_instance_valid(_dev_selected_unit):
+		_dev_selected_unit.reset_dev_ability_loadout()
+		_reconcile_after_dev_edit()
+
+
+func _on_dev_character_stats_changed(character: TacticalCharacter) -> void:
+	if _dev_mode_open and character == _dev_selected_unit:
+		dev_mode_panel.set_selected_unit(character)
+
+
+func _on_dev_character_faction_changed(character: TacticalCharacter) -> void:
+	if _dev_mode_open and character == _dev_selected_unit:
+		dev_mode_panel.set_selected_unit(character)
+
+
+func _reconcile_after_dev_edit() -> void:
+	_cancel_ability_targeting()
+	_selected_character = null
+	var has_friendlies := false
+	var has_enemies := false
+	for unit in _characters:
+		if not is_instance_valid(unit) or unit.current_health <= 0:
+			continue
+		if unit.is_friendly():
+			has_friendlies = true
+		else:
+			has_enemies = true
+	if has_friendlies and has_enemies:
+		_combat_over = false
+		_combat_result_text = ""
+		if turn_manager.reconcile_units(_characters):
+			_dev_pending_turn_activation = true
+	else:
+		_combat_over = true
+		_combat_result_text = "Victory" if has_friendlies else ("Defeat" if has_enemies else "Battle Ended")
+		turn_manager.stop_combat()
+		_dev_pending_turn_activation = false
+	inventory_screen.setup(general_inventory, _get_living_friendlies())
+	_refresh_ability_bar()
+	_update_turn_hud()
+	if is_instance_valid(_dev_selected_unit):
+		dev_mode_panel.set_selected_unit(_dev_selected_unit)
+
+
+func capture_dev_snapshot() -> Dictionary:
+	var unit_states: Array[Dictionary] = []
+	for unit in _characters:
+		if is_instance_valid(unit):
+			unit_states.append(unit.capture_dev_state())
+	var order_ids: Array[String] = []
+	for unit in turn_manager.turn_order:
+		if is_instance_valid(unit):
+			order_ids.append(unit.dev_runtime_id)
+	return {
+		"snapshot_version": DEV_SNAPSHOT_VERSION,
+		"level_definition": map_definition.resource_path if map_definition != null else "",
+		"round_number": turn_manager.round_number,
+		"current_unit_id": (
+			turn_manager.current_unit.dev_runtime_id
+			if is_instance_valid(turn_manager.current_unit)
+			else ""
+		),
+		"turn_order": order_ids,
+		"combat_over": _combat_over,
+		"combat_result": _combat_result_text,
+		"units": unit_states,
+		"inventory": general_inventory.capture_slot_paths(),
+		"camera_position": [tactical_camera.position.x, tactical_camera.position.y],
+		"camera_zoom": [tactical_camera.zoom.x, tactical_camera.zoom.y],
+	}
+
+
+static func validate_dev_snapshot_resources(snapshot: Dictionary) -> String:
+	if int(snapshot.get("snapshot_version", 0)) != DEV_SNAPSHOT_VERSION:
+		return "Unsupported or missing save version"
+	var level_path := str(snapshot.get("level_definition", ""))
+	if not ResourceLoader.exists(level_path) or not load(level_path) is BattleMapDefinitionScript:
+		return "Saved level definition is missing"
+	if not snapshot.get("units", []) is Array:
+		return "Saved unit list is invalid"
+	var ids: Dictionary = {}
+	for state in snapshot.get("units", []):
+		if not state is Dictionary:
+			return "Saved unit entry is invalid"
+		var id := str(state.get("id", ""))
+		if id.is_empty() or ids.has(id):
+			return "Saved unit IDs are missing or duplicated"
+		ids[id] = true
+		var scene_path := str(state.get("scene_path", ""))
+		if not ResourceLoader.exists(scene_path):
+			return "A saved unit scene is missing"
+		var scene := load(scene_path) as PackedScene
+		if scene == null:
+			return "A saved unit scene is missing"
+	for path in snapshot.get("inventory", []):
+		if path != null and not str(path).is_empty():
+			if not ResourceLoader.exists(str(path)) or not load(str(path)) is ItemDefinition:
+				return "A saved inventory item is missing"
+	return ""
+
+
+func _replace_units_for_snapshot(snapshot: Dictionary) -> bool:
+	var resource_error := validate_dev_snapshot_resources(snapshot)
+	if not resource_error.is_empty():
+		push_error(resource_error)
+		return false
+	var occupied: Dictionary = {}
+	var wall_cells: Dictionary = {}
+	for child in walls_container.get_children():
+		if child is TacticalWall:
+			wall_cells[(child as TacticalWall).grid_cell] = true
+	var replacements: Array[TacticalCharacter] = []
+	for state in snapshot.get("units", []):
+		var cell_data = state.get("cell", [])
+		if not cell_data is Array or cell_data.size() != 2:
+			return false
+		var cell := Vector2i(int(cell_data[0]), int(cell_data[1]))
+		if not grid.is_in_bounds(cell) or occupied.has(cell) or wall_cells.has(cell):
+			return false
+		occupied[cell] = true
+		var scene := load(str(state.get("scene_path", ""))) as PackedScene
+		var instance := scene.instantiate()
+		if not instance is TacticalCharacter:
+			instance.free()
+			return false
+		var unit := instance as TacticalCharacter
+		unit.starting_grid_cell = cell
+		unit.dev_runtime_id = str(state.get("id", ""))
+		replacements.append(unit)
+	for child in characters_container.get_children():
+		characters_container.remove_child(child)
+		child.free()
+	for unit in replacements:
+		characters_container.add_child(unit)
+	return true
+
+
+func _apply_pending_snapshot(snapshot: Dictionary) -> bool:
+	if not general_inventory.restore_slot_paths(snapshot.get("inventory", [])):
+		return false
+	var states_by_id: Dictionary = {}
+	for state in snapshot.get("units", []):
+		states_by_id[str(state.get("id", ""))] = state
+	var units_by_id: Dictionary = {}
+	for unit in _characters:
+		units_by_id[unit.dev_runtime_id] = unit
+	for unit in _characters:
+		var state := states_by_id.get(unit.dev_runtime_id, {}) as Dictionary
+		if state.is_empty() or not unit.restore_dev_state(state, units_by_id):
+			return false
+	var camera_position = snapshot.get("camera_position", [])
+	if camera_position is Array and camera_position.size() == 2:
+		tactical_camera.position = Vector2(float(camera_position[0]), float(camera_position[1]))
+	var camera_zoom = snapshot.get("camera_zoom", [])
+	if camera_zoom is Array and camera_zoom.size() == 2:
+		tactical_camera.zoom = Vector2(float(camera_zoom[0]), float(camera_zoom[1]))
+	_combat_over = bool(snapshot.get("combat_over", false))
+	_combat_result_text = str(snapshot.get("combat_result", ""))
+	turn_manager.restore_combat_state(
+		_characters,
+		snapshot.get("turn_order", []),
+		str(snapshot.get("current_unit_id", "")),
+		int(snapshot.get("round_number", 1))
+	)
+	inventory_screen.setup(general_inventory, _get_living_friendlies())
+	if _combat_over:
+		turn_manager.stop_combat()
+		_movement_locked = true
+	else:
+		call_deferred("_activate_loaded_turn")
+	return true
+
+
+func _activate_loaded_turn() -> void:
+	if snapshot_restore_succeeded and not _combat_over:
+		turn_manager.activate_restored_current_turn()
+
+
+func _on_dev_save_requested(save_name: String) -> void:
+	if save_name.strip_edges().is_empty():
+		dev_mode_panel.set_status("Enter a save name", true)
+		return
+	if _dev_save_repository.save_named(save_name, capture_dev_snapshot()):
+		dev_mode_panel.refresh_saves(_dev_save_repository.list_saves(), _dev_save_repository.has_recovery())
+		dev_mode_panel.set_status("Saved “%s”" % save_name.strip_edges())
+	else:
+		dev_mode_panel.set_status("Could not write the named save", true)
+
+
+func _on_dev_load_requested(save_name: String) -> void:
+	var snapshot := _dev_save_repository.get_named(save_name)
+	_request_dev_snapshot_load(snapshot, "Loaded “%s”" % save_name)
+
+
+func _on_dev_restore_recovery_requested() -> void:
+	_request_dev_snapshot_load(_dev_save_repository.get_recovery(), "Restored previous battle")
+
+
+func _request_dev_snapshot_load(snapshot: Dictionary, _success_message: String) -> void:
+	var validation_error := validate_dev_snapshot_resources(snapshot)
+	if not validation_error.is_empty():
+		dev_mode_panel.set_status(validation_error, true)
+		return
+	if not _dev_save_repository.write_recovery(capture_dev_snapshot()):
+		dev_mode_panel.set_status("Could not create the automatic recovery snapshot", true)
+		return
+	dev_snapshot_load_requested.emit(snapshot)
+
+
+func _on_dev_delete_save_requested(save_name: String) -> void:
+	if _dev_save_repository.delete_named(save_name):
+		dev_mode_panel.refresh_saves(_dev_save_repository.list_saves(), _dev_save_repository.has_recovery())
+		dev_mode_panel.set_status("Deleted save “%s”" % save_name)
+	else:
+		dev_mode_panel.set_status("Save could not be deleted", true)
+
+
 func _on_dev_button_pressed() -> void:
 	if not enable_dev_tools:
 		return
-	dev_history_panel.visible = not dev_history_panel.visible
+	if _dev_mode_open:
+		_close_dev_mode()
+	else:
+		_open_dev_mode()
 
 
 func _on_levels_button_pressed() -> void:
@@ -767,15 +1271,15 @@ func _on_character_equipment_changed(
 
 
 func _refresh_ai_debug_history() -> void:
-	if ai_debug_label == null:
+	if dev_mode_panel == null:
 		return
 	if _ai_debug_history.is_empty():
-		ai_debug_label.text = "No AI decisions recorded yet.\nEnd a friendly turn to let an enemy act."
+		dev_mode_panel.set_ai_history("No AI decisions recorded yet.\nEnd a friendly turn to let an enemy act.")
 		return
 	var newest_first: Array[String] = []
 	for index in range(_ai_debug_history.size() - 1, -1, -1):
 		newest_first.append(_ai_debug_history[index])
-	ai_debug_label.text = "\n\n────────────────────────────────────────\n\n".join(newest_first)
+	dev_mode_panel.set_ai_history("\n\n────────────────────────────────────────\n\n".join(newest_first))
 
 
 func _on_turn_starting(unit: TacticalCharacter) -> void:
@@ -879,12 +1383,24 @@ func _set_movement_locked(value: bool) -> void:
 	_update_turn_hud()
 
 
+func _set_dev_action_busy(value: bool) -> void:
+	_dev_action_busy = value
+	if dev_button != null:
+		dev_button.disabled = value
+		dev_button.tooltip_text = (
+			"Wait for the current movement or ability to finish"
+			if value
+			else "Open runtime battle editing tools"
+		)
+
+
 func _refresh_ability_bar() -> void:
 	if ability_bar == null or turn_manager == null:
 		return
 	var unit := turn_manager.current_unit
 	var enabled := (
 		not _movement_locked
+		and not _dev_mode_open
 		and turn_manager.is_player_turn()
 		and is_instance_valid(unit)
 		and unit.ability_available
@@ -895,6 +1411,10 @@ func _refresh_ability_bar() -> void:
 
 func _update_turn_hud() -> void:
 	if turn_manager == null or end_turn_button == null:
+		return
+	if _dev_mode_open:
+		end_turn_button.text = "Dev Mode"
+		end_turn_button.disabled = true
 		return
 	if _combat_over:
 		end_turn_button.text = "Battle Ended"

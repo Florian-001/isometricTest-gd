@@ -1,8 +1,9 @@
 [gd_resource type="Resource" script_class="ItemDefinition" format=3 uid="uid://m36t2nhg31dr"]
 
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="1_4yei1"]
 [ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="1_aohy4"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="2_fti4b"]
-[ext_resource type="Texture2D" path="res://assets/item_icons/wooden_sword.png" id="3_icon"]
+[ext_resource type="Texture2D" uid="uid://o5fr83y1b0p7" path="res://assets/item_icons/wooden_sword.png" id="3_icon"]
 
 [sub_resource type="Resource" id="StrengthBonus"]
 script = ExtResource("1_aohy4")

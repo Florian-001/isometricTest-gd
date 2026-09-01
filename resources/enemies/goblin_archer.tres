@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
-[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="4_ai"]
+[ext_resource type="Resource" uid="uid://c04280vi2qtp2" path="res://resources/ai/general_ai.tres" id="4_ai"]
 [ext_resource type="Resource" uid="uid://b0ygs6jbuindl" path="res://resources/abilities/enemy_shot.tres" id="5_shot"]
 [ext_resource type="Resource" uid="uid://dja1lf1w34kk8" path="res://resources/items/goblin_bow.tres" id="7_bow"]
 
@@ -12,10 +12,10 @@ script = ExtResource("1_enemy")
 ai_profile = ExtResource("4_ai")
 display_name = "Goblin Archer"
 faction = 1
-constitution = 19
 strength = 7
 dexterity = 11
 intelligence = 6
+constitution = 2
 speed = 11
 starting_equipment = Array[ExtResource("3_item_type")]([ExtResource("7_bow")])
 body_color = Color(0.56, 0.68, 0.25, 1)

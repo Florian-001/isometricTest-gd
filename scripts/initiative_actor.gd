@@ -27,6 +27,7 @@ signal opportunity_reaction_availability_changed(available: bool)
 signal stats_changed
 signal equipment_changed(slot: ItemDefinition.EquipmentSlot, item: ItemDefinition)
 signal statuses_changed
+signal faction_changed
 
 @export_category("Character Template")
 @export var definition: CharacterDefinition:
@@ -46,6 +47,8 @@ signal statuses_changed
 			update_configuration_warnings()
 
 @export_category("Unit Stats")
+## Runtime-only faction override used by developer tools. -1 inherits the template.
+@export_range(-1, 1, 1) var faction_override: int = -1
 ## Set to zero or higher to override the template's Constitution for this unit.
 ## Set to -1 to inherit the value from Character Template.
 @export_range(-1, 999, 1, "or_greater") var constitution_override: int = -1:
@@ -131,6 +134,7 @@ var _runtime_stats_initialized := false
 var _editor_syncing_placement := false
 var _editor_position_sync_queued := false
 var _editor_cell_sync_queued := false
+var dev_runtime_id: String = ""
 
 
 func _ready() -> void:
@@ -224,7 +228,211 @@ func initialize(grid: IsometricGrid) -> void:
 
 
 func is_friendly() -> bool:
-	return definition != null and definition.faction == CharacterDefinition.Faction.FRIENDLY
+	return get_effective_faction() == CharacterDefinition.Faction.FRIENDLY
+
+
+func get_effective_faction() -> int:
+	if faction_override in [
+		CharacterDefinition.Faction.FRIENDLY,
+		CharacterDefinition.Faction.ENEMY,
+	]:
+		return faction_override
+	return (
+		definition.faction
+		if definition != null
+		else CharacterDefinition.Faction.FRIENDLY
+	)
+
+
+func set_dev_faction(value: int) -> void:
+	var normalized := clampi(value, -1, CharacterDefinition.Faction.ENEMY)
+	if faction_override == normalized:
+		return
+	faction_override = normalized
+	faction_changed.emit()
+	queue_redraw()
+
+
+func set_dev_base_stats(values: Dictionary) -> void:
+	var previous_movement := get_movement_range()
+	var previous_max_health := get_max_health()
+	strength_override = maxi(-1, int(values.get("strength", strength_override)))
+	dexterity_override = maxi(-1, int(values.get("dexterity", dexterity_override)))
+	intelligence_override = maxi(-1, int(values.get("intelligence", intelligence_override)))
+	constitution_override = maxi(-1, int(values.get("constitution", constitution_override)))
+	speed_override = maxi(-1, int(values.get("speed", speed_override)))
+	movement_range_override = maxf(-1.0, float(values.get(
+		"movement_range",
+		movement_range_override
+	)))
+	_notify_stats_changed(previous_movement, previous_max_health)
+	queue_redraw()
+
+
+func reset_dev_base_stats() -> void:
+	set_dev_base_stats({
+		"strength": -1,
+		"dexterity": -1,
+		"intelligence": -1,
+		"constitution": -1,
+		"speed": -1,
+		"movement_range": -1.0,
+	})
+
+
+func set_dev_current_health(value: int) -> void:
+	var next_health := clampi(value, 0, get_max_health())
+	if current_health == next_health:
+		return
+	current_health = next_health
+	_defeat_emitted = current_health <= 0
+	if current_health <= 0:
+		_remaining_movement = 0.0
+		_ability_available = false
+		_opportunity_reaction_available = false
+	health_changed.emit(current_health, get_max_health())
+	queue_redraw()
+
+
+func set_dev_ability_loadout(abilities: Array[AbilityDefinition]) -> void:
+	override_template_abilities = true
+	ability_overrides.assign(abilities)
+	stats_changed.emit()
+
+
+func reset_dev_ability_loadout() -> void:
+	override_template_abilities = false
+	ability_overrides.clear()
+	stats_changed.emit()
+
+
+func capture_dev_state() -> Dictionary:
+	var equipment: Dictionary = {}
+	for slot in [
+		ItemDefinition.EquipmentSlot.WEAPON,
+		ItemDefinition.EquipmentSlot.ARMOR,
+		ItemDefinition.EquipmentSlot.ACCESSORY,
+	]:
+		var item := get_equipped_item(slot)
+		equipment[str(slot)] = item.resource_path if item != null else ""
+	var ability_paths: Array[String] = []
+	for ability in ability_overrides:
+		if ability != null and not ability.resource_path.is_empty():
+			ability_paths.append(ability.resource_path)
+	var status_states: Array[Dictionary] = []
+	for active_status in _active_statuses:
+		if active_status.definition == null or active_status.definition.resource_path.is_empty():
+			continue
+		var source_kind := ""
+		var source_value := ""
+		if active_status.source is TacticalCharacter:
+			source_kind = "unit"
+			source_value = (active_status.source as TacticalCharacter).dev_runtime_id
+		elif active_status.source is Resource:
+			source_kind = "resource"
+			source_value = (active_status.source as Resource).resource_path
+		status_states.append({
+			"definition": active_status.definition.resource_path,
+			"remaining_turns": active_status.remaining_turns,
+			"processed_this_turn": active_status.processed_this_turn,
+			"source_kind": source_kind,
+			"source": source_value,
+			"source_unit": (
+				active_status.source_unit.dev_runtime_id
+				if is_instance_valid(active_status.source_unit)
+				else ""
+			),
+		})
+	return {
+		"id": dev_runtime_id,
+		"scene_path": scene_file_path,
+		"name": name,
+		"cell": [grid_cell.x, grid_cell.y],
+		"facing": current_facing,
+		"faction_override": faction_override,
+		"strength_override": strength_override,
+		"dexterity_override": dexterity_override,
+		"intelligence_override": intelligence_override,
+		"constitution_override": constitution_override,
+		"speed_override": speed_override,
+		"movement_range_override": movement_range_override,
+		"current_health": current_health,
+		"remaining_movement": _remaining_movement,
+		"ability_available": _ability_available,
+		"reaction_available": _opportunity_reaction_available,
+		"equipment": equipment,
+		"override_template_abilities": override_template_abilities,
+		"ability_overrides": ability_paths,
+		"statuses": status_states,
+	}
+
+
+func restore_dev_state(state: Dictionary, units_by_id: Dictionary = {}) -> bool:
+	var cell_value = state.get("cell", [])
+	if not cell_value is Array or cell_value.size() != 2:
+		return false
+	dev_runtime_id = str(state.get("id", ""))
+	name = str(state.get("name", name))
+	faction_override = int(state.get("faction_override", -1))
+	strength_override = int(state.get("strength_override", -1))
+	dexterity_override = int(state.get("dexterity_override", -1))
+	intelligence_override = int(state.get("intelligence_override", -1))
+	constitution_override = int(state.get("constitution_override", -1))
+	speed_override = int(state.get("speed_override", -1))
+	movement_range_override = float(state.get("movement_range_override", -1.0))
+	grid_cell = Vector2i(int(cell_value[0]), int(cell_value[1]))
+	starting_grid_cell = grid_cell
+	set_facing(int(state.get("facing", Facing.RIGHT)) as Facing)
+	_equipped_items.clear()
+	var equipment = state.get("equipment", {})
+	if not equipment is Dictionary:
+		return false
+	for key in equipment:
+		var item_path := str(equipment[key])
+		if item_path.is_empty():
+			continue
+		var item := load(item_path)
+		if not item is ItemDefinition:
+			return false
+		_equipped_items[int(key)] = item
+	override_template_abilities = bool(state.get("override_template_abilities", false))
+	ability_overrides.clear()
+	for path in state.get("ability_overrides", []):
+		var ability := load(str(path))
+		if not ability is AbilityDefinition:
+			return false
+		ability_overrides.append(ability as AbilityDefinition)
+	_active_statuses.clear()
+	for status_state in state.get("statuses", []):
+		if not status_state is Dictionary:
+			return false
+		var definition_resource := load(str(status_state.get("definition", "")))
+		if not definition_resource is StatusEffectDefinition:
+			return false
+		var source: Object = null
+		match str(status_state.get("source_kind", "")):
+			"unit":
+				source = units_by_id.get(str(status_state.get("source", "")))
+			"resource":
+				source = load(str(status_state.get("source", "")))
+		var source_unit := units_by_id.get(str(status_state.get("source_unit", ""))) as TacticalCharacter
+		var active := ActiveStatus.new(definition_resource, source, source_unit)
+		active.remaining_turns = int(status_state.get("remaining_turns", active.remaining_turns))
+		active.processed_this_turn = bool(status_state.get("processed_this_turn", false))
+		_active_statuses.append(active)
+	current_health = clampi(int(state.get("current_health", get_max_health())), 0, get_max_health())
+	_remaining_movement = maxf(0.0, float(state.get("remaining_movement", 0.0)))
+	_ability_available = bool(state.get("ability_available", false))
+	_opportunity_reaction_available = bool(state.get("reaction_available", false))
+	_defeat_emitted = current_health <= 0
+	if _grid != null:
+		global_position = _grid.grid_to_global(grid_cell)
+	_update_sorting()
+	health_changed.emit(current_health, get_max_health())
+	stats_changed.emit()
+	statuses_changed.emit()
+	queue_redraw()
+	return true
 
 
 func set_facing(value: Facing) -> void:

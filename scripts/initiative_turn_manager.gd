@@ -108,6 +108,72 @@ func notify_unit_state_changed() -> void:
 	turn_order_changed.emit(get_rotating_order())
 
 
+## Rebuilds the live order after a developer edit. Returns true when the active
+## unit changed; callers can defer starting that unit until the editor closes.
+func reconcile_units(units: Array[TacticalCharacter]) -> bool:
+	var previous_current := current_unit
+	var previous_rotating := get_rotating_order()
+	turn_order.clear()
+	_scene_indices.clear()
+	for index in range(units.size()):
+		var unit := units[index]
+		_scene_indices[unit] = index
+		if _is_living(unit):
+			turn_order.append(unit)
+	_sort_turn_order()
+	if _is_living(previous_current) and turn_order.has(previous_current):
+		current_unit = previous_current
+	else:
+		current_unit = null
+		for candidate in previous_rotating:
+			if _is_living(candidate) and turn_order.has(candidate):
+				current_unit = candidate
+				break
+		if current_unit == null and not turn_order.is_empty():
+			current_unit = turn_order[0]
+	current_index = turn_order.find(current_unit) if current_unit != null else -1
+	turn_order_changed.emit(get_rotating_order())
+	return current_unit != previous_current
+
+
+func restore_combat_state(
+	units: Array[TacticalCharacter],
+	ordered_ids: Array,
+	current_id: String,
+	restored_round: int
+) -> void:
+	turn_order.clear()
+	_scene_indices.clear()
+	var by_id: Dictionary = {}
+	for index in range(units.size()):
+		var unit := units[index]
+		_scene_indices[unit] = index
+		by_id[unit.dev_runtime_id] = unit
+	for id in ordered_ids:
+		var unit := by_id.get(str(id)) as TacticalCharacter
+		if _is_living(unit) and not turn_order.has(unit):
+			turn_order.append(unit)
+	for unit in units:
+		if _is_living(unit) and not turn_order.has(unit):
+			turn_order.append(unit)
+	round_number = maxi(1, restored_round)
+	current_unit = by_id.get(current_id) as TacticalCharacter
+	if not _is_living(current_unit):
+		current_unit = turn_order[0] if not turn_order.is_empty() else null
+	current_index = turn_order.find(current_unit) if current_unit != null else -1
+	round_started.emit(round_number)
+	turn_order_changed.emit(get_rotating_order())
+
+
+func activate_restored_current_turn() -> void:
+	if _is_living(current_unit):
+		turn_started.emit(current_unit)
+
+
+func activate_reconciled_current_turn() -> void:
+	_start_current_turn()
+
+
 func _start_current_turn() -> void:
 	var starting_unit := current_unit
 	if not _is_living(starting_unit):

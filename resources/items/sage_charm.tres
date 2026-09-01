@@ -1,8 +1,9 @@
 [gd_resource type="Resource" script_class="ItemDefinition" format=3 uid="uid://pghwydiamt0o"]
 
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="1_item"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="1_vcfxq"]
 [ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
-[ext_resource type="Texture2D" path="res://assets/item_icons/sage_charm.png" id="3_icon"]
+[ext_resource type="Texture2D" uid="uid://ejdmje32sboh" path="res://assets/item_icons/sage_charm.png" id="3_icon"]
 
 [sub_resource type="Resource" id="IntelligenceBonus"]
 script = ExtResource("2_modifier")
@@ -12,6 +13,6 @@ value = 2.0
 [resource]
 script = ExtResource("1_item")
 display_name = "Sage Charm"
-icon = ExtResource("3_icon")
 slot = 2
+icon = ExtResource("3_icon")
 modifiers = Array[ExtResource("2_modifier")]([SubResource("IntelligenceBonus")])

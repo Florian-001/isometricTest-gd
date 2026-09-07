@@ -4,8 +4,11 @@
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="8_item_type"]
 
+[ext_resource type="Resource" path="res://resources/classes/wizard.tres" id="starting_class"]
+
 [resource]
 script = ExtResource("1_definition")
+starting_class = ExtResource("starting_class")
 display_name = "Friendly Adventurer"
 strength = 1
 dexterity = 1

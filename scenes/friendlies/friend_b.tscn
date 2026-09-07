@@ -1,19 +1,26 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3 uid="uid://d8ur1qmm0op"]
 
-[ext_resource type="Script" path="res://scripts/initiative_actor.gd" id="1_actor"]
-[ext_resource type="Resource" path="res://resources/friendly_spellcaster.tres" id="2_definition"]
-[ext_resource type="Texture2D" path="res://assets/characters/friendly_spellblade_left.png" id="3_left"]
-[ext_resource type="Texture2D" path="res://assets/characters/friendly_spellblade_right.png" id="4_right"]
+[ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="1_actor"]
+[ext_resource type="Resource" uid="uid://clbeyhlog2wbi" path="res://resources/friendly_spellcaster.tres" id="2_definition"]
+[ext_resource type="Texture2D" uid="uid://derfxfporaao3" path="res://assets/characters/friendly_spellblade_left.png" id="3_left"]
+[ext_resource type="Texture2D" uid="uid://b26vog8gwnbrc" path="res://assets/characters/friendly_spellblade_right.png" id="4_right"]
 [ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="5_name_label"]
+[ext_resource type="Resource" path="res://resources/classes/warrior.tres" id="class"]
+[ext_resource type="Script" uid="uid://bjahsdfmwux0" path="res://scripts/character_class_level.gd" id="class_level"]
 
-[node name="FriendB" type="Node2D"]
+[sub_resource type="Resource" id="Resource_kbadr"]
+script = ExtResource("class_level")
+character_class = ExtResource("class")
+
+[node name="FriendB" type="Node2D" unique_id=1973832459]
 script = ExtResource("1_actor")
 definition = ExtResource("2_definition")
 constitution_override = 25
 movement_range_override = 5.0
 speed_override = 8
+class_level_overrides = Array[ExtResource("class_level")]([SubResource("Resource_kbadr")])
 facing_left_texture = ExtResource("3_left")
 facing_right_texture = ExtResource("4_right")
-initial_facing = 1
 
-[node name="UnitNameLabel" parent="." instance=ExtResource("5_name_label")]
+[node name="UnitNameLabel" parent="." unique_id=1512159812 instance=ExtResource("5_name_label")]
+text = "FriendB"

@@ -142,6 +142,29 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.48, 0.82, 0.92, 1)
 text = "Effective stats"
 
+[node name="Classes" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+
+[node name="Summary" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+autowrap_mode = 3
+text = "Level 1"
+
+[node name="Entries" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes"]
+layout_mode = 2
+
+[node name="AddClass" type="HBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes"]
+layout_mode = 2
+
+[node name="Picker" type="OptionButton" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes/AddClass"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AddButton" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes/AddClass"]
+layout_mode = 2
+text = "Add Class at Level 1"
+
 [node name="StatsTitle" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
@@ -269,6 +292,12 @@ text = "Abilities"
 layout_mode = 2
 tooltip_text = "Restore the template ability loadout"
 text = "Reset to Template"
+
+[node name="AbilityBypass" type="CheckBox" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Developer Ability Override — Ignore Classes"
+tooltip_text = "Replaces the class loadout with the abilities checked below. Turn off to restore class unlocks."
 
 [node name="AbilitiesScroll" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
 custom_minimum_size = Vector2(0, 128)

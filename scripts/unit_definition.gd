@@ -12,6 +12,10 @@ enum Faction {
 @export var faction: Faction = Faction.FRIENDLY
 @export var portrait: Texture2D
 
+@export_category("Friendly Class")
+## Friendlies start at level one in this class unless their scene overrides the allocation.
+@export var starting_class: CharacterClassDefinition
+
 @export_category("Stats")
 @export_range(0.0, 100.0, 0.5) var movement_range: float = 6.0
 @export_range(1, 999, 1, "or_greater") var strength: int = 10
@@ -28,7 +32,7 @@ enum Faction {
 	PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY
 ) var max_health: int:
 	get:
-		return UnitStat.get_scaling_rules().calculate_max_health(float(constitution))
+		return calculate_max_health(float(constitution))
 @export_range(1, 999, 1, "or_greater") var speed: int = 10
 
 @export_category("Starting Equipment")
@@ -40,6 +44,15 @@ enum Faction {
 @export var health_bar_color: Color = Color("42e66b")
 
 @export_category("Ability Loadout")
-## Resize this list in the Inspector, then choose New AbilityDefinition or load an existing .tres ability.
-## Expand each ability to edit its targeting, shape, presentation, and effects inline.
+## Enemy loadout. Friendly characters resolve their abilities from class levels instead.
 @export var abilities: Array[AbilityDefinition] = []
+
+
+## Shared by the definition Inspector and runtime health, including stat modifiers.
+func calculate_max_health(effective_constitution: float) -> int:
+	return UnitStat.get_scaling_rules().calculate_max_health(effective_constitution)
+
+
+func _validate_property(property: Dictionary) -> void:
+	if (property.name == "starting_class" and faction != Faction.FRIENDLY) or (property.name == "abilities" and faction == Faction.FRIENDLY):
+		property.usage = property.usage & ~PROPERTY_USAGE_EDITOR

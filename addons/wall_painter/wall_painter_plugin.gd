@@ -2,6 +2,7 @@
 extends EditorPlugin
 
 const WallScript = preload("res://scripts/tactical_wall.gd")
+const PaintMode = preload("res://addons/spawn_painter/paint_tool_mode.gd")
 
 var _paint_button: Button
 var _painting := false
@@ -18,6 +19,7 @@ func _enter_tree() -> void:
 	_paint_button.toggle_mode = true
 	_paint_button.toggled.connect(_on_paint_toggled)
 	add_control_to_container(CONTAINER_CANVAS_EDITOR_MENU, _paint_button)
+	PaintMode.register(_paint_button)
 
 
 func _exit_tree() -> void:
@@ -93,6 +95,8 @@ func _forward_canvas_draw_over_viewport(overlay: Control) -> void:
 
 
 func _on_paint_toggled(enabled: bool) -> void:
+	if enabled:
+		PaintMode.activate(_paint_button)
 	if not enabled:
 		_painting = false
 		_erasing = false

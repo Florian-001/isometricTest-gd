@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/weathered_bow.svg" id="icon"]
+
+[resource]
+script = ExtResource("item")
+display_name = "Weathered Bow"
+icon = ExtResource("icon")
+slot = 0
+weapon_type = 1
+weapon_damage = 4

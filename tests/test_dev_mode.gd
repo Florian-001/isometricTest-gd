@@ -28,9 +28,9 @@ func teardown() -> void:
 func test_editor_authored_drawer_and_catalog_are_complete() -> void:
 	var catalog := load("res://resources/dev_tool_catalog.tres") as DevToolCatalog
 	assert_true(catalog != null, "the Battle Inspector catalog should load")
-	assert_eq(catalog.unit_scenes.size(), 8, "the unit palette should contain all eight reusable scenes")
-	assert_eq(catalog.abilities.size(), 12, "the ability editor should contain all twelve abilities")
-	assert_eq(catalog.items.size(), 12, "the equipment editor should contain all twelve items")
+	assert_eq(catalog.unit_scenes.size(), 11, "the unit palette should contain all eleven reusable scenes")
+	assert_eq(catalog.abilities.size(), 13, "the ability editor should contain all thirteen abilities")
+	assert_eq(catalog.items.size(), 15, "the equipment editor should contain all fifteen items")
 	assert_eq(catalog.wall_styles.size(), 2, "the terrain editor should contain both configured wall styles")
 	for unit_scene in catalog.unit_scenes:
 		var unit := track(unit_scene.instantiate())
@@ -83,8 +83,8 @@ func test_unit_setup_edits_are_instance_only_and_support_empty_slots() -> void:
 	assert_true(unit.override_template_abilities, "ability edits should enable a complete instance loadout")
 	assert_eq(unit.get_abilities(), chosen, "ability checkboxes should set the selected loadout")
 	unit.reset_dev_ability_loadout()
-	assert_false(unit.override_template_abilities, "ability reset should restore the template loadout")
-	assert_eq(unit.get_abilities(), unit.definition.abilities, "ability reset should use the shared template without changing it")
+	assert_false(unit.override_template_abilities, "ability reset should restore class unlocks")
+	assert_eq(unit.get_abilities(), [arrow], "ability reset should use the Archer level-one class loadout")
 
 	unit.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, null)
 	assert_true(unit.use_complete_equipment_override, "equipment edits should switch to complete-loadout mode")

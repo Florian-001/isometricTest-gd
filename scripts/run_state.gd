@@ -111,9 +111,17 @@ static func from_data(data: Dictionary) -> RunState:
 		if not reward_path.is_empty() and not load(reward_path) is ItemDefinition:
 			return null
 		if kind in [RunMapGraph.NodeType.NORMAL_COMBAT, RunMapGraph.NodeType.HARD_COMBAT, RunMapGraph.NodeType.BOSS]:
-			var encounter := load(str(state.pending.get("encounter", ""))) as RunEncounterDefinition
-			if encounter == null or encounter.battle_map == null:
+			var resolved := RunCombatProgression.resolve_pending(state.pending, node.tier + 1)
+			if not resolved.error.is_empty():
 				return null
+			var encounter: RunEncounterDefinition = resolved.encounter
+			if encounter.battle_map is BattleMapTemplateDefinition:
+				if not encounter.chief_node_name.is_empty() or not TemplateEncounterSetup.validate_saved(
+					encounter.battle_map, state.pending.get("template_setup"), state.party.size()
+				).is_empty():
+					return null
+		elif state.pending.has("combat_progression"):
+			return null
 		for path in state.pending.get("offers", []):
 			if not path is String or not ResourceLoader.exists(path) or not load(path) is ItemDefinition:
 				return null

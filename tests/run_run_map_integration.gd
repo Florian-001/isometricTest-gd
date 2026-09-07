@@ -23,6 +23,9 @@ func _run() -> void:
 	await process_frame
 	check(manager.current_battle == null and manager.level_select.visible, "standalone menu remains startup")
 	manager.show_map_button.pressed.emit()
+	manager.starting_hub.toggle_character("archer")
+	manager.starting_hub.toggle_character("vanguard")
+	manager.starting_hub.start_button.pressed.emit()
 	await frames(4)
 	check(run.state != null, "New Run creates and saves party state: " + run.error_message)
 	if run.state == null:
@@ -86,7 +89,8 @@ func _run() -> void:
 	check(run.state.route.is_empty(), "entry is not completion")
 	var battle := manager.current_battle
 	check(not battle.restart_button.visible and not battle.dev_button.visible, "run disables restart and developer tools")
-	var original_pending := JSON.stringify(run.state.pending)
+	# JSON loads whole-number fields as floats inside nested roster/progression data.
+	var original_pending: Dictionary = JSON.parse_string(JSON.stringify(run.state.pending))
 	var entry := run.save_store.load_run()
 	check(entry != null and entry.party[0].health == 48, "entry checkpoint contains original party")
 	# Quit before resolution and continue the exact committed encounter.
@@ -104,7 +108,7 @@ func _run() -> void:
 	check(manager.continue_run_button.visible, "fresh application session offers Continue Run")
 	manager.continue_run_button.pressed.emit()
 	await frames(4)
-	check(JSON.stringify(run.state.pending) == original_pending, "interruption does not reroll room content")
+	check(JSON.parse_string(JSON.stringify(run.state.pending)) == original_pending, "interruption does not reroll room content")
 	battle = manager.current_battle
 	var friendly := battle._characters.filter(func(unit: TacticalCharacter) -> bool: return unit.is_friendly())[0] as TacticalCharacter
 	check(friendly.current_health == 48, "interrupted battle restores entry health")
@@ -147,6 +151,9 @@ func _run() -> void:
 	var before_replace := run.state.graph.get_signature()
 	manager.hide_run_map()
 	manager.show_map_button.pressed.emit()
+	check(not manager.replace_run_dialog.visible, "opening the hub preserves the run without confirmation")
+	manager.starting_hub.toggle_character("archer")
+	manager.starting_hub.start_button.pressed.emit()
 	await frames(2)
 	check(manager.replace_run_dialog.visible, "replacing unfinished run asks for confirmation")
 	manager.replace_run_dialog.canceled.emit()

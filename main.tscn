@@ -8,10 +8,12 @@
 [ext_resource type="PackedScene" path="res://scenes/run_map_screen.tscn" id="6_run_map"]
 [ext_resource type="Script" path="res://scripts/run_controller.gd" id="run_controller"]
 [ext_resource type="Resource" path="res://resources/run/default_run.tres" id="run_config"]
+[ext_resource type="Resource" path="res://resources/maps/spawn_template_demo.tres" id="spawn_template"]
+[ext_resource type="PackedScene" path="res://scenes/starting_hub.tscn" id="starting_hub"]
 
 [node name="Main" type="Node" unique_id=1967285414]
 script = ExtResource("1_manager")
-levels = Array[ExtResource("2_definition_type")]([ExtResource("3_terrain_showcase"), ExtResource("4_goblin_skirmish")])
+levels = Array[ExtResource("2_definition_type")]([ExtResource("3_terrain_showcase"), ExtResource("4_goblin_skirmish"), ExtResource("spawn_template")])
 battle_scene = ExtResource("5_battle")
 
 [node name="RunController" type="Node" parent="."]
@@ -97,7 +99,7 @@ layout_mode = 2
 autowrap_mode = 2
 theme_override_font_sizes/font_size = 13
 
-[node name="ReplaceRunDialog" type="ConfirmationDialog" parent="LevelSelect"]
+[node name="ReplaceRunDialog" type="ConfirmationDialog" parent="."]
 title = "Start a new run?"
 dialog_text = "Starting a new run replaces your saved journey. Continue?"
 ok_button_text = "Start new run"
@@ -113,3 +115,8 @@ horizontal_alignment = 1
 layer = 30
 
 [node name="RunMapScreen" parent="RunMapLayer" instance=ExtResource("6_run_map")]
+
+[node name="HubLayer" type="CanvasLayer" parent="."]
+layer = 30
+
+[node name="StartingHub" parent="HubLayer" instance=ExtResource("starting_hub")]

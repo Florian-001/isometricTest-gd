@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="CharacterClassDefinition" format=3 uid="uid://cs3nmgs4bnpyo"]
+
+[ext_resource type="Resource" uid="uid://7wlmmxsy6gcc" path="res://resources/abilities/heal.tres" id="ability_0"]
+[ext_resource type="Resource" uid="uid://coxj05o5g75fi" path="res://resources/abilities/focus.tres" id="ability_1"]
+[ext_resource type="Resource" uid="uid://d17q7fv47avlu" path="res://resources/abilities/beam.tres" id="ability_2"]
+[ext_resource type="Script" uid="uid://cb2sfxg1krtk4" path="res://scripts/character_class_definition.gd" id="class"]
+[ext_resource type="Script" uid="uid://dtcq17r6pgivp" path="res://scripts/class_ability_unlock.gd" id="unlock"]
+
+[sub_resource type="Resource" id="Unlock_0"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_0")
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_1")
+required_level = 2
+
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_2")
+
+[resource]
+script = ExtResource("class")
+class_id = &"cleric"
+display_name = "Cleric"
+ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_0"), SubResource("Unlock_1"), SubResource("Unlock_2")])

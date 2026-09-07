@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+display_name = "Bite"
+ability_type = 0
+effect = 1
+damage_type = 0
+innate_damage = 0
+scaling_stat = 0
+scaling_amount = 0.0
+range = 1.414
+area_of_effect = 1
+target_flags = 2
+delivery_type = 2
+placeholder_color = Color(0.69, 0.44, 0.4, 1)
+melee_slash_color = Color(0.98, 0.86, 0.68, 1)

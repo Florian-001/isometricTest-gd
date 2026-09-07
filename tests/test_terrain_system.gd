@@ -385,6 +385,8 @@ func _make_unit(
 	var unit := track(TacticalCharacterScript.new()) as TacticalCharacter
 	unit.definition = definition
 	unit.enemy_ai_profile = profile
+	if friendly:
+		unit.set_dev_ability_loadout(abilities)
 	unit.movement_range_override = movement
 	unit.starting_grid_cell = cell
 	unit._ready()

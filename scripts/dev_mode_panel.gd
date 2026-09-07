@@ -37,6 +37,12 @@ const AI_LOG_SEPARATOR := "\n\n────────────────�
 @onready var unit_name: Label = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/UnitHeader/UnitName
 @onready var heal_unit_button: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/UnitHeader/HealUnitButton
 @onready var derived_stats: Label = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/DerivedStats
+@onready var class_editor: VBoxContainer = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes
+@onready var class_summary: Label = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes/Summary
+@onready var class_entries: VBoxContainer = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes/Entries
+@onready var class_picker: OptionButton = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes/AddClass/Picker
+@onready var add_class_button: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Classes/AddClass/AddButton
+@onready var ability_bypass: CheckBox = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/AbilityBypass
 @onready var strength_spin: SpinBox = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats/StrengthSpin
 @onready var dexterity_spin: SpinBox = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats/DexteritySpin
 @onready var intelligence_spin: SpinBox = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats/IntelligenceSpin
@@ -98,6 +104,8 @@ func _ready() -> void:
 	_connect_stat(speed_spin, speed_reset, UnitStat.Type.SPEED)
 	_connect_stat(movement_spin, movement_reset, UnitStat.Type.MOVEMENT_RANGE)
 	abilities_reset.pressed.connect(_reset_abilities)
+	ability_bypass.toggled.connect(_ability_bypass_toggled)
+	add_class_button.pressed.connect(_add_class_pressed)
 	equipment_reset.pressed.connect(_reset_equipment)
 	weapon_picker.item_selected.connect(_equipment_selected.bind(ItemDefinition.EquipmentSlot.WEAPON, weapon_picker))
 	armor_picker.item_selected.connect(_equipment_selected.bind(ItemDefinition.EquipmentSlot.ARMOR, armor_picker))
@@ -348,6 +356,8 @@ func _reset_abilities() -> void:
 func _ability_toggled(pressed: bool, ability: AbilityDefinition) -> void:
 	if _syncing or not is_instance_valid(_selected_unit):
 		return
+	if _selected_unit.is_friendly() and not _selected_unit.override_template_abilities:
+		return
 	var values: Array[AbilityDefinition] = []
 	values.assign(_selected_unit.get_abilities())
 	if pressed and not values.has(ability):
@@ -357,6 +367,83 @@ func _ability_toggled(pressed: bool, ability: AbilityDefinition) -> void:
 	_selected_unit.set_dev_ability_loadout(values)
 	_mark_setup_changed()
 	_refresh_selected_unit()
+
+
+func _ability_bypass_toggled(enabled: bool) -> void:
+	if _syncing or not is_instance_valid(_selected_unit) or not _selected_unit.is_friendly():
+		return
+	if enabled:
+		_selected_unit.set_dev_ability_loadout(_selected_unit.get_abilities())
+	else:
+		_selected_unit.reset_dev_ability_loadout()
+	_mark_setup_changed()
+	_refresh_selected_unit()
+
+
+func _add_class_pressed() -> void:
+	if class_picker.selected < 0 or not is_instance_valid(_selected_unit):
+		return
+	_set_class_level(1, class_picker.get_selected_metadata() as CharacterClassDefinition)
+
+
+func _set_class_level(value: float, character_class: CharacterClassDefinition) -> void:
+	if _syncing or not is_instance_valid(_selected_unit):
+		return
+	if _selected_unit.set_class_level(character_class, int(value)):
+		_mark_setup_changed()
+	_refresh_selected_unit()
+
+
+func _rebuild_classes() -> void:
+	class_editor.visible = _selected_unit.is_friendly()
+	ability_bypass.visible = _selected_unit.is_friendly()
+	ability_bypass.set_pressed_no_signal(_selected_unit.override_template_abilities)
+	abilities_reset.text = "Use Class Unlocks" if _selected_unit.is_friendly() else "Reset to Template"
+	abilities_reset.tooltip_text = "Disable the developer bypass and restore class unlocks" if _selected_unit.is_friendly() else "Restore the template ability loadout"
+	_clear_children(class_entries)
+	class_picker.clear()
+	if not _selected_unit.is_friendly():
+		return
+	var levels := _selected_unit.get_class_levels()
+	class_summary.text = CharacterClassProgression.get_summary(levels)
+	var active_ids := {}
+	for allocation in levels:
+		if allocation == null or allocation.character_class == null:
+			continue
+		var definition := allocation.character_class
+		active_ids[definition.class_id] = true
+		var row := HBoxContainer.new()
+		row.set_meta("class_id", definition.class_id)
+		var label := Label.new()
+		label.text = definition.display_name
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+		var spin := SpinBox.new()
+		spin.name = "Level"
+		spin.min_value = 1
+		spin.max_value = 99
+		spin.allow_greater = true
+		spin.step = 1
+		spin.value = allocation.level
+		spin.tooltip_text = "Levels invested in %s" % definition.display_name
+		spin.value_changed.connect(_set_class_level.bind(definition))
+		row.add_child(spin)
+		var remove := Button.new()
+		remove.name = "Remove"
+		remove.text = "Remove"
+		remove.disabled = levels.size() <= 1
+		remove.tooltip_text = "A friendly must retain at least one class"
+		remove.pressed.connect(_set_class_level.bind(0.0, definition))
+		row.add_child(remove)
+		class_entries.add_child(row)
+	if _catalog != null:
+		for definition in _catalog.character_classes:
+			if definition == null or active_ids.has(definition.class_id):
+				continue
+			class_picker.add_item(definition.display_name)
+			class_picker.set_item_metadata(class_picker.item_count - 1, definition)
+	add_class_button.disabled = class_picker.item_count == 0
+	class_picker.disabled = class_picker.item_count == 0
 
 
 func _reset_equipment() -> void:
@@ -424,6 +511,7 @@ func _refresh_selected_unit() -> void:
 		_selected_unit.get_movement_range(),
 		_selected_unit.get_initiative(),
 	]
+	_rebuild_classes()
 	_rebuild_abilities()
 	_rebuild_equipment_picker(weapon_picker, ItemDefinition.EquipmentSlot.WEAPON)
 	_rebuild_equipment_picker(armor_picker, ItemDefinition.EquipmentSlot.ARMOR)
@@ -458,6 +546,27 @@ func _base_movement_value() -> float:
 
 func _rebuild_abilities() -> void:
 	_clear_children(ability_entries)
+	if _selected_unit.is_friendly() and not _selected_unit.override_template_abilities:
+		for allocation in _selected_unit.get_class_levels():
+			if allocation == null or allocation.character_class == null:
+				continue
+			for unlock in allocation.character_class.get_sorted_unlocks():
+				if unlock.ability == null:
+					continue
+				var entry := VBoxContainer.new()
+				entry.add_theme_constant_override("separation", 0)
+				var label := Label.new()
+				var unlocked := allocation.level >= unlock.required_level
+				entry.set_meta("ability", unlock.ability)
+				entry.set_meta("unlocked", unlocked)
+				label.text = "%s · %s %d · %s" % [unlock.ability.display_name, allocation.character_class.display_name, unlock.required_level, "Unlocked" if unlocked else "Locked"]
+				label.tooltip_text = unlock.ability.get_description(_selected_unit)
+				label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				label.add_theme_color_override("font_color", SUCCESS_TEXT if unlocked else Color("8095aa"))
+				entry.add_child(label)
+				_add_damage_breakdown(entry, unlock.ability, label.tooltip_text)
+				ability_entries.add_child(entry)
+		return
 	if _catalog == null:
 		return
 	var current := _selected_unit.get_abilities()
@@ -473,19 +582,20 @@ func _rebuild_abilities() -> void:
 		check.button_pressed = current.has(ability)
 		check.toggled.connect(_ability_toggled.bind(ability))
 		entry.add_child(check)
-		var damage_breakdown := Label.new()
-		damage_breakdown.name = "DamageBreakdown"
-		damage_breakdown.text = ability.get_damage_calculation_description(_selected_unit)
-		damage_breakdown.tooltip_text = check.tooltip_text
-		damage_breakdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		damage_breakdown.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		damage_breakdown.add_theme_font_size_override("font_size", 12)
-		damage_breakdown.add_theme_color_override(
-			"font_color",
-			Color("79cbe8") if ability.has_damage() else Color("8095aa")
-		)
-		entry.add_child(damage_breakdown)
+		_add_damage_breakdown(entry, ability, check.tooltip_text)
 		ability_entries.add_child(entry)
+
+
+func _add_damage_breakdown(entry: VBoxContainer, ability: AbilityDefinition, description: String) -> void:
+	var damage_breakdown := Label.new()
+	damage_breakdown.name = "DamageBreakdown"
+	damage_breakdown.text = ability.get_damage_calculation_description(_selected_unit)
+	damage_breakdown.tooltip_text = description
+	damage_breakdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	damage_breakdown.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	damage_breakdown.add_theme_font_size_override("font_size", 12)
+	damage_breakdown.add_theme_color_override("font_color", Color("79cbe8") if ability.has_damage() else Color("8095aa"))
+	entry.add_child(damage_breakdown)
 
 
 func _rebuild_equipment_picker(

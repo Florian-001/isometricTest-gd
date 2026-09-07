@@ -32,8 +32,6 @@ palette = ExtResource("4_palette")
 [node name="FriendA" parent="Characters" unique_id=202289012 instance=ExtResource("5_friend_a")]
 z_index = 113
 constitution_override = 5
-override_template_abilities = true
-ability_overrides = Array[ExtResource("6_yfbn5")]([ExtResource("7_7gw14")])
 starting_equipment_overrides = Array[ExtResource("7_t7vv0")]([ExtResource("7_04l5s")])
 use_complete_equipment_override = true
 complete_equipment_overrides = Array[ExtResource("7_t7vv0")]([ExtResource("7_04l5s")])
@@ -42,8 +40,6 @@ starting_grid_cell = Vector2i(4, 9)
 [node name="FriendB" parent="Characters" unique_id=819615493 instance=ExtResource("6_friend_b")]
 z_index = 116
 constitution_override = 3
-override_template_abilities = true
-ability_overrides = Array[ExtResource("6_yfbn5")]([ExtResource("11_6q8p0")])
 use_complete_equipment_override = true
 complete_equipment_overrides = Array[ExtResource("7_t7vv0")]([ExtResource("8_04l5s")])
 starting_grid_cell = Vector2i(7, 9)

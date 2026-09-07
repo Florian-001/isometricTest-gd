@@ -27,6 +27,9 @@ signal battle_finished(victory: bool, party_results: Array[Dictionary], inventor
 var run_party_input: Array[Dictionary] = []
 var run_inventory_input: Array[String] = []
 var run_encounter: RunEncounterDefinition
+## Concrete generated roster, committed by RunController before a run battle opens.
+var template_setup_input: Dictionary = {}
+var initialization_error: String = ""
 var _run_result_emitted := false
 
 @export_category("Battle Map")
@@ -116,6 +119,9 @@ func _ready() -> void:
 		_update_turn_hud()
 		return
 	var authored_environment := _capture_environment_setup()
+	if map_definition is BattleMapTemplateDefinition and pending_restore_payload.is_empty():
+		if not _prepare_template_characters():
+			return
 	if run_encounter != null:
 		enable_dev_tools = false
 		if not _prepare_run_characters():
@@ -297,6 +303,7 @@ func _collect_and_initialize_characters() -> void:
 
 
 func _connect_character(character: TacticalCharacter) -> void:
+	character.class_progression_changed.connect(_on_character_class_progression_changed.bind(character))
 	character.movement_remaining_changed.connect(
 		_on_unit_movement_changed.bind(character)
 	)
@@ -1569,6 +1576,14 @@ func _on_character_equipment_changed(
 	_on_inventory_equipment_updated(character)
 
 
+func _on_character_class_progression_changed(character: TacticalCharacter) -> void:
+	if character == _selected_character and _selected_ability != null and not character.get_abilities().has(_selected_ability):
+		_cancel_ability_targeting()
+	if character == turn_manager.current_unit:
+		_refresh_ability_bar()
+		_update_turn_hud()
+
+
 func _refresh_ai_debug_history() -> void:
 	if dev_mode_panel == null:
 		return
@@ -1747,9 +1762,75 @@ func _check_combat_end() -> bool:
 	return true
 
 
+func _prepare_template_characters() -> bool:
+	var template := map_definition as BattleMapTemplateDefinition
+	var party_root: Node
+	var party: Array[TacticalCharacter] = []
+	var party_slots := run_party_input.size()
+	if run_encounter != null and not run_encounter.chief_node_name.is_empty():
+		return _fail_template("Named-chief encounters require an authored map, not a generated template.")
+	if run_encounter == null:
+		if template.standalone_party == null or not template.standalone_party.can_instantiate():
+			return _fail_template("Assign a Standalone Party scene to this map template.")
+		party_root = template.standalone_party.instantiate()
+		for child in party_root.get_children():
+			if child is TacticalCharacter:
+				if child.definition == null or not child.is_friendly():
+					party_root.free()
+					return _fail_template("Standalone Party combatants must have friendly definitions.")
+				party.append(child)
+		party_slots = party.size()
+		if party_slots == 0:
+			party_root.free()
+			return _fail_template("Standalone Party must contain friendly TacticalCharacter children.")
+	var setup := template_setup_input
+	if run_encounter == null:
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		setup = TemplateEncounterSetup.create(template, party_slots, rng)
+		if not str(setup.get("error", "")).is_empty():
+			party_root.free()
+			return _fail_template(setup.error)
+	var error := TemplateEncounterSetup.validate_saved(template, setup, party_slots)
+	if not error.is_empty():
+		if party_root != null:
+			party_root.free()
+		return _fail_template(error)
+	var spawns := battle_map.get_node("SpawnTiles") as BattleSpawnTiles
+	for index in range(party.size()):
+		var character := party[index]
+		character.owner = null
+		party_root.remove_child(character)
+		character.starting_grid_cell = spawns.friendly_cells[index]
+		characters_container.add_child(character)
+	if party_root != null:
+		party_root.free()
+	for entry in setup.enemies:
+		var scene := load(str(entry.scene)) as PackedScene
+		var character := scene.instantiate() as TacticalCharacter
+		character.name = str(entry.name)
+		character.scenario_unit_id = str(entry.id)
+		character.starting_grid_cell = Vector2i(int(entry.cell[0]), int(entry.cell[1]))
+		characters_container.add_child(character)
+	return true
+
+
+func _fail_template(message: String) -> bool:
+	initialization_error = message
+	_combat_over = true
+	_movement_locked = true
+	_combat_result_text = "Invalid Template"
+	push_error(message)
+	_refresh_ability_bar()
+	_update_turn_hud()
+	return false
+
+
 func _prepare_run_characters() -> bool:
 	var spawns := battle_map.get_node_or_null("PartySpawns")
-	if spawns == null or spawns.get_child_count() < run_party_input.size():
+	var template_spawns := battle_map.get_node_or_null("SpawnTiles") as BattleSpawnTiles
+	var is_template := map_definition is BattleMapTemplateDefinition
+	if not is_template and (spawns == null or spawns.get_child_count() < run_party_input.size()):
 		push_error("Run encounter needs an authored spawn for every original party member.")
 		return false
 	for child in characters_container.get_children():
@@ -1768,6 +1849,7 @@ func _prepare_run_characters() -> bool:
 			character.set(stat + "_override", ceili(base * run_encounter.enemy_multiplier))
 		if not run_encounter.chief_node_name.is_empty():
 			character.name = run_encounter.chief_display_name
+	var friendly_index := 0
 	for index in range(run_party_input.size()):
 		var member: Dictionary = run_party_input[index]
 		if bool(member.get("lost", false)):
@@ -1775,17 +1857,22 @@ func _prepare_run_characters() -> bool:
 		var setup: Dictionary = member.setup.duplicate(true)
 		var scene := load(str(setup.scene)) as PackedScene
 		var character := scene.instantiate() as TacticalCharacter
-		var spawn := spawns.get_child(index) as RunSpawnPoint
-		if character == null or spawn == null:
+		var spawn := spawns.get_child(index) as RunSpawnPoint if not is_template else null
+		if character == null or (not is_template and spawn == null):
 			push_error("Run party scene or spawn is invalid.")
 			return false
-		setup.cell = [spawn.grid_cell.x, spawn.grid_cell.y]
+		var cell := template_spawns.friendly_cells[index] if is_template else spawn.grid_cell
+		setup.cell = [cell.x, cell.y]
 		setup.complete_equipment = true
 		setup.equipment = member.equipment
 		character.apply_setup_state(setup)
 		character.permanent_defeat = true
 		character.name = str(member.name)
 		characters_container.add_child(character)
+		if is_template:
+			# Preserve party IDs if a generated enemy happens to use the same ID.
+			characters_container.move_child(character, friendly_index)
+			friendly_index += 1
 	return true
 
 
@@ -1815,7 +1902,8 @@ func capture_run_party() -> Array[Dictionary]:
 				equipment.append(item.resource_path)
 		var persistent_max := character.get_max_health_without_statuses()
 		result.append({"id": character.scenario_unit_id, "health": mini(character.current_health, persistent_max),
-			"max_health": persistent_max, "equipment": equipment})
+			"max_health": persistent_max, "equipment": equipment,
+			"class_levels": CharacterClassProgression.to_data(character.get_class_levels())})
 	return result
 
 

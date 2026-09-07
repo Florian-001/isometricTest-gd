@@ -24,6 +24,10 @@ func to_data() -> Dictionary:
 	return {"id": id, "name": display_name, "setup": setup.duplicate(true), "health": health,
 		"max_health": max_health, "equipment": Array(equipment), "lost": lost}
 
+
+func get_class_summary() -> String:
+	return CharacterClassProgression.get_summary(CharacterClassProgression.from_data(setup.get("class_levels", [])))
+
 static func from_data(data: Dictionary) -> RunPartyMember:
 	for key in ["health", "max_health"]:
 		if not RunState._integer(data.get(key)):
@@ -66,5 +70,7 @@ static func from_data(data: Dictionary) -> RunPartyMember:
 		return null
 	var scene_path := str(member.setup.get("scene", ""))
 	if not ResourceLoader.exists(scene_path) or not load(scene_path) is PackedScene:
+		return null
+	if not CharacterClassProgression.prepare_setup(member.setup).is_empty():
 		return null
 	return member

@@ -359,14 +359,14 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_eq(ability.get_effective_area_span(), 5, "normalized area span should be exposed to targeting")
 
 	var friendly_definition = load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
-	assert_eq(friendly_definition.abilities.size(), 7, "the friendly template should expose seven sample abilities")
+	assert_eq(friendly_definition.starting_class.class_id, &"wizard", "the friendly spellcaster template should start as Wizard")
+	var unlocks: Array[ClassAbilityUnlock] = friendly_definition.starting_class.get_sorted_unlocks()
 	var names: Array[String] = []
-	for sample in friendly_definition.abilities:
-		names.append(sample.display_name)
-	assert_eq(names, ["Fireball", "Arrow", "Heal", "Beam", "Strike", "Ice Shard", "Charge"], "Charge should be the final sample ability")
-	assert_eq(friendly_definition.abilities[0].innate_damage, 20, "Fireball innate damage should be editable directly on the ability")
-	assert_eq(friendly_definition.abilities[4].innate_damage, 0, "Strike should expose zero innate damage directly on the ability")
-	var ice_shard := friendly_definition.abilities[5] as AbilityDefinition
+	for unlock in unlocks:
+		names.append(unlock.ability.display_name)
+	assert_eq(names, ["Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam"], "Wizard should expose its editable class progression")
+	assert_eq(unlocks[3].ability.innate_damage, 20, "Fireball innate damage remains editable on the ability")
+	var ice_shard: AbilityDefinition = unlocks[0].ability
 	assert_eq(ice_shard.delivery_type, AbilityDefinition.DeliveryType.PROJECTILE, "Ice Shard should use projectile delivery")
 	assert_eq(ice_shard.damage_type, DamageCalculator.Type.MAGICAL, "Ice Shard should deal magical damage")
 	assert_eq(ice_shard.innate_damage, 15, "Ice Shard should expose 15 innate damage")
@@ -376,7 +376,7 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_eq(ice_shard.area_of_effect, 0, "Ice Shard should affect one cell")
 	assert_eq(ice_shard.target_flags, AbilityDefinition.TargetFlags.ENEMY, "Ice Shard should target one enemy")
 	assert_eq(ice_shard.status_effect.status_id, &"slow", "Ice Shard should expose Slow directly")
-	var charge := friendly_definition.abilities[6] as AbilityDefinition
+	var charge := load("res://resources/abilities/charge.tres") as AbilityDefinition
 	assert_eq(charge.caster_movement, AbilityDefinition.CasterMovement.CHARGE_TO_TARGET, "Charge should expose caster movement directly")
 	assert_eq(charge.ability_type, AbilityDefinition.AbilityType.MELEE, "Charge should require a Melee weapon")
 	assert_eq(charge.delivery_type, AbilityDefinition.DeliveryType.MELEE, "Charge should resolve through Melee delivery")
@@ -697,6 +697,7 @@ func test_weapon_compatibility_is_independent_from_damage_type_and_delivery() ->
 	grid.grid_size = Vector2i(5, 5)
 	var executor := track(AbilityExecutorScript.new()) as AbilityExecutor
 	assert_false(targeting.is_valid_primary_target(caster, target.grid_cell, ranged, units), "targeting should reject an incompatible ability")
+	caster.set_dev_ability_loadout([ranged])
 	assert_false(executor.can_execute(caster, ranged, target.grid_cell, units, grid, targeting), "execution should reject an incompatible ability")
 	assert_true(caster.ability_available, "rejecting an incompatible ability should not spend the action")
 
@@ -989,7 +990,7 @@ func test_weapon_status_applies_to_every_surviving_weapon_damage_target() -> voi
 
 
 func test_unit_ability_loadout_override() -> void:
-	var unit := _make_unit(true, Vector2i.ZERO, 6.0)
+	var unit := _make_unit(false, Vector2i.ZERO, 6.0)
 	var template_ability = AbilityDefinitionScript.new()
 	template_ability.display_name = "Template Ability"
 	var override_ability = AbilityDefinitionScript.new()
@@ -1124,6 +1125,7 @@ func test_blocked_projectile_does_not_spend_action() -> void:
 	blocked_projectile.delivery_type = AbilityDefinition.DeliveryType.PROJECTILE
 	blocked_projectile.range = 5.0
 	blocked_projectile.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	caster.set_dev_ability_loadout([blocked_projectile])
 	caster.reset_ability_action()
 
 	var can_execute := executor.can_execute(
@@ -1203,6 +1205,7 @@ func test_melee_preflight_rejects_invalid_attacks_without_spending_action() -> v
 	var targeting = AbilityTargetingScript.new(grid.grid_size)
 	var executor = track(AbilityExecutorScript.new()) as AbilityExecutor
 	var strike := load("res://resources/abilities/strike.tres") as AbilityDefinition
+	caster.set_dev_ability_loadout([strike])
 	caster.reset_ability_action()
 
 	assert_true(MeleeDeliveryScript.can_reach(caster.grid_cell, enemy.grid_cell, {}), "shared melee delivery should accept an open diagonal")
@@ -1223,7 +1226,7 @@ func test_opportunity_attack_selection_reach_reaction_and_round_reset() -> void:
 	melee_utility.ability_type = AbilityDefinition.AbilityType.MELEE
 	melee_utility.target_flags = AbilityDefinition.TargetFlags.ENEMY
 	var abilities: Array[AbilityDefinition] = [melee_utility, strike]
-	attacker.definition.abilities = abilities
+	attacker.set_dev_ability_loadout(abilities)
 	var weapon := ItemDefinition.new()
 	weapon.weapon_type = ItemDefinition.WeaponType.MELEE
 	attacker.equip_item(weapon)
@@ -1511,40 +1514,34 @@ func test_ability_action_resets_only_on_active_turn() -> void:
 
 
 func test_ability_bar_populates_and_disables_after_cast() -> void:
-	var friendly_definition = load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
-	var unit = track(TacticalCharacterScript.new()) as TacticalCharacter
-	unit.definition = friendly_definition
+	var unit := track(TacticalCharacterScript.new()) as TacticalCharacter
+	unit.definition = load("res://resources/friendly_spellcaster.tres") as CharacterDefinition
 	unit._ready()
 	unit.reset_ability_action()
 	var bar = track(AbilityBarScene.instantiate())
 	bar.rebuild(unit, true)
 	var entries: HBoxContainer = bar.get_node("Margin/HBox")
-	assert_eq(entries.get_child_count(), 7, "the ability bar should create one button per configured ability")
-	assert_true(entries.get_child(0).text.contains("32 DMG"), "damage buttons should show their caster-scaled total damage")
-	assert_true(entries.get_child(1).text.contains("Requires a Ranged weapon"), "the Ability Bar summary should show the incompatible weapon reason")
-	assert_true(entries.get_child(1).disabled, "Arrow should remain visible but disabled with a Melee weapon")
-	assert_true(entries.get_child(1).tooltip_text.contains("7 physical damage"), "the disabled tooltip should retain the type-aware damage preview")
-	assert_true(entries.get_child(1).tooltip_text.contains("Requires a Ranged weapon"), "disabled abilities should explain their weapon requirement")
-	assert_false(entries.get_child(2).text.contains("DMG"), "non-damaging ability buttons should remain uncluttered")
-	assert_true(entries.get_child(5).text.contains("27 DMG"), "Ice Shard should show its Intelligence-scaled damage")
-	assert_true(entries.get_child(5).tooltip_text.contains("Slow"), "Ice Shard's tooltip should include its direct status")
-	assert_false(entries.get_child(0).disabled, "ability buttons should be enabled while the action is available")
-	assert_false(entries.get_child(4).disabled, "Strike should be enabled by the starting Melee sword")
-	assert_true(entries.get_child(6).text.contains("32 DMG"), "Charge should show the shared Melee damage calculation")
-	assert_false(entries.get_child(6).disabled, "Charge should be enabled by the starting Melee sword")
-	assert_true(entries.get_child(6).tooltip_text.contains("Charges in a clear straight line"), "Charge's tooltip should explain caster movement")
-
-	var ranger_bow := load("res://resources/items/ranger_bow.tres") as ItemDefinition
-	unit.equip_item(ranger_bow)
+	assert_eq(entries.get_child_count(), 1, "level-one Wizard should show only Ice Shard")
+	assert_true(entries.get_child(0).text.contains("%d DMG" % unit.get_abilities()[0].calculate_damage(unit)), "ability bar shows live class-ability damage")
+	assert_true(entries.get_child(0).tooltip_text.contains("Slow"), "Ice Shard tooltip retains its status description")
+	assert_false(entries.get_child(0).disabled, "unlocked Magic works without a weapon")
+	unit.set_class_level(unit.definition.starting_class, 3)
 	bar.rebuild(unit, true)
-	assert_true(entries.get_child(1).text.contains("17 DMG"), "Arrow should include Ranger Bow damage after a compatible swap")
-	assert_false(entries.get_child(1).disabled, "a Ranged weapon should enable Arrow")
-	assert_true(entries.get_child(4).disabled, "a Ranged weapon should disable Strike")
-	assert_true(entries.get_child(6).disabled, "a Ranged weapon should disable Charge")
-	assert_true(entries.get_child(4).tooltip_text.contains("Requires a Melee weapon"), "Strike should explain its Melee requirement")
+	assert_eq(entries.get_child_count(), 3, "the ability bar includes newly unlocked abilities")
+	assert_false(entries.get_child(2).text.contains("DMG"), "status ability summaries remain uncluttered")
+	var arrow := load("res://resources/abilities/arrow.tres") as AbilityDefinition
+	var strike := load("res://resources/abilities/strike.tres") as AbilityDefinition
+	unit.set_dev_ability_loadout([arrow, strike])
+	bar.rebuild(unit, true)
+	assert_true(entries.get_child(0).disabled and entries.get_child(1).disabled, "developer overrides still require weapons")
+	assert_true(entries.get_child(0).tooltip_text.contains("Requires a Ranged weapon"), "disabled abilities explain equipment requirements")
+	unit.equip_item(load("res://resources/items/ranger_bow.tres"))
+	bar.rebuild(unit, true)
+	assert_false(entries.get_child(0).disabled, "a matching Ranged weapon enables Arrow")
+	assert_true(entries.get_child(1).disabled, "a Ranged weapon leaves Strike unavailable")
 	unit.spend_ability_action()
 	bar.rebuild(unit, true)
-	assert_true(entries.get_child(0).disabled, "ability buttons should disable after the action is spent")
+	assert_true(entries.get_child(0).disabled, "ability buttons disable after the action is spent")
 
 	var half_weapon := AbilityDefinition.new()
 	half_weapon.display_name = "Half Weapon Shot"
@@ -1557,6 +1554,7 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	half_weapon_definition.abilities = half_weapon_abilities
 	var half_weapon_unit := track(TacticalCharacterScript.new()) as TacticalCharacter
 	half_weapon_unit.definition = half_weapon_definition
+	half_weapon_unit.set_dev_ability_loadout(half_weapon_abilities)
 	half_weapon_unit._ready()
 	half_weapon_unit.equip_item(load("res://resources/items/frost_bow.tres") as ItemDefinition)
 	var half_weapon_bar = track(AbilityBarScene.instantiate())

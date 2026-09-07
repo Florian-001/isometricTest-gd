@@ -1,0 +1,21 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/initiative_actor.gd" id="1_actor"]
+[ext_resource type="Resource" path="res://resources/enemies/rat.tres" id="2_definition"]
+[ext_resource type="Texture2D" path="res://assets/characters/rat_left.png" id="3_left"]
+[ext_resource type="Texture2D" path="res://assets/characters/rat_right.png" id="4_right"]
+[ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="5_name_label"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_left_frame"]
+atlas = ExtResource("3_left")
+region = Rect2(0, 0, 1402, 1122)
+margin = Rect2(0, 215, 0, 280)
+
+[node name="Rat" type="Node2D"]
+script = ExtResource("1_actor")
+definition = ExtResource("2_definition")
+facing_left_texture = SubResource("AtlasTexture_left_frame")
+facing_right_texture = ExtResource("4_right")
+initial_facing = 0
+
+[node name="UnitNameLabel" parent="." instance=ExtResource("5_name_label")]

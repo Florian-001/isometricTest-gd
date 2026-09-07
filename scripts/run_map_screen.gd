@@ -13,7 +13,7 @@ signal close_requested
 @onready var room_body: Label = %RoomBody
 @onready var room_action: Button = %RoomAction
 @onready var offers: VBoxContainer = %Offers
-@onready var party_entries: HBoxContainer = %PartyEntries
+@onready var party_entries: HFlowContainer = %PartyEntries
 @onready var inventory_label: Label = %InventoryLabel
 @onready var message: Label = %Message
 var controller: RunController
@@ -54,6 +54,7 @@ func refresh() -> void:
 	for member in state.party:
 		var entry := party_entry_scene.instantiate()
 		entry.get_node("Name").text = member.display_name
+		entry.get_node("Classes").text = member.get_class_summary()
 		entry.get_node("Health").text = "FALLEN · permanently lost" if member.lost else "%d / %d HP" % [member.health, member.max_health]
 		if member.lost:
 			entry.modulate = Color(0.65, 0.42, 0.32)

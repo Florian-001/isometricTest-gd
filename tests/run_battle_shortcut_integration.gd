@@ -60,6 +60,7 @@ func _test_ability_bar_slots() -> void:
 	definition.abilities = abilities
 	var unit := TacticalCharacter.new()
 	unit.definition = definition
+	unit.set_dev_ability_loadout(abilities)
 	unit._ready()
 	unit.reset_ability_action()
 	var bar := (load("res://scenes/ability_bar.tscn") as PackedScene).instantiate() as AbilityBar

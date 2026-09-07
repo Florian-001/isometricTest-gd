@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/initiative_actor.gd" id="1_actor"]
 [ext_resource type="Resource" path="res://resources/friendly_spellcaster.tres" id="2_definition"]
@@ -8,9 +8,18 @@
 [ext_resource type="Texture2D" path="res://assets/characters/friendly_frost_archer_right.png" id="6_right"]
 [ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="7_name_label"]
 
+[ext_resource type="Script" path="res://scripts/character_class_level.gd" id="class_level"]
+[ext_resource type="Resource" path="res://resources/classes/archer.tres" id="class"]
+
+[sub_resource type="Resource" id="StartingClassLevel"]
+script = ExtResource("class_level")
+character_class = ExtResource("class")
+level = 1
+
 [node name="FriendA" type="Node2D"]
 script = ExtResource("1_actor")
 definition = ExtResource("2_definition")
+class_level_overrides = Array[ExtResource("class_level")]([SubResource("StartingClassLevel")])
 constitution_override = 12
 movement_range_override = 6.0
 speed_override = 12

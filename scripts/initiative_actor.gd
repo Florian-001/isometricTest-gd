@@ -27,6 +27,7 @@ signal opportunity_reaction_availability_changed(available: bool)
 signal stats_changed
 signal equipment_changed(slot: ItemDefinition.EquipmentSlot, item: ItemDefinition)
 signal statuses_changed
+signal class_progression_changed
 
 @export_category("Scenario Identity")
 ## Stable identifier used by developer scenario saves and status-source references.
@@ -77,9 +78,17 @@ signal statuses_changed
 @export_range(-1, 999, 1, "or_greater") var intelligence_override: int = -1
 @export_range(-1, 999, 1, "or_greater") var speed_override: int = -1
 
-@export_category("Ability Loadout")
-## Disabled: this unit uses the abilities stored in its Character Template.
-## Enabled: Ability Overrides below becomes this unit's complete loadout.
+@export_category("Friendly Class Progression")
+## Empty inherits the template's Starting Class at level one. Entries are independent per unit.
+@export var class_level_overrides: Array[CharacterClassLevel] = []:
+	set(value):
+		class_level_overrides = CharacterClassProgression.copy_levels(value)
+		class_progression_changed.emit()
+		if Engine.is_editor_hint():
+			update_configuration_warnings()
+
+@export_category("Developer Ability Override — Ignore Classes")
+## Friendly developer bypass: replaces ALL class abilities. Enemies override their template loadout.
 @export var override_template_abilities: bool = false
 ## Resize this list and choose New AbilityDefinition to author an inline, unit-specific ability.
 ## You can also drag existing ability .tres files here from the FileSystem dock.
@@ -176,6 +185,8 @@ func _notification(what: int) -> void:
 func _validate_property(property: Dictionary) -> void:
 	if property.name == "position":
 		property.usage = property.usage & ~PROPERTY_USAGE_STORAGE
+	if property.name == "class_level_overrides" and not is_friendly():
+		property.usage = property.usage & ~PROPERTY_USAGE_EDITOR
 
 
 func _queue_editor_position_sync() -> void:
@@ -588,10 +599,64 @@ func advance_status_durations() -> void:
 func get_abilities() -> Array[AbilityDefinition]:
 	if override_template_abilities:
 		return ability_overrides
+	if is_friendly():
+		var unlocked: Array[AbilityDefinition] = []
+		for entry in get_class_levels():
+			if entry == null or entry.character_class == null or entry.level < 1:
+				continue
+			for unlock in entry.character_class.get_sorted_unlocks():
+				if unlock.ability != null and unlock.required_level >= 1 and unlock.required_level <= entry.level and not unlocked.has(unlock.ability):
+					unlocked.append(unlock.ability)
+		return unlocked
 	if definition != null:
 		return definition.abilities
 	var empty_abilities: Array[AbilityDefinition] = []
 	return empty_abilities
+
+
+func get_class_levels() -> Array[CharacterClassLevel]:
+	var result: Array[CharacterClassLevel] = []
+	if not is_friendly():
+		return result
+	if not class_level_overrides.is_empty():
+		return CharacterClassProgression.copy_levels(class_level_overrides)
+	if definition.starting_class != null:
+		result.append(CharacterClassLevel.create(definition.starting_class))
+	return result
+
+
+func get_character_level() -> int:
+	if not is_friendly():
+		return 0
+	var total := 0
+	for entry in get_class_levels():
+		if entry != null:
+			total += maxi(0, entry.level)
+	return maxi(1, total)
+
+
+## Level zero removes a class; removing the last class is rejected without changes.
+func set_class_level(character_class: CharacterClassDefinition, level: int) -> bool:
+	if not is_friendly() or character_class == null or level < 0:
+		return false
+	var levels := get_class_levels()
+	var found := false
+	for index in range(levels.size()):
+		if levels[index] != null and levels[index].character_class != null and levels[index].character_class.class_id == character_class.class_id:
+			if levels[index].character_class != character_class:
+				return false
+			found = true
+			if level == 0:
+				levels.remove_at(index)
+			else:
+				levels[index].level = level
+			break
+	if not found and level > 0:
+		levels.append(CharacterClassLevel.create(character_class, level))
+	if not CharacterClassProgression.validate_levels(levels).is_empty():
+		return false
+	class_level_overrides = levels
+	return true
 
 
 func set_dev_stat_override(stat: UnitStat.Type, value: float) -> void:
@@ -639,11 +704,13 @@ func clear_dev_stat_override(stat: UnitStat.Type) -> void:
 func set_dev_ability_loadout(values: Array[AbilityDefinition]) -> void:
 	override_template_abilities = true
 	ability_overrides.assign(values)
+	class_progression_changed.emit()
 
 
 func reset_dev_ability_loadout() -> void:
 	override_template_abilities = false
 	ability_overrides.clear()
+	class_progression_changed.emit()
 
 
 func set_dev_equipment(slot: ItemDefinition.EquipmentSlot, item: ItemDefinition) -> void:
@@ -710,6 +777,7 @@ func capture_setup_state() -> Dictionary:
 			"movement_range": movement_range_override,
 		},
 		"override_abilities": override_template_abilities,
+		"class_levels": CharacterClassProgression.to_data(get_class_levels()),
 		"abilities": _resource_paths(ability_overrides),
 		"complete_equipment": use_complete_equipment_override,
 		"equipment": _resource_paths(complete_equipment_overrides),
@@ -722,6 +790,12 @@ func apply_setup_state(state: Dictionary) -> void:
 	var definition_path := str(state.get("definition", ""))
 	if ResourceLoader.exists(definition_path):
 		definition = load(definition_path) as CharacterDefinition
+	if is_friendly() and state.has("class_levels"):
+		var class_errors := CharacterClassProgression.validate_data(state["class_levels"])
+		if class_errors.is_empty():
+			class_level_overrides = CharacterClassProgression.from_data(state["class_levels"])
+		else:
+			push_error("Invalid class setup: %s" % " ".join(class_errors))
 	var cell_value: Array = state.get("cell", [0, 0])
 	if cell_value.size() >= 2:
 		starting_grid_cell = Vector2i(int(cell_value[0]), int(cell_value[1]))
@@ -739,6 +813,7 @@ func apply_setup_state(state: Dictionary) -> void:
 	complete_equipment_overrides = _load_items(state.get("equipment", []))
 	starting_equipment_overrides = _load_items(state.get("legacy_equipment", []))
 	_runtime_stats_initialized = false
+	class_progression_changed.emit()
 
 
 func capture_runtime_state() -> Dictionary:
@@ -940,19 +1015,27 @@ func heal(amount: int) -> void:
 
 
 func get_max_health() -> int:
-	return UnitStat.get_scaling_rules().calculate_max_health(
+	return calculate_max_health_for_constitution(
 		get_effective_stat(UnitStat.Type.CONSTITUTION)
 	)
 
 
 func get_max_health_without_statuses() -> int:
-	return UnitStat.get_scaling_rules().calculate_max_health(
+	return calculate_max_health_for_constitution(
 		_calculate_effective_stat(UnitStat.Type.CONSTITUTION, true, false)
 	)
 
 
+func calculate_max_health_for_constitution(effective_constitution: float) -> int:
+	if definition != null:
+		return definition.calculate_max_health(effective_constitution)
+	return UnitStat.get_scaling_rules().calculate_max_health(effective_constitution)
+
+
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
+	if is_friendly():
+		warnings.append_array(CharacterClassProgression.validate_levels(get_class_levels()))
 	if definition == null:
 		warnings.append("Assign a Character Template before running the battle.")
 	elif definition.faction == CharacterDefinition.Faction.ENEMY and get_enemy_ai_profile() == null:

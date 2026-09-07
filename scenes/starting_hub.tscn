@@ -1,0 +1,109 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/starting_hub.gd" id="script"]
+
+[node name="StartingHub" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.027, 0.043, 0.067, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="Layout" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.77, 0.43, 1)
+theme_override_font_sizes/font_size = 30
+text = "Assemble your party"
+
+[node name="Subtitle" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.63, 0.69, 0.76, 1)
+text = "Choose 1–4 adventurers for the journey. Each begins at level 1."
+autowrap_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="Margin/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="Margin/Layout/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="RosterHeading" type="Label" parent="Margin/Layout/Scroll/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.63, 0.69, 0.76, 1)
+theme_override_font_sizes/font_size = 13
+text = "AVAILABLE CHARACTERS"
+
+[node name="Roster" type="GridContainer" parent="Margin/Layout/Scroll/Content"]
+layout_mode = 2
+columns = 4
+theme_override_constants/h_separation = 14
+theme_override_constants/v_separation = 14
+
+[node name="PartyHeading" type="Label" parent="Margin/Layout/Scroll/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.77, 0.43, 1)
+theme_override_font_sizes/font_size = 13
+text = "YOUR PARTY   ·   0 / 4"
+
+[node name="Slots" type="GridContainer" parent="Margin/Layout/Scroll/Content"]
+layout_mode = 2
+columns = 4
+theme_override_constants/h_separation = 14
+theme_override_constants/v_separation = 14
+
+[node name="Error" type="Label" parent="Margin/Layout"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.56, 0.48, 1)
+autowrap_mode = 2
+text_overrun_behavior = 3
+max_lines_visible = 3
+
+[node name="Actions" type="HBoxContainer" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Back" type="Button" parent="Margin/Layout/Actions"]
+custom_minimum_size = Vector2(120, 48)
+layout_mode = 2
+text = "Back"
+
+[node name="Spacer" type="Control" parent="Margin/Layout/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="Start" type="Button" parent="Margin/Layout/Actions"]
+custom_minimum_size = Vector2(180, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Start Run"
+disabled = true

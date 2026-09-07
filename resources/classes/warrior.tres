@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CharacterClassDefinition" format=3 uid="uid://1b2lkaipypt5"]
+
+[ext_resource type="Resource" uid="uid://ypvhtrfkl6un" path="res://resources/abilities/strike.tres" id="ability_0"]
+[ext_resource type="Resource" path="res://resources/abilities/charge.tres" id="ability_1"]
+[ext_resource type="Script" uid="uid://cb2sfxg1krtk4" path="res://scripts/character_class_definition.gd" id="class"]
+[ext_resource type="Script" uid="uid://dtcq17r6pgivp" path="res://scripts/class_ability_unlock.gd" id="unlock"]
+
+[sub_resource type="Resource" id="Unlock_0"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_0")
+
+[sub_resource type="Resource" id="Unlock_1"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_1")
+required_level = 2
+
+[resource]
+script = ExtResource("class")
+class_id = &"warrior"
+display_name = "Warrior"
+ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_0"), SubResource("Unlock_1")])

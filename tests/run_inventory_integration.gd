@@ -57,7 +57,7 @@ func _make_character(display_name: String) -> TacticalCharacter:
 	var unit := TacticalCharacter.new()
 	unit.definition = CharacterDefinition.new()
 	unit.definition.display_name = display_name
-	unit.definition.abilities = [load("res://resources/abilities/strike.tres"), load("res://resources/abilities/arrow.tres"), load("res://resources/abilities/fireball.tres")]
+	unit.set_dev_ability_loadout([load("res://resources/abilities/strike.tres"), load("res://resources/abilities/arrow.tres"), load("res://resources/abilities/fireball.tres")])
 	root.add_child(unit)
 	return unit
 

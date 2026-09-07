@@ -149,6 +149,7 @@ static func load_save(path: String, directory_path := SAVE_DIRECTORY) -> Diction
 
 
 static func validate_payload(input: Dictionary) -> Dictionary:
+	input = input.duplicate(true)
 	var errors: Array[String] = []
 	if int(input.get("schema_version", -1)) != SCHEMA_VERSION:
 		errors.append("Unsupported save schema version.")
@@ -313,6 +314,7 @@ static func validate_payload(input: Dictionary) -> Dictionary:
 		_validate_resource_paths(unit.get("abilities", []), "ability", errors)
 		_validate_resource_paths(unit.get("equipment", []), "item", errors)
 		_validate_resource_paths(unit.get("legacy_equipment", []), "item", errors)
+		errors.append_array(CharacterClassProgression.prepare_setup(unit))
 	if factions.size() < 2:
 		errors.append("Scenario requires at least one friendly and one enemy unit.")
 	var fresh_start := bool(runtime.get("fresh_start", false))

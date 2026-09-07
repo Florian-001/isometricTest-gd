@@ -131,6 +131,8 @@ func _set_character(character: TacticalCharacter) -> void:
 func _connect_character_signals() -> void:
 	if not is_instance_valid(_character):
 		return
+	if not _character.class_progression_changed.is_connected(_on_selected_character_stats_changed):
+		_character.class_progression_changed.connect(_on_selected_character_stats_changed)
 	if not _character.stats_changed.is_connected(_on_selected_character_stats_changed):
 		_character.stats_changed.connect(_on_selected_character_stats_changed)
 	if not _character.health_changed.is_connected(_on_selected_character_health_changed):
@@ -142,6 +144,8 @@ func _connect_character_signals() -> void:
 func _disconnect_character_signals() -> void:
 	if not is_instance_valid(_character):
 		return
+	if _character.class_progression_changed.is_connected(_on_selected_character_stats_changed):
+		_character.class_progression_changed.disconnect(_on_selected_character_stats_changed)
 	if _character.stats_changed.is_connected(_on_selected_character_stats_changed):
 		_character.stats_changed.disconnect(_on_selected_character_stats_changed)
 	if _character.health_changed.is_connected(_on_selected_character_health_changed):
@@ -182,6 +186,12 @@ func _refresh_character_details() -> void:
 
 
 func _build_stat_entries() -> void:
+	if _character.is_friendly():
+		var summary := Label.new()
+		summary.name = "ClassProgression"
+		summary.text = CharacterClassProgression.get_summary(_character.get_class_levels())
+		summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		stats_entries.add_child(summary)
 	_add_stat_row(
 		"health",
 		"Health",

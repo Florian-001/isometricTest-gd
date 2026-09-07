@@ -28,8 +28,53 @@ func has_unfinished_run() -> bool:
 	return state != null and state.status == RunState.Status.ACTIVE
 
 func new_run(seed_override: int = -1) -> bool:
-	if config == null or not config.is_configured():
+	if config == null:
 		return _problem("Assign a complete run configuration in the Inspector.")
+	var report := config.validate_configuration()
+	if not report.errors.is_empty():
+		return _problem(" ".join(report.errors))
+	for warning in report.warnings:
+		push_warning(warning)
+	var members: Array[RunPartyMember] = []
+	var party_scene := config.starting_party.instantiate()
+	for child in party_scene.get_children():
+		if child is TacticalCharacter:
+			members.append(RunPartyMember.from_character(child))
+	party_scene.free()
+	return _save_new_run(members, seed_override)
+
+
+func new_run_with_party(character_ids: Array[String], seed_override: int = -1) -> bool:
+	if config == null:
+		return _problem("Assign a complete run configuration in the Inspector.")
+	if character_ids.is_empty() or character_ids.size() > 4:
+		return _problem("Choose between one and four unique characters.")
+	var roster := config.inspect_starting_roster()
+	if not roster.errors.is_empty():
+		return _problem(" ".join(roster.errors))
+	var scenes := {}
+	for entry in roster.entries:
+		scenes[entry.id] = entry.scene
+	var chosen := {}
+	for id in character_ids:
+		if not scenes.has(id) or chosen.has(id):
+			return _problem("Choose distinct characters from the starting roster.")
+		chosen[id] = true
+	var report := config.validate_configuration(character_ids.size())
+	if not report.errors.is_empty():
+		return _problem(" ".join(report.errors))
+	for warning in report.warnings:
+		push_warning(warning)
+	var members: Array[RunPartyMember] = []
+	for id in character_ids:
+		var character := (scenes[id] as PackedScene).instantiate() as TacticalCharacter
+		members.append(RunPartyMember.from_character(character))
+		character.free()
+	return _save_new_run(members, seed_override)
+
+
+## Commit the candidate first. A failed write must leave the previous run untouched.
+func _save_new_run(members: Array[RunPartyMember], seed_override: int) -> bool:
 	var seed_value := seed_override
 	if seed_value < 0:
 		seed_value = fixed_seed if use_fixed_seed else int(randi())
@@ -38,11 +83,7 @@ func new_run(seed_override: int = -1) -> bool:
 	if next.graph == null:
 		return _problem("Could not generate a valid map with these room settings.")
 	next.gold = config.starting_gold
-	var party_scene := config.starting_party.instantiate()
-	for child in party_scene.get_children():
-		if child is TacticalCharacter:
-			next.party.append(RunPartyMember.from_character(child))
-	party_scene.free()
+	next.party = members
 	if next.party.is_empty():
 		return _problem("The starting party scene has no characters.")
 	if not save_store.save_run(next):
@@ -57,7 +98,10 @@ func select_room(id: int) -> bool:
 	if state == null or not state.available_rooms().has(id) or battle_open:
 		return false
 	var before := state.to_data()
-	state.pending = _prepare_room(state.graph.get_node_by_id(id))
+	var prepared := _prepare_room(state.graph.get_node_by_id(id))
+	if prepared.is_empty():
+		return false
+	state.pending = prepared
 	if not _commit(before):
 		return false
 	resume_room()
@@ -69,10 +113,21 @@ func resume_room() -> void:
 	if is_combat_room():
 		if battle_open:
 			return
-		var encounter := load(str(state.pending.encounter)) as RunEncounterDefinition
-		if encounter == null:
-			_problem("This encounter is missing. Your checkpoint has been kept.")
+		var floor_number := state.graph.get_node_by_id(int(state.pending.node_id)).tier + 1
+		var resolved := RunCombatProgression.resolve_pending(state.pending, floor_number)
+		if not resolved.error.is_empty():
+			_problem("%s Your checkpoint has been kept." % resolved.error)
 			return
+		var encounter: RunEncounterDefinition = resolved.encounter
+		var capacity_error := RunConfig.validate_encounter_capacity(encounter.battle_map, state.party.size())
+		if not capacity_error.is_empty():
+			_problem("%s Your checkpoint has been kept." % capacity_error)
+			return
+		if encounter.battle_map is BattleMapTemplateDefinition:
+			var error := TemplateEncounterSetup.validate_saved(encounter.battle_map, state.pending.get("template_setup"), state.party.size())
+			if not error.is_empty():
+				_problem("%s Your checkpoint has been kept." % error)
+				return
 		var members: Array[Dictionary] = []
 		for member in state.party:
 			members.append(member.to_data())
@@ -101,6 +156,11 @@ func finish_battle(node_id: int, victory: bool, results: Array[Dictionary], inve
 			state = RunState.from_data(before)
 			return _problem("The battle returned an incomplete party result.")
 		var result: Dictionary = by_id[member.id]
+		if result.has("class_levels"):
+			if not CharacterClassProgression.validate_data(result["class_levels"]).is_empty():
+				state = RunState.from_data(before)
+				return _problem("The battle returned invalid party class levels.")
+			member.setup["class_levels"] = result["class_levels"].duplicate(true)
 		member.max_health = maxi(1, int(result.get("max_health", member.max_health)))
 		member.health = clampi(int(result.get("health", 0)), 0, member.max_health)
 		member.lost = member.health == 0
@@ -159,12 +219,17 @@ func _prepare_room(node: RunMapGraph.NodeData) -> Dictionary:
 	var pending := {"node_id": node.id, "type": type, "resolved": false, "offers": [], "purchased": [],
 		"encounter": "", "reward_item": "", "gold": 0, "price": config.shop_price, "rest_fraction": config.rest_fraction}
 	match type:
-		RunMapGraph.NodeType.NORMAL_COMBAT:
-			pending.encounter = config.normal_encounters[rng.randi_range(0, config.normal_encounters.size() - 1)].resource_path
-			pending.gold = config.combat_gold
-		RunMapGraph.NodeType.HARD_COMBAT:
-			pending.encounter = config.elite_encounters[rng.randi_range(0, config.elite_encounters.size() - 1)].resource_path
-			pending.gold = config.elite_gold
+		RunMapGraph.NodeType.NORMAL_COMBAT, RunMapGraph.NodeType.HARD_COMBAT:
+			var choices := config.normal_encounters if type == RunMapGraph.NodeType.NORMAL_COMBAT else config.elite_encounters
+			if choices.is_empty():
+				_problem("Add an encounter to this combat room's encounter catalog.")
+				return {}
+			var selected := choices[rng.randi_range(0, choices.size() - 1)]
+			if selected == null or selected.resource_path.is_empty():
+				_problem("Assign a saved encounter resource to every encounter catalog entry.")
+				return {}
+			pending.encounter = selected.resource_path
+			pending.gold = config.combat_gold if type == RunMapGraph.NodeType.NORMAL_COMBAT else config.elite_gold
 		RunMapGraph.NodeType.CHEST:
 			pending.gold = config.treasure_gold
 		RunMapGraph.NodeType.BOSS:
@@ -180,6 +245,37 @@ func _prepare_room(node: RunMapGraph.NodeData) -> Dictionary:
 			var index := rng.randi_range(0, pool.size() - 1)
 			pending.offers.append(pool[index])
 			pool.remove_at(index)
+	if not str(pending.encounter).is_empty():
+		var encounter := load(str(pending.encounter)) as RunEncounterDefinition
+		if type in [RunMapGraph.NodeType.NORMAL_COMBAT, RunMapGraph.NodeType.HARD_COMBAT] and (not config.combat_stages.is_empty() or not config.floor_overrides.is_empty()):
+			var settings := RunCombatProgression.snapshot(config, node.tier + 1, encounter)
+			if not settings.error.is_empty():
+				_problem(settings.error)
+				return {}
+			settings.erase("error")
+			pending.combat_progression = settings
+		var resolved := RunCombatProgression.resolve_pending(pending, node.tier + 1)
+		if not resolved.error.is_empty():
+			_problem(resolved.error)
+			return {}
+		encounter = resolved.encounter
+		var capacity_error := RunConfig.validate_encounter_capacity(encounter.battle_map, state.party.size())
+		if not capacity_error.is_empty():
+			_problem(capacity_error)
+			return {}
+		if encounter.battle_map is BattleMapTemplateDefinition:
+			if not encounter.chief_node_name.is_empty():
+				_problem("Named-chief encounters require an authored map.")
+				return {}
+			var encounter_rng := RandomNumberGenerator.new()
+			encounter_rng.seed = state.graph.seed_value ^ (node.id * 1000003 + 924731)
+			var setup := TemplateEncounterSetup.create(encounter.battle_map, state.party.size(), encounter_rng)
+			if not setup.error.is_empty():
+				_problem(setup.error)
+				return {}
+			pending.template_setup = setup
+			if pending.has("combat_progression") and int(setup.total_cr) < int(pending.combat_progression.combat_rating):
+				push_warning("Floor %d can spend only CR %d of budget %d with this enemy pool and spawn capacity." % [node.tier + 1, setup.total_cr, pending.combat_progression.combat_rating])
 	return pending
 
 func _apply_reward() -> void:

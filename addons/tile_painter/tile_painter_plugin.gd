@@ -2,6 +2,7 @@
 extends EditorPlugin
 
 const TileScript = preload("res://scripts/tactical_tile.gd")
+const PaintMode = preload("res://addons/spawn_painter/paint_tool_mode.gd")
 const TileStatusInspector = preload("res://addons/tile_painter/tile_status_inspector.gd")
 const ItemArrayInspector = preload("res://addons/tile_painter/item_array_inspector.gd")
 const ItemModifierInspector = preload("res://addons/tile_painter/item_modifier_inspector.gd")
@@ -40,6 +41,7 @@ func _enter_tree() -> void:
 	_paint_button.toggle_mode = true
 	_paint_button.toggled.connect(_on_paint_toggled)
 	add_control_to_container(CONTAINER_CANVAS_EDITOR_MENU, _paint_button)
+	PaintMode.register(_paint_button)
 	_refresh_palette()
 
 
@@ -144,6 +146,7 @@ func _forward_canvas_draw_over_viewport(overlay: Control) -> void:
 
 func _on_paint_toggled(enabled: bool) -> void:
 	if enabled:
+		PaintMode.activate(_paint_button)
 		_refresh_palette()
 	else:
 		_painting = false

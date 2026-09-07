@@ -17,9 +17,12 @@ const TacticalBattleScript = preload("res://scripts/initiative_battle_controller
 @onready var run_map_screen: RunMapScreen = $RunMapLayer/RunMapScreen
 @onready var run_controller: RunController = $RunController
 @onready var continue_run_button: Button = $LevelSelect/Root/Center/Panel/Margin/VBox/ContinueRunButton
-@onready var replace_run_dialog: ConfirmationDialog = $LevelSelect/ReplaceRunDialog
+@onready var replace_run_dialog: ConfirmationDialog = $ReplaceRunDialog
+@onready var starting_hub: StartingHub = $HubLayer/StartingHub
 @onready var run_message: Label = $LevelSelect/Root/Center/Panel/Margin/VBox/RunMessage
 var _pending_run_result: Dictionary = {}
+var _pending_party_ids: Array[String] = []
+var _starting_run := false
 
 var current_battle: TacticalBattleScript
 
@@ -30,6 +33,9 @@ func _ready() -> void:
 	run_map_screen.setup(run_controller)
 	continue_run_button.pressed.connect(continue_run)
 	replace_run_dialog.confirmed.connect(_start_new_run)
+	replace_run_dialog.canceled.connect(_cancel_new_run)
+	starting_hub.back_requested.connect(_show_level_select)
+	starting_hub.start_requested.connect(_request_new_run)
 	run_controller.battle_requested.connect(_start_run_battle)
 	run_controller.state_changed.connect(_refresh_run_menu)
 	_rebuild_level_buttons()
@@ -39,6 +45,18 @@ func _ready() -> void:
 func show_run_map() -> void:
 	if is_instance_valid(current_battle):
 		return
+	_pending_party_ids.clear()
+	_starting_run = false
+	level_select.hide()
+	run_map_screen.close_map()
+	starting_hub.open_hub(run_controller.config)
+
+
+func _request_new_run(character_ids: Array[String]) -> void:
+	if _starting_run or not starting_hub.visible:
+		return
+	_starting_run = true
+	_pending_party_ids = character_ids.duplicate()
 	if run_controller.has_unfinished_run() or (run_controller.state == null and run_controller.has_saved_run()):
 		replace_run_dialog.popup_centered()
 		return
@@ -46,10 +64,24 @@ func show_run_map() -> void:
 
 
 func _start_new_run() -> void:
-	if not run_controller.new_run():
+	if not _starting_run or not starting_hub.visible:
 		return
+	if not run_controller.new_run_with_party(_pending_party_ids):
+		_starting_run = false
+		starting_hub.set_busy(false)
+		starting_hub.show_error(run_controller.error_message)
+		return
+	_starting_run = false
+	_pending_party_ids.clear()
+	starting_hub.hide()
 	level_select.hide()
 	run_map_screen.open_map()
+
+
+func _cancel_new_run() -> void:
+	_starting_run = false
+	_pending_party_ids.clear()
+	starting_hub.set_busy(false)
 
 
 func continue_run() -> void:
@@ -59,6 +91,7 @@ func continue_run() -> void:
 		run_message.text = run_controller.error_message
 		return
 	level_select.hide()
+	starting_hub.hide()
 	run_map_screen.open_map()
 	run_controller.resume_room()
 
@@ -148,6 +181,15 @@ func _create_battle(
 	_connect_battle(current_battle)
 	level_select.hide()
 	add_child(current_battle)
+	if not current_battle.initialization_succeeded:
+		var message := current_battle.initialization_error
+		var failed_battle := current_battle
+		current_battle = null
+		remove_child(failed_battle)
+		failed_battle.queue_free()
+		_show_level_select()
+		run_message.text = message if not message.is_empty() else "The battle could not be initialized."
+		return false
 	return true
 
 
@@ -193,6 +235,9 @@ func _rebuild_level_buttons() -> void:
 
 
 func _show_level_select() -> void:
+	starting_hub.hide()
+	_pending_party_ids.clear()
+	_starting_run = false
 	run_map_screen.close_map()
 	level_select.show()
 	_refresh_run_menu()
@@ -224,10 +269,13 @@ func _start_run_battle(encounter: RunEncounterDefinition, members: Array[Diction
 	battle.run_encounter = encounter
 	battle.run_party_input = members
 	battle.run_inventory_input = inventory
+	if encounter.battle_map is BattleMapTemplateDefinition:
+		battle.template_setup_input = run_controller.state.pending.get("template_setup", {}).duplicate(true)
 	battle.unit_names_visible = unit_names_visible
 	_connect_battle(battle)
 	battle.battle_finished.connect(_on_run_battle_finished.bind(battle, node_id))
 	current_battle = battle
+	starting_hub.hide()
 	level_select.hide()
 	run_map_screen.close_map()
 	add_child(battle)
@@ -236,7 +284,9 @@ func _start_run_battle(encounter: RunEncounterDefinition, members: Array[Diction
 		remove_child(battle)
 		battle.queue_free()
 		run_controller.battle_open = false
-		run_controller.error_message = "The encounter could not load. Your entry checkpoint is safe."
+		run_controller.error_message = "%s Your entry checkpoint is safe." % (
+			battle.initialization_error if not battle.initialization_error.is_empty() else "The encounter could not load."
+		)
 		run_map_screen.open_map()
 
 

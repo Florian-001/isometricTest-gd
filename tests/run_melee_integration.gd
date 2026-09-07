@@ -36,6 +36,7 @@ func _run() -> void:
 	strike.melee_lunge_duration = 0.02
 	strike.melee_return_duration = 0.02
 	strike.melee_slash_duration = 0.02
+	caster.set_dev_ability_loadout([strike])
 	var units: Array[TacticalCharacter] = [caster, target]
 	var original_position := caster.global_position
 	var original_cell := caster.grid_cell
@@ -71,6 +72,7 @@ func _run() -> void:
 
 	caster.reset_ability_action()
 	var focus := load("res://resources/abilities/focus.tres") as AbilityDefinition
+	caster.set_dev_ability_loadout([focus])
 	var focus_succeeded: bool = await executor.execute(
 		caster,
 		focus,
@@ -86,6 +88,7 @@ func _run() -> void:
 
 	caster.reset_ability_action()
 	var slow := load("res://resources/abilities/slow.tres") as AbilityDefinition
+	caster.set_dev_ability_loadout([slow])
 	var slow_succeeded: bool = await executor.execute(
 		caster,
 		slow,

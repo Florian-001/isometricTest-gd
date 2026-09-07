@@ -98,3 +98,13 @@ grid_cell = Vector2i(4, 9)
 position = Vector2(544, 480)
 script = ExtResource("run_spawn")
 grid_cell = Vector2i(7, 9)
+
+[node name="Member3" type="Marker2D" parent="PartySpawns"]
+position = Vector2(352, 432)
+script = ExtResource("run_spawn")
+grid_cell = Vector2i(4, 10)
+
+[node name="Member4" type="Marker2D" parent="PartySpawns"]
+position = Vector2(496, 504)
+script = ExtResource("run_spawn")
+grid_cell = Vector2i(7, 10)

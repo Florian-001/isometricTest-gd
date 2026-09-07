@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BattleMapTemplateDefinition" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/battle_map_template_definition.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/maps/spawn_template_demo.tscn" id="map"]
+[ext_resource type="PackedScene" path="res://scenes/run/starting_party.tscn" id="party"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_warrior.tscn" id="warrior"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_warrior_club.tscn" id="club"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_archer.tscn" id="archer"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/wolf.tscn" id="wolf"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/mage.tscn" id="mage"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/ranger.tscn" id="ranger"]
+
+[resource]
+script = ExtResource("script")
+display_name = "Spawn Template Demo"
+description = "A random enemy group with up to 3 combined CR, placed on painted spawn cells."
+map_scene = ExtResource("map")
+combat_rating = 3
+enemy_pool = Array[PackedScene]([ExtResource("warrior"), ExtResource("club"), ExtResource("archer"), ExtResource("wolf"), ExtResource("mage"), ExtResource("ranger")])
+standalone_party = ExtResource("party")

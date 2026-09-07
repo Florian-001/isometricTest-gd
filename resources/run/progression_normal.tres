@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="RunEncounterDefinition" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/run_encounter_definition.gd" id="script"]
+[ext_resource type="Resource" path="res://resources/maps/run_progression.tres" id="map"]
+[resource]
+script = ExtResource("script")
+display_name = "Ascent Skirmish"
+battle_map = ExtResource("map")

@@ -1,0 +1,48 @@
+{
+  "tool": "Built-in image_gen.imagegen",
+  "date": "2026-09-07",
+  "style_reference": "assets/characters/friendly_spellblade_right.png",
+  "reference_role": "Existing friendly character inspected before generation and supplied alongside each initial new character for the style-refinement edits.",
+  "final_assets": [
+    {
+      "path": "assets/characters/friendly_wizard_right.png",
+      "generated_source": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-93325dde-8264-47c1-bffe-8f230700251a.png"
+    },
+    {
+      "path": "assets/characters/friendly_wizard_left.png",
+      "generated_source": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-0410380a-e760-4d48-a2ea-e2c230532dcf.png"
+    },
+    {
+      "path": "assets/characters/friendly_cleric_right.png",
+      "generated_source": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-1deb3753-92c3-493b-9d80-0502350ddfc2.png"
+    },
+    {
+      "path": "assets/characters/friendly_cleric_left.png",
+      "generated_source": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-3cdaa48f-1c7e-42d9-98f0-eb6c51151b4e.png"
+    }
+  ],
+  "initial_generation_prompts": {
+    "wizard": "Use case: stylized-concept. Create a production game sprite of a friendly Wizard, in the same visual style as the friendly green-cloaked sword character shown in this conversation: compact chibi proportions, oversized head, thick crisp near-black outlines, simple cel shading, muted jewel tones, three-quarter isometric standing view looking toward screen RIGHT. A distinct young adult Wizard with a pointed violet hat, violet and blue robes, boots, and wooden staff with a small blue crystal. Full body including hat, feet, and staff entirely visible. Square canvas, centered, roughly 85% of canvas height, baseline at 91% height, no floor shadow. Cute readable fantasy tactical RPG character that remains clear at 112x112 pixels. True transparent RGBA background, no backdrop, no checkerboard, no text, no border, no scenery. Keep the friendly reference's simple flat illustrated finish, not a realistic or painted rendering.",
+    "cleric": "Use case: stylized-concept. Create a production game sprite of a friendly Cleric, in the same visual style as the friendly green-cloaked sword character shown in this conversation: compact chibi proportions, oversized head, thick crisp near-black outlines, simple cel shading, muted jewel tones, three-quarter isometric standing view looking toward screen RIGHT. A distinct young adult Cleric with warm brown skin, short curly dark hair, light ivory robes with muted gold trim, boots, and a holy wooden staff topped with a small golden sun emblem. Full body including head, feet, and staff entirely visible. Square canvas, centered, roughly 85% of canvas height, baseline at 91% height, no floor shadow. Cute readable fantasy tactical RPG character that remains clear at 112x112 pixels. True transparent RGBA background, no backdrop, no checkerboard, no text, no border, no scenery. Keep the friendly reference's simple flat illustrated finish, not a realistic or painted rendering."
+  },
+  "style_refinement_prompt": "Use case: style-transfer. Image 1 is the edit target, the new friendly CHARACTER sprite. Image 2 is the existing game's friendly sword-character STYLE REFERENCE. Refine Image 1 to match Image 2's simpler muted cel shading, chunky dark brown outlines, compact proportions, small simple eyes, slightly elevated three-quarter camera angle, and framing. Preserve Image 1's character identity, clothing colors, staff, full-body standing pose and screen-RIGHT facing direction. Simplify decorative details for readability at an actual 112x112 game size. Match Image 2's figure height and baseline: all art within x=9%-94%, y=10%-93% of a square canvas; centered, feet level near y=91%. Fully transparent RGBA background, preserve clean alpha, no shadow, no text, no checkerboard, no ground. Deliver only the refined CHARACTER.",
+  "style_refinement_inputs": {
+    "wizard": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-33a14b47-de96-44af-8aa4-9d247e975e00.png",
+    "cleric": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-70ea1386-0078-4ead-8860-d4791d328bb2.png"
+  },
+  "final_alpha_and_facing_prompts": {
+    "wizard_right": "Use case: background-extraction. Edit this wizard game sprite. Remove ALL of the white and grey checkerboard background completely, including enclosed background gaps around the staff, hand, legs and clothing. Deliver a PNG with a real RGBA alpha channel: every background pixel must have ALPHA ZERO, not white, black, or a rendered checkerboard. Preserve the exact character artwork, colors, proportions, linework, square canvas, character size and framing. Keep the character facing screen RIGHT with the exact same pose. No other changes. Transparent cutout only.",
+    "wizard_left": "Use case: background-extraction. Edit this wizard game sprite. Remove ALL of the white and grey checkerboard background completely, including enclosed background gaps around the staff, hand, legs and clothing. Deliver a PNG with a real RGBA alpha channel: every background pixel must have ALPHA ZERO, not white, black, or a rendered checkerboard. Preserve the exact character artwork, colors, proportions, linework, square canvas, character size and framing. Horizontally mirror the complete character so it faces screen LEFT, including the staff. This is the left-facing battle variant of the very same character. No other changes. Transparent cutout only.",
+    "cleric_right": "Use case: background-extraction. Edit this cleric game sprite. Remove ALL of the white and grey checkerboard background completely, including enclosed background gaps around the staff, hand, legs and clothing. Deliver a PNG with a real RGBA alpha channel: every background pixel must have ALPHA ZERO, not white, black, or a rendered checkerboard. Preserve the exact character artwork, colors, proportions, linework, square canvas, character size and framing. Keep the character facing screen RIGHT with the exact same pose. No other changes. Transparent cutout only.",
+    "cleric_left": "Use case: background-extraction. Edit this cleric game sprite. Remove ALL of the white and grey checkerboard background completely, including enclosed background gaps around the staff, hand, legs and clothing. Deliver a PNG with a real RGBA alpha channel: every background pixel must have ALPHA ZERO, not white, black, or a rendered checkerboard. Preserve the exact character artwork, colors, proportions, linework, square canvas, character size and framing. Horizontally mirror the complete character so it faces screen LEFT, including the staff. This is the left-facing battle variant of the very same character. No other changes. Transparent cutout only."
+  },
+  "alpha_and_facing_inputs": {
+    "wizard": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-561d5ea7-4c48-4eec-b35a-00013b643f39.png",
+    "cleric": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-4c5d0100-d4ea-4671-90e7-8e4361a1141c.png"
+  },
+  "additional_wizard_left_extraction": {
+    "prompt": "Use case: background-extraction. Extract this left-facing Wizard sprite as a transparent PNG cutout. Remove the grey and white background and give all background pixels alpha 0, including inside gaps. Preserve the character exactly, with no changes to pose, direction, colors, proportions or framing. Output an RGBA PNG with actual transparency.",
+    "input": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-02f35e95-6726-43e8-8756-3ac070a57eec.png"
+  },
+  "validation": "All four final PNGs have RGBA channels with alpha ranging 0–255. Source files were copied unchanged. Godot mipmap import and linear mipmap filtering keep the generated artwork readable at the existing 112×112 battle draw size and 132/74 pixel hub art areas."
+}

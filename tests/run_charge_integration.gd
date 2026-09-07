@@ -207,6 +207,8 @@ func _make_unit(
 	var unit := TacticalCharacter.new()
 	unit.name = unit_name
 	unit.definition = definition
+	if friendly:
+		unit.set_dev_ability_loadout(definition.abilities)
 	unit.starting_grid_cell = cell
 	unit.movement_animation_speed = 5000.0
 	parent.add_child(unit)

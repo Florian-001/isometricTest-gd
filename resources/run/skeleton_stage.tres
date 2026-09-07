@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RunCombatStage" format=3 uid="uid://nggdvi38hudw"]
+
+[ext_resource type="PackedScene" path="res://scenes/enemies/skeleton_archer.tscn" id="archer"]
+[ext_resource type="Script" uid="uid://bi7uj0xgbv3ea" path="res://scripts/run_combat_stage.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/skeleton_warrior.tscn" id="warrior"]
+
+[resource]
+resource_name = "Skeletons — Floors 4–15"
+script = ExtResource("script")
+display_name = "Skeletons"
+first_floor = 4
+starting_cr = 12
+enemy_pool = Array[PackedScene]([ExtResource("warrior"), ExtResource("archer")])

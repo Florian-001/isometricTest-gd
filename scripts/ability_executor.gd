@@ -211,6 +211,7 @@ func _can_execute_base(
 		not is_instance_valid(caster)
 		or caster.current_health <= 0
 		or ability == null
+		or (caster.is_friendly() and not caster.get_abilities().has(ability))
 		or not ability.can_be_used_by(caster)
 		or grid == null
 		or targeting == null

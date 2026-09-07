@@ -277,7 +277,7 @@ func _apply_new_status_constitution_modifiers(
 		* percent_multiplier
 	)
 	unit_constitutions[unit] = adjusted
-	unit_max_health[unit] = UnitStat.get_scaling_rules().calculate_max_health(adjusted)
+	unit_max_health[unit] = unit.calculate_max_health_for_constitution(adjusted)
 
 
 func get_terrain(cell: Vector2i) -> TileDefinition:

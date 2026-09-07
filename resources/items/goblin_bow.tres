@@ -2,19 +2,17 @@
 
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="1_item"]
 [ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
-
-[ext_resource type="Texture2D" path="res://assets/item_icons/goblin_bow.svg" id="inventory_icon"]
+[ext_resource type="Texture2D" uid="uid://c3gleyd7lbph8" path="res://assets/item_icons/goblin_bow.svg" id="inventory_icon"]
 
 [sub_resource type="Resource" id="DexterityBonus"]
 script = ExtResource("2_modifier")
 stat = 2
 value = 1.0
 
-
 [resource]
 script = ExtResource("1_item")
-icon = ExtResource("inventory_icon")
 display_name = "Goblin Bow"
+icon = ExtResource("inventory_icon")
 weapon_type = 1
 weapon_damage = 7
 modifiers = Array[ExtResource("2_modifier")]([SubResource("DexterityBonus")])

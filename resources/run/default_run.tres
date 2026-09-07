@@ -1,25 +1,35 @@
-[gd_resource type="Resource" script_class="RunConfig" format=3]
-[ext_resource type="Script" path="res://scripts/run_config.gd" id="script"]
+[gd_resource type="Resource" script_class="RunConfig" format=3 uid="uid://q5jqg5txuxnb"]
+
+[ext_resource type="Script" uid="uid://cx8y5t74ogrfx" path="res://scripts/run_combat_floor_override.gd" id="14_gn31p"]
+[ext_resource type="Resource" path="res://resources/run/boss.tres" id="boss"]
+[ext_resource type="Script" uid="uid://v3utuhkwm621" path="res://scripts/run_encounter_definition.gd" id="encounter_type"]
+[ext_resource type="Resource" path="res://resources/items/frost_bow.tres" id="frost_bow"]
+[ext_resource type="Resource" uid="uid://bhi62vxngrasm" path="res://resources/run/goblin_stage.tres" id="goblins"]
+[ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/iron_sword.tres" id="iron_sword"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="item_type"]
 [ext_resource type="Resource" path="res://resources/run/map_settings.tres" id="map"]
 [ext_resource type="PackedScene" path="res://scenes/run/starting_party.tscn" id="party"]
-[ext_resource type="Script" path="res://scripts/run_encounter_definition.gd" id="encounter_type"]
-[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item_type"]
-[ext_resource type="Resource" path="res://resources/run/boss.tres" id="boss"]
-[ext_resource type="Resource" path="res://resources/run/terrain_showcase_normal.tres" id="terrain_showcase_normal"]
-[ext_resource type="Resource" path="res://resources/run/terrain_showcase_elite.tres" id="terrain_showcase_elite"]
-[ext_resource type="Resource" path="res://resources/run/goblin_skirmish_normal.tres" id="goblin_skirmish_normal"]
-[ext_resource type="Resource" path="res://resources/run/goblin_skirmish_elite.tres" id="goblin_skirmish_elite"]
-[ext_resource type="Resource" path="res://resources/items/wooden_sword.tres" id="wooden_sword"]
-[ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="iron_sword"]
-[ext_resource type="Resource" path="res://resources/items/ranger_bow.tres" id="ranger_bow"]
-[ext_resource type="Resource" path="res://resources/items/frost_bow.tres" id="frost_bow"]
-[ext_resource type="Resource" path="res://resources/items/ranger_armor.tres" id="ranger_armor"]
-[ext_resource type="Resource" path="res://resources/items/sage_charm.tres" id="sage_charm"]
+[ext_resource type="Resource" path="res://resources/run/progression_elite.tres" id="progression_elite"]
+[ext_resource type="Resource" path="res://resources/run/progression_normal.tres" id="progression_normal"]
+[ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/ranger_armor.tres" id="ranger_armor"]
+[ext_resource type="Resource" uid="uid://cgq7lrwo26syh" path="res://resources/items/ranger_bow.tres" id="ranger_bow"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/archer.tscn" id="roster_archer"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/cleric.tscn" id="roster_cleric"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/warrior.tscn" id="roster_warrior"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/wizard.tscn" id="roster_wizard"]
+[ext_resource type="Resource" uid="uid://pghwydiamt0o" path="res://resources/items/sage_charm.tres" id="sage_charm"]
+[ext_resource type="Script" uid="uid://b5eopc3aog4s0" path="res://scripts/run_config.gd" id="script"]
+[ext_resource type="Resource" uid="uid://nggdvi38hudw" path="res://resources/run/skeleton_stage.tres" id="skeletons"]
+[ext_resource type="Script" uid="uid://bi7uj0xgbv3ea" path="res://scripts/run_combat_stage.gd" id="stage_type"]
+[ext_resource type="Resource" uid="uid://m36t2nhg31dr" path="res://resources/items/wooden_sword.tres" id="wooden_sword"]
+
 [resource]
 script = ExtResource("script")
 map_settings = ExtResource("map")
 starting_party = ExtResource("party")
+starting_character_roster = Array[PackedScene]([ExtResource("roster_warrior"), ExtResource("roster_archer"), ExtResource("roster_wizard"), ExtResource("roster_cleric")])
+normal_encounters = Array[ExtResource("encounter_type")]([ExtResource("progression_normal")])
+elite_encounters = Array[ExtResource("encounter_type")]([ExtResource("progression_elite")])
 boss_encounter = ExtResource("boss")
-normal_encounters = Array[ExtResource("encounter_type")]([ExtResource("terrain_showcase_normal"), ExtResource("goblin_skirmish_normal")])
-elite_encounters = Array[ExtResource("encounter_type")]([ExtResource("terrain_showcase_elite"), ExtResource("goblin_skirmish_elite")])
+combat_stages = Array[ExtResource("stage_type")]([ExtResource("goblins"), ExtResource("skeletons")])
 equipment_pool = Array[ExtResource("item_type")]([ExtResource("wooden_sword"), ExtResource("iron_sword"), ExtResource("ranger_bow"), ExtResource("frost_bow"), ExtResource("ranger_armor"), ExtResource("sage_charm")])

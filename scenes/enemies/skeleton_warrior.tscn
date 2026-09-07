@@ -1,0 +1,26 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/initiative_actor.gd" id="actor"]
+[ext_resource type="Resource" path="res://resources/enemies/skeleton_warrior.tres" id="definition"]
+[ext_resource type="Texture2D" path="res://assets/characters/skeleton_warrior_left.png" id="left"]
+[ext_resource type="Texture2D" path="res://assets/characters/skeleton_warrior_right.png" id="right"]
+[ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="label"]
+
+[sub_resource type="AtlasTexture" id="left_frame"]
+atlas = ExtResource("left")
+region = Rect2(0, 0, 1254, 1254)
+margin = Rect2(173, 170, 346, 346)
+
+[sub_resource type="AtlasTexture" id="right_frame"]
+atlas = ExtResource("right")
+region = Rect2(0, 0, 1254, 1254)
+margin = Rect2(173, 170, 346, 346)
+
+[node name="SkeletonWarrior" type="Node2D"]
+script = ExtResource("actor")
+definition = ExtResource("definition")
+facing_left_texture = SubResource("left_frame")
+facing_right_texture = SubResource("right_frame")
+initial_facing = 0
+
+[node name="UnitNameLabel" parent="." instance=ExtResource("label")]

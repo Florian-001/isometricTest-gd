@@ -8,14 +8,31 @@ const MUTED_TEXT_COLOR := Color(0.58, 0.66, 0.74)
 signal closed
 signal equipment_updated(character: TacticalCharacter)
 
+@export_category("Grid Presentation")
+@export var item_slot_scene: PackedScene
+@export var weapon_fallback_icon: Texture2D
+@export var ranged_fallback_icon: Texture2D
+@export var armor_fallback_icon: Texture2D
+@export var accessory_fallback_icon: Texture2D
+@export_range(1, 20) var minimum_rows: int = 4
+@export_range(0.0, 1.0, 0.05) var hover_delay: float = 0.2
+
 var _inventory: GeneralInventory
 var _characters: Array[TacticalCharacter] = []
 var _character: TacticalCharacter
+var _context_revision: int = 0
+var _refresh_pending: bool = false
+var _detail_cell: InventoryItemSlot
+var _drag_scroll_direction: float = 0.0
+var _applying_transfer: bool = false
 
 @onready var character_picker: OptionButton = $Dim/Panel/Margin/VBox/CharacterRow/CharacterPicker
 @onready var character_name: Label = $Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/CharacterName
-@onready var general_entries: VBoxContainer = $Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries
-@onready var equipment_entries: VBoxContainer = $Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries
+@onready var general_entries: GridContainer = $Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries
+@onready var equipment_entries: GridContainer = $Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries
+@onready var inventory_scroll: ScrollContainer = $Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll
+@onready var item_details: InventoryItemDetails = $ItemDetails
+@onready var hover_timer: Timer = $HoverTimer
 @onready var stats_entries: VBoxContainer = $Dim/Panel/Margin/VBox/Columns/DetailsPanel/Margin/VBox/StatsEntries
 @onready var ability_entries: VBoxContainer = $Dim/Panel/Margin/VBox/Columns/DetailsPanel/Margin/VBox/AbilitiesScroll/AbilityEntries
 @onready var close_button: Button = $Dim/Panel/Margin/VBox/Header/CloseButton
@@ -24,13 +41,17 @@ var _character: TacticalCharacter
 func _ready() -> void:
 	close_button.pressed.connect(close_screen)
 	character_picker.item_selected.connect(_on_character_selected)
+	inventory_scroll.get_v_scroll_bar().value_changed.connect(_on_inventory_scrolled)
 
 
 func setup(inventory: GeneralInventory, characters: Array[TacticalCharacter]) -> void:
+	_invalidate_interaction()
+	if is_instance_valid(_inventory) and _inventory.items_changed.is_connected(_queue_refresh):
+		_inventory.items_changed.disconnect(_queue_refresh)
 	_inventory = inventory
 	_characters.assign(characters)
-	if not _inventory.items_changed.is_connected(_refresh):
-		_inventory.items_changed.connect(_refresh)
+	if _inventory != null:
+		_inventory.items_changed.connect(_queue_refresh)
 	var next_character := _character
 	if not is_instance_valid(next_character) or not _characters.has(next_character):
 		next_character = _characters[0] if not _characters.is_empty() else null
@@ -53,13 +74,17 @@ func open_for(preferred_character: TacticalCharacter = null) -> void:
 func close_screen() -> void:
 	if not visible:
 		return
+	_invalidate_interaction()
 	hide()
 	closed.emit()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
-		close_screen()
+		if get_viewport().gui_is_dragging():
+			_invalidate_interaction()
+		else:
+			close_screen()
 		get_viewport().set_input_as_handled()
 
 
@@ -84,10 +109,10 @@ func _on_character_selected(index: int) -> void:
 
 
 func _refresh() -> void:
+	_refresh_pending = false
 	if not is_node_ready():
 		return
-	_clear_entries(general_entries)
-	_clear_entries(equipment_entries)
+	_hide_details()
 	_build_general_inventory()
 	_build_equipment_slots()
 	_refresh_character_details()
@@ -97,6 +122,7 @@ func _set_character(character: TacticalCharacter) -> void:
 	if _character == character:
 		_connect_character_signals()
 		return
+	_invalidate_interaction()
 	_disconnect_character_signals()
 	_character = character
 	_connect_character_signals()
@@ -129,6 +155,8 @@ func _on_selected_character_stats_changed() -> void:
 
 
 func _on_selected_character_health_changed(_current: int, _maximum: int) -> void:
+	if _current <= 0:
+		_invalidate_interaction()
 	_refresh_character_details()
 
 
@@ -136,7 +164,8 @@ func _on_selected_character_equipment_changed(
 	_slot: ItemDefinition.EquipmentSlot,
 	_item: ItemDefinition
 ) -> void:
-	_refresh()
+	_invalidate_interaction()
+	_queue_refresh()
 
 
 func _refresh_character_details() -> void:
@@ -318,92 +347,169 @@ func _format_stat_value(value: float) -> String:
 
 
 func _build_general_inventory() -> void:
-	if _inventory == null:
-		_add_empty_label(general_entries, "Inventory unavailable")
-		return
-	var items := _inventory.get_items()
-	if items.is_empty():
-		_add_empty_label(general_entries, "No unused items")
-		return
-	for item in items:
-		var button := _make_item_button(item, false)
-		button.pressed.connect(_equip_item.bind(item))
-		general_entries.add_child(button)
+	var count := 0 if _inventory == null else _inventory.get_slots().size()
+	var columns := general_entries.columns
+	var cells := maxi(minimum_rows * columns, ceili(float(count + 1) / columns) * columns)
+	while general_entries.get_child_count() < cells:
+		general_entries.add_child(item_slot_scene.instantiate())
+	# Keep existing cells alive during refreshes, including drag completion.
+	for index in general_entries.get_child_count():
+		var cell := general_entries.get_child(index) as InventoryItemSlot
+		cell.visible = index < cells
+		cell.bind_item(_inventory.get_item_at(index) if _inventory != null else null, self, index)
+	var item_count := 0 if _inventory == null else _inventory.get_items().size()
+	$Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Subtitle.text = "%d %s · shared pack" % [item_count, "item" if item_count == 1 else "items"]
 
 
 func _build_equipment_slots() -> void:
-	if not is_instance_valid(_character):
-		character_name.text = "No character selected"
+	character_name.text = _get_character_display_name(_character) if is_instance_valid(_character) else "No character selected"
+	for column in equipment_entries.get_children():
+		var cell := column.get_node("Slot") as InventoryItemSlot
+		cell.bind_item(_character.get_equipped_item(cell.equipment_slot) if is_instance_valid(_character) else null, self)
+
+
+func get_item_icon(item: ItemDefinition) -> Texture2D:
+	if item.icon != null:
+		return item.icon
+	match item.slot:
+		ItemDefinition.EquipmentSlot.ARMOR:
+			return armor_fallback_icon
+		ItemDefinition.EquipmentSlot.ACCESSORY:
+			return accessory_fallback_icon
+		_:
+			return ranged_fallback_icon if item.weapon_type == ItemDefinition.WeaponType.RANGED else weapon_fallback_icon
+
+
+func _queue_refresh() -> void:
+	_hide_details()
+	if not _refresh_pending:
+		_refresh_pending = true
+		_refresh.call_deferred()
+
+
+func _invalidate_interaction() -> void:
+	_context_revision += 1
+	_hide_details()
+	if not _applying_transfer and is_inside_tree() and get_viewport().gui_is_dragging():
+		get_viewport().gui_cancel_drag()
+
+
+func create_drag_payload(cell: InventoryItemSlot) -> Dictionary:
+	if not visible or _inventory == null or cell.item == null:
+		return {}
+	_hide_details()
+	return {
+		"screen": self, "context": _context_revision, "inventory_revision": _inventory.revision,
+		"character": _character, "slot": cell.slot_index, "equipment_slot": cell.equipment_slot,
+		"item": cell.item,
+	}
+
+
+func _valid_payload(data: Variant) -> bool:
+	if not visible or _inventory == null or not data is Dictionary:
+		return false
+	if data.get("screen") != self or data.get("context", -1) != _context_revision or data.get("inventory_revision", -1) != _inventory.revision:
+		return false
+	if data.get("character") != _character or not data.get("item") is ItemDefinition:
+		return false
+	if not data.get("slot") is int or not data.get("equipment_slot") is int:
+		return false
+	var slot: int = data.equipment_slot
+	if slot >= 0:
+		return is_instance_valid(_character) and _character.current_health > 0 and ItemDefinition.EquipmentSlot.values().has(slot) and _character.get_equipped_item(slot) == data.item
+	return _inventory.get_item_at(data.slot) == data.item
+
+
+func can_drop_on(cell: InventoryItemSlot, data: Variant) -> bool:
+	if cell.screen != self or not cell.visible or not _valid_payload(data):
+		return false
+	if cell.equipment_slot >= 0:
+		return data.equipment_slot < 0 and _inventory.can_equip_from_slot(data.slot, _character, cell.equipment_slot)
+	if data.equipment_slot >= 0:
+		return _inventory.can_unequip_to_slot(_character, data.equipment_slot, cell.slot_index)
+	return _inventory.can_move_or_swap(data.slot, cell.slot_index)
+
+
+func drop_on(cell: InventoryItemSlot, data: Variant) -> void:
+	if not can_drop_on(cell, data):
 		return
-	character_name.text = _get_character_display_name(_character)
-	for slot in [
-		ItemDefinition.EquipmentSlot.WEAPON,
-		ItemDefinition.EquipmentSlot.ARMOR,
-		ItemDefinition.EquipmentSlot.ACCESSORY,
-	]:
-		var item := _character.get_equipped_item(slot)
-		var button := Button.new()
-		button.custom_minimum_size = Vector2(0.0, 64.0)
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.text = "%s\n%s" % [
-			_get_slot_name(slot),
-			_get_item_name_with_damage(item) if item != null else "Empty",
-		]
-		button.tooltip_text = (
-			_get_item_tooltip(item, "unequip")
-			if item != null
-			else "%s slot" % _get_slot_name(slot)
-		)
-		button.disabled = item == null
-		if item != null:
-			button.icon = item.icon
-			button.expand_icon = true
-			button.pressed.connect(_unequip_slot.bind(slot))
-		equipment_entries.add_child(button)
+	var equipment_change: bool = cell.equipment_slot >= 0 or data.equipment_slot >= 0
+	_applying_transfer = true
+	if cell.equipment_slot >= 0:
+		_inventory.equip_from_slot(data.slot, _character, cell.equipment_slot)
+	elif data.equipment_slot >= 0:
+		_inventory.unequip_to_slot(_character, data.equipment_slot, cell.slot_index)
+	else:
+		_inventory.move_or_swap(data.slot, cell.slot_index)
+	_applying_transfer = false
+	if equipment_change:
+		equipment_updated.emit(_character)
 
 
-func _equip_item(item: ItemDefinition) -> void:
-	if _inventory == null or not is_instance_valid(_character):
+func quick_transfer(cell: InventoryItemSlot) -> void:
+	if not visible or _inventory == null or cell.item == null or get_viewport().gui_is_dragging():
 		return
-	if not _inventory.take_item(item):
+	var changed := false
+	if cell.equipment_slot >= 0:
+		changed = _inventory.unequip_to_slot(_character, cell.equipment_slot, _inventory.first_empty_slot())
+	elif _inventory.get_item_at(cell.slot_index) == cell.item:
+		changed = _inventory.equip_from_slot(cell.slot_index, _character, cell.item.slot)
+	if changed:
+		equipment_updated.emit(_character)
+
+
+func request_details(cell: InventoryItemSlot) -> void:
+	_hide_details()
+	if not visible or cell.item == null or get_viewport().gui_is_dragging():
 		return
-	var replaced := _character.equip_item(item)
-	if replaced != null:
-		_inventory.add_item(replaced)
-	equipment_updated.emit(_character)
-	_refresh()
+	_detail_cell = cell
+	hover_timer.start(maxf(hover_delay, 0.001))
 
 
-func _unequip_slot(slot: ItemDefinition.EquipmentSlot) -> void:
-	if _inventory == null or not is_instance_valid(_character):
+func dismiss_details(cell: InventoryItemSlot) -> void:
+	if _detail_cell == cell:
+		_hide_details()
+
+
+func _hide_details() -> void:
+	_detail_cell = null
+	if is_node_ready():
+		hover_timer.stop()
+		item_details.hide()
+
+
+func _on_hover_timeout() -> void:
+	if not visible or not is_instance_valid(_detail_cell) or _detail_cell.item == null or get_viewport().gui_is_dragging():
 		return
-	var removed := _character.unequip_item(slot)
-	if removed == null:
+	item_details.show_item(_detail_cell.item, _detail_cell.equipment_slot >= 0)
+	item_details.place_next_to(_detail_cell)
+
+
+func _on_inventory_scrolled(_value: float) -> void:
+	_hide_details()
+
+
+func _process(delta: float) -> void:
+	if not visible:
 		return
-	_inventory.add_item(removed)
-	equipment_updated.emit(_character)
-	_refresh()
+	if item_details.visible and is_instance_valid(_detail_cell):
+		item_details.place_next_to(_detail_cell)
+	if get_viewport().gui_is_dragging():
+		_hide_details()
+		var rect := inventory_scroll.get_global_rect()
+		var point := get_global_mouse_position()
+		if rect.has_point(point):
+			_drag_scroll_direction = -1.0 if point.y < rect.position.y + 28.0 else (1.0 if point.y > rect.end.y - 28.0 else 0.0)
+			inventory_scroll.scroll_vertical += roundi(_drag_scroll_direction * 480.0 * delta)
 
 
-func _make_item_button(item: ItemDefinition, equipped: bool) -> Button:
-	var button := Button.new()
-	button.set_meta("item", item)
-	button.custom_minimum_size = Vector2(0.0, 56.0)
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.text = "%s\n%s" % [item.display_name, _get_item_slot_summary(item)]
-	button.tooltip_text = _get_item_tooltip(item, "unequip" if equipped else "equip")
-	button.icon = item.icon
-	button.expand_icon = true
-	return button
-
-
-func _clear_entries(container: VBoxContainer) -> void:
+func _clear_entries(container: Container) -> void:
 	for child in container.get_children():
 		container.remove_child(child)
 		child.queue_free()
 
 
-func _add_empty_label(container: VBoxContainer, text: String) -> void:
+func _add_empty_label(container: Container, text: String) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_color_override("font_color", MUTED_TEXT_COLOR)
@@ -414,44 +520,3 @@ func _get_character_display_name(character: TacticalCharacter) -> String:
 	if character.definition != null and not character.definition.display_name.is_empty():
 		return "%s (%s)" % [character.definition.display_name, character.name]
 	return str(character.name)
-
-
-func _get_slot_name(slot: ItemDefinition.EquipmentSlot) -> String:
-	return ItemDefinition.EquipmentSlot.keys()[slot].capitalize()
-
-
-func _get_item_name_with_damage(item: ItemDefinition) -> String:
-	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
-		var result := "%s · %s · %d DMG" % [
-			item.display_name,
-			_get_weapon_type_name(item),
-			item.weapon_damage,
-		]
-		if item.status_effect != null:
-			result += " · %s" % item.status_effect.display_name
-		return result
-	return item.display_name
-
-
-func _get_item_slot_summary(item: ItemDefinition) -> String:
-	var summary := _get_slot_name(item.slot)
-	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
-		summary += " · %s · %d DMG" % [_get_weapon_type_name(item), item.weapon_damage]
-		if item.status_effect != null:
-			summary += " · %s" % item.status_effect.display_name
-	return summary
-
-
-func _get_item_tooltip(item: ItemDefinition, action: String) -> String:
-	var lines: Array[String] = [item.display_name]
-	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
-		lines.append("Weapon type: %s" % _get_weapon_type_name(item))
-		lines.append("Weapon damage: %d" % item.weapon_damage)
-		if item.status_effect != null:
-			lines.append("Applies: %s" % item.status_effect.get_description())
-	lines.append("Click to %s" % action)
-	return "\n".join(lines)
-
-
-func _get_weapon_type_name(item: ItemDefinition) -> String:
-	return ItemDefinition.WeaponType.keys()[item.weapon_type].capitalize()

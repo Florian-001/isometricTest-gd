@@ -1,0 +1,100 @@
+[gd_scene format=3 ]
+
+[ext_resource type="Script"  path="res://scripts/battle_map.gd" id="1_map"]
+[ext_resource type="Script"  path="res://scripts/isometric_grid.gd" id="2_grid"]
+[ext_resource type="Script"  path="res://scripts/tactical_terrain.gd" id="3_terrain"]
+[ext_resource type="Script"  path="res://scripts/tactical_tile.gd" id="4_tile"]
+[ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="5_palette"]
+[ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="6_mud"]
+[ext_resource type="Resource"  path="res://resources/tiles/fire.tres" id="7_fire"]
+[ext_resource type="Resource"  path="res://resources/tiles/ice.tres" id="8_ice"]
+[ext_resource type="Script"  path="res://scripts/tactical_wall.gd" id="9_wall"]
+[ext_resource type="Resource" path="res://resources/walls/low_earthen_wall.tres" id="10_low_wall"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="11_friend_b"]
+[ext_resource type="PackedScene"  path="res://scenes/enemies/goblin_warrior.tscn" id="12_warrior"]
+
+[ext_resource type="Script" path="res://scripts/run_spawn_point.gd" id="run_spawn"]
+
+[node name="TerrainShowcase" type="Node2D"]
+script = ExtResource("1_map")
+
+[node name="Grid" type="Node2D" parent="."]
+position = Vector2(640, 96)
+script = ExtResource("2_grid")
+
+[node name="Terrain" type="Node" parent="."]
+script = ExtResource("3_terrain")
+palette = ExtResource("5_palette")
+
+[node name="Mud_3_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("6_mud")
+grid_cell = Vector2i(3, 4)
+
+[node name="Mud_4_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("6_mud")
+grid_cell = Vector2i(4, 4)
+
+[node name="Fire_6_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("7_fire")
+grid_cell = Vector2i(6, 4)
+
+[node name="Fire_7_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("7_fire")
+grid_cell = Vector2i(7, 4)
+
+[node name="Ice_8_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("8_ice")
+grid_cell = Vector2i(8, 4)
+
+[node name="Ice_9_4" type="Node" parent="Terrain"]
+script = ExtResource("4_tile")
+definition = ExtResource("8_ice")
+grid_cell = Vector2i(9, 4)
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="Wall_5_4" type="Node2D" parent="Walls"]
+z_index = 109
+position = Vector2(688, 312)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 4)
+definition = ExtResource("10_low_wall")
+
+[node name="Wall_5_5" type="Node2D" parent="Walls"]
+z_index = 110
+position = Vector2(640, 336)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 5)
+definition = ExtResource("10_low_wall")
+
+[node name="Wall_5_6" type="Node2D" parent="Walls"]
+z_index = 111
+position = Vector2(592, 360)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 6)
+definition = ExtResource("10_low_wall")
+
+[node name="Characters" type="Node2D" parent="."]
+
+[node name="MeleeEnemy" parent="Characters" instance=ExtResource("12_warrior")]
+z_index = 109
+movement_range_override = 2.0
+starting_grid_cell = Vector2i(6, 3)
+
+
+[node name="PartySpawns" type="Node2D" parent="."]
+
+[node name="Member1" type="Marker2D" parent="PartySpawns"]
+position = Vector2(400, 408)
+script = ExtResource("run_spawn")
+grid_cell = Vector2i(4, 9)
+
+[node name="Member2" type="Marker2D" parent="PartySpawns"]
+position = Vector2(544, 480)
+script = ExtResource("run_spawn")
+grid_cell = Vector2i(7, 9)

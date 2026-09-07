@@ -6,7 +6,13 @@
 [ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="4_palette"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="5_friend_a"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="6_friend_b"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="6_yfbn5"]
+[ext_resource type="Resource" uid="uid://dja1lf1w34kk8" path="res://resources/items/goblin_bow.tres" id="7_04l5s"]
+[ext_resource type="Resource" uid="uid://7m35u3ondco3" path="res://resources/abilities/arrow.tres" id="7_7gw14"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="7_t7vv0"]
 [ext_resource type="PackedScene" uid="uid://3ue0j7my7j3p" path="res://scenes/enemies/goblin_warrior.tscn" id="7_warrior"]
+[ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/iron_sword.tres" id="8_04l5s"]
+[ext_resource type="Resource" uid="uid://ypvhtrfkl6un" path="res://resources/abilities/strike.tres" id="11_6q8p0"]
 
 [node name="GoblinSkirmish" type="Node2D" unique_id=1047695173]
 script = ExtResource("1_map")
@@ -25,14 +31,26 @@ palette = ExtResource("4_palette")
 
 [node name="FriendA" parent="Characters" unique_id=202289012 instance=ExtResource("5_friend_a")]
 z_index = 113
+constitution_override = 5
+override_template_abilities = true
+ability_overrides = Array[ExtResource("6_yfbn5")]([ExtResource("7_7gw14")])
+starting_equipment_overrides = Array[ExtResource("7_t7vv0")]([ExtResource("7_04l5s")])
+use_complete_equipment_override = true
+complete_equipment_overrides = Array[ExtResource("7_t7vv0")]([ExtResource("7_04l5s")])
 starting_grid_cell = Vector2i(4, 9)
 
 [node name="FriendB" parent="Characters" unique_id=819615493 instance=ExtResource("6_friend_b")]
 z_index = 116
+constitution_override = 3
+override_template_abilities = true
+ability_overrides = Array[ExtResource("6_yfbn5")]([ExtResource("11_6q8p0")])
+use_complete_equipment_override = true
+complete_equipment_overrides = Array[ExtResource("7_t7vv0")]([ExtResource("8_04l5s")])
 starting_grid_cell = Vector2i(7, 9)
 
 [node name="GoblinWarriorA" parent="Characters" unique_id=903214657 instance=ExtResource("7_warrior")]
 z_index = 105
+ability_overrides = Array[ExtResource("6_yfbn5")]([ExtResource("11_6q8p0")])
 starting_grid_cell = Vector2i(3, 2)
 
 [node name="GoblinWarriorB" parent="Characters" unique_id=551355218 instance=ExtResource("7_warrior")]
@@ -42,3 +60,11 @@ starting_grid_cell = Vector2i(6, 2)
 [node name="GoblinWarriorC" parent="Characters" unique_id=1439437667 instance=ExtResource("7_warrior")]
 z_index = 111
 starting_grid_cell = Vector2i(9, 2)
+
+[node name="GoblinWarriorC2" parent="Characters" unique_id=541383733 instance=ExtResource("7_warrior")]
+z_index = 104
+starting_grid_cell = Vector2i(4, 0)
+
+[node name="GoblinWarriorC3" parent="Characters" unique_id=187155099 instance=ExtResource("7_warrior")]
+z_index = 107
+starting_grid_cell = Vector2i(7, 0)

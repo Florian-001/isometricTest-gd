@@ -23,12 +23,12 @@ enum Faction {
 		if Engine.is_editor_hint():
 			notify_property_list_changed()
 @export_custom(
-	PROPERTY_HINT_RANGE,
-	"4,3996,4,or_greater",
+	PROPERTY_HINT_NONE,
+	"",
 	PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY
 ) var max_health: int:
 	get:
-		return constitution * 4
+		return UnitStat.get_scaling_rules().calculate_max_health(float(constitution))
 @export_range(1, 999, 1, "or_greater") var speed: int = 10
 
 @export_category("Starting Equipment")

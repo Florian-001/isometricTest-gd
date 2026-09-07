@@ -1,0 +1,478 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dev_mode_panel.gd" id="1_panel"]
+
+[node name="DevModePanel" type="Control"]
+process_mode = 3
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_panel")
+
+[node name="InputBlocker" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0, 0, 0, 0.08)
+
+[node name="Drawer" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 0
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_right = 466.0
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Margin" type="MarginContainer" parent="Drawer"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="Main" type="VBoxContainer" parent="Drawer/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TopBar" type="HBoxContainer" parent="Drawer/Margin/Main"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Drawer/Margin/Main/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 22
+text = "Scenario Dev Mode"
+
+[node name="SaveButton" type="Button" parent="Drawer/Margin/Main/TopBar"]
+custom_minimum_size = Vector2(70, 38)
+layout_mode = 2
+tooltip_text = "Create a new automatically named save"
+text = "Save"
+
+[node name="PlayButton" type="Button" parent="Drawer/Margin/Main/TopBar"]
+custom_minimum_size = Vector2(104, 38)
+layout_mode = 2
+text = "Resume"
+
+[node name="Status" type="Label" parent="Drawer/Margin/Main"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.84, 0.9, 0.96, 1)
+theme_override_font_sizes/font_size = 12
+text = "Battle paused."
+autowrap_mode = 2
+
+[node name="Tabs" type="TabContainer" parent="Drawer/Margin/Main"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Unit" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs"]
+layout_mode = 2
+metadata/_tab_index = 0
+horizontal_scroll_mode = 0
+
+[node name="UnitContent" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="PaletteLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.82, 0.94, 1)
+text = "Drag a unit onto the board"
+
+[node name="PaletteScroll" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent"]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="PaletteEntries" type="HBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/PaletteScroll"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NoSelection" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.62, 0.73, 1)
+text = "Select any unit on the board to edit it."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="UnitEditor" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="UnitHeader" type="HBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+
+[node name="UnitName" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/UnitHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "Selected Unit"
+
+[node name="CellHint" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/UnitHeader"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.62, 0.73, 1)
+text = "Drag to move"
+
+[node name="HealUnitButton" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/UnitHeader"]
+custom_minimum_size = Vector2(94, 0)
+layout_mode = 2
+tooltip_text = "Restore the selected living unit to full health"
+disabled = true
+text = "Heal to Full"
+
+[node name="DerivedStats" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.82, 0.92, 1)
+text = "Effective stats"
+
+[node name="StatsTitle" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+text = "Base Combat Stats"
+
+[node name="Stats" type="GridContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 5
+columns = 3
+
+[node name="StrengthLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Strength"
+
+[node name="StrengthSpin" type="SpinBox" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(116, 0)
+layout_mode = 2
+max_value = 999.0
+value = 10.0
+
+[node name="StrengthReset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(34, 0)
+layout_mode = 2
+tooltip_text = "Use template value"
+text = "↺"
+
+[node name="DexterityLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Dexterity"
+
+[node name="DexteritySpin" type="SpinBox" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(116, 0)
+layout_mode = 2
+max_value = 999.0
+value = 10.0
+
+[node name="DexterityReset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(34, 0)
+layout_mode = 2
+tooltip_text = "Use template value"
+text = "↺"
+
+[node name="IntelligenceLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Intelligence"
+
+[node name="IntelligenceSpin" type="SpinBox" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(116, 0)
+layout_mode = 2
+max_value = 999.0
+value = 10.0
+
+[node name="IntelligenceReset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(34, 0)
+layout_mode = 2
+tooltip_text = "Use template value"
+text = "↺"
+
+[node name="ConstitutionLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Constitution"
+
+[node name="ConstitutionSpin" type="SpinBox" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(116, 0)
+layout_mode = 2
+max_value = 999.0
+value = 10.0
+
+[node name="ConstitutionReset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(34, 0)
+layout_mode = 2
+tooltip_text = "Use template value"
+text = "↺"
+
+[node name="SpeedLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Speed"
+
+[node name="SpeedSpin" type="SpinBox" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(116, 0)
+layout_mode = 2
+max_value = 999.0
+value = 10.0
+
+[node name="SpeedReset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(34, 0)
+layout_mode = 2
+tooltip_text = "Use template value"
+text = "↺"
+
+[node name="MovementLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Movement Range"
+
+[node name="MovementSpin" type="SpinBox" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(116, 0)
+layout_mode = 2
+max_value = 100.0
+step = 0.5
+value = 6.0
+
+[node name="MovementReset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats"]
+custom_minimum_size = Vector2(34, 0)
+layout_mode = 2
+tooltip_text = "Use template value"
+text = "↺"
+
+[node name="AbilitiesHeader" type="HBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+
+[node name="AbilitiesTitle" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/AbilitiesHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+text = "Abilities"
+
+[node name="AbilitiesReset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/AbilitiesHeader"]
+layout_mode = 2
+tooltip_text = "Restore the template ability loadout"
+text = "Reset to Template"
+
+[node name="AbilitiesScroll" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+custom_minimum_size = Vector2(0, 128)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="AbilityEntries" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/AbilitiesScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="EquipmentHeader" type="HBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+
+[node name="EquipmentTitle" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/EquipmentHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+text = "Equipment"
+
+[node name="EquipmentReset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/EquipmentHeader"]
+layout_mode = 2
+tooltip_text = "Restore template equipment"
+text = "Reset to Template"
+
+[node name="Equipment" type="GridContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 5
+columns = 2
+
+[node name="WeaponLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
+layout_mode = 2
+text = "Weapon"
+
+[node name="WeaponPicker" type="OptionButton" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ArmorLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
+layout_mode = 2
+text = "Armor"
+
+[node name="ArmorPicker" type="OptionButton" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AccessoryLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
+layout_mode = 2
+text = "Accessory"
+
+[node name="AccessoryPicker" type="OptionButton" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DeleteUnitButton" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+tooltip_text = "Delete selected unit (Delete)"
+text = "Delete Selected Unit"
+
+[node name="Terrain" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 1
+horizontal_scroll_mode = 0
+
+[node name="TerrainContent" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Terrain"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 9
+
+[node name="TerrainHelp" type="Label" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.62, 0.73, 1)
+text = "Left-drag paints · right-drag erases · middle-drag pans"
+autowrap_mode = 2
+
+[node name="TilesTitle" type="Label" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+text = "Terrain Tiles"
+
+[node name="TileBrushes" type="FlowContainer" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent"]
+layout_mode = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+
+[node name="WallsTitle" type="Label" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+text = "Walls"
+
+[node name="WallBrushes" type="FlowContainer" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent"]
+layout_mode = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+
+[node name="EraseButton" type="Button" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+toggle_mode = true
+text = "Eraser"
+tooltip_text = "Remove terrain or walls. Right-drag always erases."
+
+[node name="BrushDetails" type="Label" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent"]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.82, 0.92, 1)
+text = "Choose a terrain or wall brush."
+autowrap_mode = 2
+
+[node name="History" type="HBoxContainer" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="UndoButton" type="Button" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent/History"]
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "Undo"
+
+[node name="RedoButton" type="Button" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent/History"]
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "Redo"
+
+[node name="ResetMapButton" type="Button" parent="Drawer/Margin/Main/Tabs/Terrain/TerrainContent/History"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Reset to Map"
+tooltip_text = "Restore the map's authored terrain and walls. This can be undone."
+
+[node name="Saves" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+theme_override_constants/separation = 8
+
+[node name="SaveHelp" type="Label" parent="Drawer/Margin/Main/Tabs/Saves"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.62, 0.73, 1)
+text = "Save creates a new entry. Rename inline; ↻ replaces an entry."
+autowrap_mode = 2
+
+[node name="SavesScroll" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs/Saves"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SaveEntries" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Saves/SavesScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 7
+
+[node name="AILog" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 3
+
+[node name="AILogActions" type="HBoxContainer" parent="Drawer/Margin/Main/Tabs/AILog"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AILogActionSpacer" type="Control" parent="Drawer/Margin/Main/Tabs/AILog/AILogActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CopyAILogButton" type="Button" parent="Drawer/Margin/Main/Tabs/AILog/AILogActions"]
+custom_minimum_size = Vector2(112, 38)
+layout_mode = 2
+tooltip_text = "Copy the retained AI decision history for sharing with an LLM"
+disabled = true
+text = "Copy Logs"
+
+[node name="AILogScroll" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs/AILog"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="AILogContent" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/AILog/AILogScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EmptyState" type="Label" parent="Drawer/Margin/Main/Tabs/AILog/AILogScroll/AILogContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "No AI decisions recorded yet.\nEnd a friendly turn to let an enemy act."
+autowrap_mode = 2
+
+[node name="AILogEntries" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/AILog/AILogScroll/AILogContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="DeleteSaveDialog" type="ConfirmationDialog" parent="."]
+process_mode = 3
+title = "Delete Save?"
+ok_button_text = "Delete"
+
+[node name="DiscardEditsDialog" type="ConfirmationDialog" parent="."]
+process_mode = 3
+title = "Discard Setup Edits?"
+dialog_text = "Loading this save will discard the current unsaved setup edits."
+ok_button_text = "Discard and Load"

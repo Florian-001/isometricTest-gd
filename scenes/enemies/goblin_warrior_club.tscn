@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://cjmr74w1vvywt"]
+[gd_scene load_steps=8 format=3 uid="uid://cjmr74w1vvywt"]
 
 [ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="1_actor"]
 [ext_resource type="Resource" uid="uid://b4os1tck6c5md" path="res://resources/enemies/goblin_warrior.tres" id="2_definition"]
@@ -6,6 +6,7 @@
 [ext_resource type="Resource" uid="uid://xt3bbbhxvacu" path="res://resources/items/goblin_club.tres" id="4_club"]
 [ext_resource type="Texture2D" path="res://assets/characters/goblin_clubber_left.png" id="5_left"]
 [ext_resource type="Texture2D" path="res://assets/characters/goblin_clubber_right.png" id="6_right"]
+[ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="7_name_label"]
 
 [node name="GoblinWarriorClub" type="Node2D"]
 script = ExtResource("1_actor")
@@ -14,3 +15,5 @@ starting_equipment_overrides = Array[ExtResource("3_item_type")]([ExtResource("4
 facing_left_texture = ExtResource("5_left")
 facing_right_texture = ExtResource("6_right")
 initial_facing = 0
+
+[node name="UnitNameLabel" parent="." instance=ExtResource("7_name_label")]

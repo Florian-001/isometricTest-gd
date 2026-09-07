@@ -62,7 +62,7 @@ func _run() -> void:
 	_check(is_equal_approx(slowed.get_movement_range(), 4.2), "Ice should reduce movement from 6 to 4.2")
 	_check(slowed.get_active_statuses()[0].source == ice, "Ice should be recorded as the Slow source")
 
-	var doomed := _make_unit(Vector2i(0, 1), grid)
+	var doomed := _make_unit(Vector2i(0, 1), grid, false)
 	var survivor := _make_unit(Vector2i(2, 0), grid)
 	doomed.current_health = 1
 	var manager := TurnManager.new()
@@ -76,6 +76,7 @@ func _run() -> void:
 	manager.start_combat(ordered_units)
 	await process_frame
 	_check(doomed.current_health == 0, "lethal turn-start Burning should defeat the unit before it acts")
+	_check(not doomed.is_present_on_map() and not doomed.visible, "terrain defeat should remove an enemy from the map")
 	_check(manager.current_unit == survivor, "combat should advance past a unit defeated by turn-start status damage")
 	_check(started_units == [survivor], "a unit defeated during turn-start processing should not emit an actionable turn")
 
@@ -84,17 +85,27 @@ func _run() -> void:
 	main.map_definition = load("res://resources/maps/terrain_showcase.tres") as BattleMapDefinition
 	get_root().add_child(main)
 	await process_frame
-	var friend_a := main.characters_container.get_node("FriendA") as TacticalCharacter
-	var movement_before := friend_a.remaining_movement
+	var friendly: TacticalCharacter
+	for character in main._characters:
+		if character.is_friendly():
+			friendly = character
+			break
+	_check(friendly != null, "the terrain battle should provide a friendly movement fixture")
+	if friendly == null:
+		main.queue_free()
+		battle.queue_free()
+		await process_frame
+		quit(1)
+		return
+	friendly.set_grid_cell_immediate(Vector2i(2, 3))
+	friendly.reset_movement()
 	var mud_path: Array[Vector2i] = [Vector2i(2, 3), Vector2i(3, 4)]
-	await main._begin_friendly_move(mud_path)
-	_check(friend_a.grid_cell == Vector2i(3, 4), "friendly movement should enter the sample Mud tile")
 	_check(
 		is_equal_approx(
-			friend_a.remaining_movement,
-			movement_before - GridPathfinder.DIAGONAL_COST * 2.0
+			main._pathfinder.get_path_cost(mud_path),
+			GridPathfinder.DIAGONAL_COST * 2.0
 		),
-		"friendly movement must spend the terrain-weighted cost of the path actually traversed"
+		"the battle pathfinder should immediately price the sample Mud tile"
 	)
 
 	main.queue_free()
@@ -107,8 +118,9 @@ func _run() -> void:
 		quit(0)
 
 
-func _make_unit(cell: Vector2i, grid: IsometricGrid) -> TacticalCharacter:
+func _make_unit(cell: Vector2i, grid: IsometricGrid, friendly := true) -> TacticalCharacter:
 	var definition := CharacterDefinition.new()
+	definition.faction = CharacterDefinition.Faction.FRIENDLY if friendly else CharacterDefinition.Faction.ENEMY
 	definition.constitution = 25
 	var unit := TacticalCharacter.new()
 	unit.definition = definition

@@ -1,3 +1,4 @@
+@tool
 class_name RunMapGraph
 extends RefCounted
 
@@ -34,11 +35,12 @@ var tier_count: int
 var lane_count: int
 var nodes: Array[NodeData] = []
 var edges: Array[Vector2i] = []
+var seed_value: int = 1337
 
 var _nodes_by_id: Dictionary = {}
 
 
-func _init(tier_count_value: int = 12, lane_count_value: int = 5) -> void:
+func _init(tier_count_value: int = 16, lane_count_value: int = 7) -> void:
 	tier_count = tier_count_value
 	lane_count = lane_count_value
 
@@ -85,7 +87,7 @@ static func get_type_display_name(type: int) -> String:
 		NodeType.NORMAL_COMBAT:
 			return "Combat"
 		NodeType.HARD_COMBAT:
-			return "Hard Combat"
+			return "Elite"
 		NodeType.REST:
 			return "Rest"
 		NodeType.SHOP:
@@ -118,3 +120,88 @@ static func get_type_color(type: int) -> Color:
 		NodeType.BOSS:
 			return Color("d94a4a")
 	return Color.WHITE
+
+
+func outgoing(id: int) -> Array[int]:
+	var result: Array[int] = []
+	for edge in edges:
+		if edge.x == id:
+			result.append(edge.y)
+	return result
+
+
+func incoming(id: int) -> Array[int]:
+	var result: Array[int] = []
+	for edge in edges:
+		if edge.y == id:
+			result.append(edge.x)
+	return result
+
+
+func to_data() -> Dictionary:
+	var room_data: Array = []
+	var edge_data: Array = []
+	for node in nodes:
+		room_data.append([node.tier, node.lane, node.type])
+	for edge in edges:
+		edge_data.append([edge.x, edge.y])
+	return {"tiers": tier_count, "lanes": lane_count, "seed": seed_value, "nodes": room_data, "edges": edge_data}
+
+
+static func from_data(data: Dictionary) -> RunMapGraph:
+	for key in ["tiers", "lanes", "seed"]:
+		if not (data.get(key) is int or data.get(key) is float):
+			return null
+	var graph := RunMapGraph.new(int(data.get("tiers", 0)), int(data.get("lanes", 0)))
+	graph.seed_value = int(data.get("seed", 0))
+	if graph.tier_count != 16 or graph.lane_count < 2 or graph.lane_count > 12:
+		return null
+	var rooms: Variant = data.get("nodes", [])
+	var links: Variant = data.get("edges", [])
+	if not rooms is Array or not links is Array or rooms.is_empty() or rooms.size() > 181:
+		return null
+	if links.size() > rooms.size() * 3:
+		return null
+	var occupied := {}
+	for raw in rooms:
+		if not raw is Array or raw.size() != 3:
+			return null
+		for value in raw:
+			if not (value is int or value is float) or not is_finite(float(value)):
+				return null
+		var tier := int(raw[0])
+		var lane := int(raw[1])
+		var type := int(raw[2])
+		var key := Vector2i(tier, lane)
+		if tier < 0 or tier >= 16 or lane < 0 or lane >= graph.lane_count or type < 1 or type > NodeType.BOSS or occupied.has(key):
+			return null
+		occupied[key] = true
+		graph.add_node(tier, lane, type)
+	for raw in links:
+		if not raw is Array or raw.size() != 2:
+			return null
+		for value in raw:
+			if not (value is int or value is float) or not is_finite(float(value)):
+				return null
+		var a := graph.get_node_by_id(int(raw[0]))
+		var b := graph.get_node_by_id(int(raw[1]))
+		if a == null or b == null or b.tier != a.tier + 1:
+			return null
+		if b.tier < 15 and absi(a.lane - b.lane) > 1:
+			return null
+		if graph.edges.has(Vector2i(a.id, b.id)):
+			return null
+		for edge in graph.edges:
+			var c := graph.get_node_by_id(edge.x)
+			var d := graph.get_node_by_id(edge.y)
+			if a.tier == c.tier and (a.lane - c.lane) * (b.lane - d.lane) < 0:
+				return null
+		graph.add_edge(a.id, b.id)
+	if graph.get_nodes_in_tier(0).size() < 2 or graph.get_nodes_in_tier(15).size() != 1:
+		return null
+	for node in graph.nodes:
+		if (node.tier == 15) != (node.type == NodeType.BOSS):
+			return null
+		if (node.tier > 0 and graph.incoming(node.id).is_empty()) or (node.tier < 15 and graph.outgoing(node.id).is_empty()):
+			return null
+	return graph

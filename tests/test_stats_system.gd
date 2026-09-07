@@ -101,6 +101,82 @@ func test_effective_stats_without_equipment_keep_statuses_and_speed_movement_rul
 	assert_true(is_equal_approx(unit.get_effective_stat_without_equipment(UnitStat.Type.MOVEMENT_RANGE), 7.0), "equipment-free Movement should recalculate from Speed without equipment")
 
 
+func test_shared_stat_scaling_rules_drive_definition_runtime_and_ai() -> void:
+	var rules := UnitStat.get_scaling_rules()
+	assert_eq(rules.resource_path, "res://resources/stat_scaling_rules.tres", "UnitStat should expose the one shared balance resource")
+	var property_names: Array[StringName] = [
+		&"health_per_constitution_point",
+		&"minimum_constitution_for_health",
+		&"initiative_per_speed_point",
+		&"movement_speed_reference",
+		&"movement_per_speed_point",
+		&"minimum_base_movement_range",
+		&"minimum_effective_movement_range",
+		&"maximum_movement_range",
+	]
+	var original_values: Dictionary = {}
+	for property_name in property_names:
+		var property_info := _get_property_info(rules, property_name)
+		assert_false(property_info.is_empty(), "%s should be exposed by the balance resource" % property_name)
+		assert_true(bool(int(property_info.usage) & PROPERTY_USAGE_EDITOR), "%s should be Inspector-editable" % property_name)
+		assert_true(bool(int(property_info.usage) & PROPERTY_USAGE_STORAGE), "%s should be stored in the balance asset" % property_name)
+		original_values[property_name] = rules.get(property_name)
+
+	assert_true(is_equal_approx(rules.health_per_constitution_point, 4.0), "Constitution should retain its existing health conversion by default")
+	assert_true(is_equal_approx(rules.initiative_per_speed_point, 1.0), "Speed should retain its existing initiative conversion by default")
+	assert_true(is_equal_approx(rules.movement_speed_reference, 10.0), "movement should retain Speed 10 as its default reference")
+	assert_true(is_equal_approx(rules.movement_per_speed_point, 0.25), "movement should retain its existing Speed conversion by default")
+	assert_true(is_equal_approx(rules.minimum_base_movement_range, 2.0), "base movement should retain its existing minimum")
+	assert_true(is_equal_approx(rules.minimum_effective_movement_range, 0.0), "modified movement should retain its existing minimum")
+	assert_true(is_equal_approx(rules.maximum_movement_range, 10.0), "movement should retain its existing maximum")
+
+	rules.health_per_constitution_point = 2.5
+	rules.minimum_constitution_for_health = 1.0
+	rules.initiative_per_speed_point = 0.5
+	rules.movement_speed_reference = 8.0
+	rules.movement_per_speed_point = 0.5
+	rules.minimum_base_movement_range = 3.0
+	rules.minimum_effective_movement_range = 1.0
+	rules.maximum_movement_range = 9.0
+
+	var definition := CharacterDefinitionScript.new() as CharacterDefinition
+	definition.constitution = 3
+	definition.speed = 10
+	definition.movement_range = 5.0
+	assert_eq(definition.max_health, 8, "fractional health conversion should round only after multiplication")
+	var unit := _make_unit(definition)
+	assert_eq(unit.current_health, 8, "runtime health should use the shared custom conversion")
+	assert_eq(unit.get_initiative(), 5, "runtime initiative should use the shared custom conversion")
+	assert_true(is_equal_approx(unit.get_movement_range(), 6.0), "Speed should adjust movement from the configured reference")
+	assert_true(is_equal_approx(rules.calculate_speed_adjusted_base_movement(0.0, 0.0), 3.0), "Speed-adjusted base movement should use the configured floor")
+	assert_true(is_equal_approx(rules.calculate_speed_adjusted_base_movement(20.0, 20.0), 9.0), "Speed-adjusted base movement should use the configured ceiling")
+	assert_true(is_equal_approx(rules.clamp_effective_movement_range(-20.0), 1.0), "effective movement should use its separate configured floor")
+	assert_true(is_equal_approx(rules.clamp_effective_movement_range(20.0), 9.0), "effective movement should share the configured ceiling")
+	rules.health_per_constitution_point = 0.0
+	assert_eq(rules.calculate_max_health(0.0), 1, "maximum health should always retain its one-point safety floor")
+	rules.health_per_constitution_point = 2.5
+
+	var rule_probe := _make_status(
+		&"rule_probe",
+		2,
+		[
+			_make_modifier(UnitStat.Type.CONSTITUTION, StatModifierDefinition.Operation.FLAT, -2.0),
+			_make_modifier(UnitStat.Type.MOVEMENT_RANGE, StatModifierDefinition.Operation.FLAT, -20.0),
+		]
+	)
+	var snapshot := AIBoardSnapshot.from_battle([unit], Vector2i(4, 4))
+	var forecast := snapshot.forecast_status_application(unit, unit, rule_probe)
+	assert_eq(snapshot.get_max_health(unit), 3, "AI health forecasts should use the shared custom Constitution conversion")
+	assert_eq(forecast.health_delta, -5, "AI forecasts should report health clamped by the custom conversion")
+	assert_true(is_equal_approx(snapshot.get_movement_range(unit), 1.0), "AI movement forecasts should use the shared effective floor")
+	var copied_snapshot := snapshot.duplicate_state()
+	assert_true(is_equal_approx(float(copied_snapshot.unit_constitutions[unit]), 1.0), "AI snapshot copies should preserve effective Constitution")
+	assert_eq(copied_snapshot.get_max_health(unit), 3, "AI snapshot copies should preserve converted maximum health")
+
+	for property_name in property_names:
+		rules.set(property_name, original_values[property_name])
+
+
 func test_constitution_drives_health_modifiers_inspector_and_ai_snapshots() -> void:
 	assert_eq(
 		[

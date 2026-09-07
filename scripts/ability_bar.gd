@@ -4,6 +4,8 @@ extends PanelContainer
 
 signal ability_selected(ability: AbilityDefinition)
 
+const MAX_SHORTCUT_SLOTS := 9
+
 @export_range(70.0, 150.0, 2.0) var button_width: float = 96.0
 @export_range(42.0, 100.0, 2.0) var button_height: float = 62.0
 @export var selected_border_color: Color = Color("ffd34e")
@@ -19,16 +21,19 @@ func rebuild(unit: TacticalCharacter, interaction_enabled: bool) -> void:
 
 	if not is_instance_valid(unit):
 		return
+	var slot_index := 0
 	for ability in unit.get_abilities():
 		if ability == null:
 			continue
-		var button := _create_button(ability, unit)
+		var shortcut_number := slot_index + 1 if slot_index < MAX_SHORTCUT_SLOTS else 0
+		var button := _create_button(ability, unit, shortcut_number)
 		button.disabled = (
 			not interaction_enabled
 			or not unit.ability_available
 			or not ability.can_be_used_by(unit)
 		)
 		entries.add_child(button)
+		slot_index += 1
 	set_selected(_selected_ability)
 
 
@@ -40,7 +45,24 @@ func set_selected(ability: AbilityDefinition) -> void:
 			button.button_pressed = button.get_meta("ability") == ability
 
 
-func _create_button(ability: AbilityDefinition, caster: TacticalCharacter) -> Button:
+func activate_slot(slot_index: int) -> bool:
+	if slot_index < 0 or slot_index >= MAX_SHORTCUT_SLOTS:
+		return false
+	var entries := _get_entries()
+	if slot_index >= entries.get_child_count():
+		return false
+	var button := entries.get_child(slot_index) as Button
+	if button == null or button.disabled:
+		return false
+	button.pressed.emit()
+	return true
+
+
+func _create_button(
+	ability: AbilityDefinition,
+	caster: TacticalCharacter,
+	shortcut_number: int
+) -> Button:
 	var button := Button.new()
 	button.custom_minimum_size = Vector2(button_width, button_height)
 	button.toggle_mode = true
@@ -50,19 +72,32 @@ func _create_button(ability: AbilityDefinition, caster: TacticalCharacter) -> Bu
 	var summary_text := damage_text if has_damage else ""
 	if not unavailable_reason.is_empty():
 		summary_text = unavailable_reason
+	var shortcut_text := "[%d]" % shortcut_number if shortcut_number > 0 else ""
 	if ability.image == null:
-		button.text = (
-			"%s\n%s" % [ability.display_name, summary_text]
-			if not summary_text.is_empty()
+		var title_text := (
+			"%s %s" % [shortcut_text, ability.display_name]
+			if not shortcut_text.is_empty()
 			else ability.display_name
 		)
+		button.text = (
+			"%s\n%s" % [title_text, summary_text]
+			if not summary_text.is_empty()
+			else title_text
+		)
 	else:
-		button.text = summary_text
+		button.text = (
+			"%s\n%s" % [shortcut_text, summary_text]
+			if not shortcut_text.is_empty() and not summary_text.is_empty()
+			else shortcut_text if not shortcut_text.is_empty() else summary_text
+		)
 	button.icon = ability.image
 	button.expand_icon = true
 	button.tooltip_text = "%s\n%s" % [ability.display_name, ability.get_description(caster)]
+	if shortcut_number > 0:
+		button.tooltip_text += "\nShortcut: %d" % shortcut_number
 	button.set_meta("ability", ability)
 	button.set_meta("unavailable_reason", unavailable_reason)
+	button.set_meta("shortcut_number", shortcut_number)
 	button.pressed.connect(_on_ability_pressed.bind(ability))
 
 	var normal_style := StyleBoxFlat.new()

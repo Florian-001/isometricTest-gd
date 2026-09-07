@@ -18,10 +18,9 @@ func suite_name() -> String:
 	return "enemy_ai"
 
 
-func test_profile_defaults_resources_and_configuration_warnings() -> void:
+func test_profile_resources_and_configuration_warnings() -> void:
 	var profile := EnemyAIProfileScript.new() as EnemyAIProfile
 	assert_eq(profile.display_name, "General AI", "new AI profiles should describe their general behavior")
-	assert_true(is_equal_approx(profile.risk_aversion, 1.0), "general AI should default to balanced risk")
 
 	var general_profile := ResourceLoader.load(
 		"res://resources/ai/general_ai.tres",
@@ -29,7 +28,6 @@ func test_profile_defaults_resources_and_configuration_warnings() -> void:
 		ResourceLoader.CACHE_MODE_REPLACE
 	) as EnemyAIProfile
 	assert_eq(general_profile.display_name, "General AI", "the reusable profile should be the single general template")
-	assert_true(is_equal_approx(general_profile.risk_aversion, 1.0), "the reusable profile should use balanced risk")
 	assert_false(FileAccess.file_exists("res://resources/ai/melee_ai.tres"), "the obsolete Melee profile should be removed")
 	assert_false(FileAccess.file_exists("res://resources/ai/ranged_ai.tres"), "the obsolete Ranged profile should be removed")
 
@@ -47,6 +45,25 @@ func test_profile_defaults_resources_and_configuration_warnings() -> void:
 	assert_true(bundled_enemy._get_configuration_warnings().is_empty(), "a bundled archetype AI should satisfy enemy configuration")
 	bundled_definition.faction = CharacterDefinition.Faction.FRIENDLY
 	assert_true(bundled_enemy._get_configuration_warnings().size() > 0, "warnings should also recognize a bundled AI on an incorrectly friendly archetype")
+
+
+func test_ai_log_summary_separates_ignored_diagnostics_from_the_total() -> void:
+	var plan := EnemyTurnPlan.new()
+	plan.end_cell = Vector2i(2, 3)
+	plan.effect_score = 6.0
+	plan.position_score = 2.0
+	plan.coordination_score = 1.0
+	plan.total_score = 9.0
+	plan.threat_score = 40.0
+	plan.counterplay_score = 50.0
+	plan.exact_reply_evaluated = true
+	var summary := plan.get_debug_summary()
+	assert_true(
+		summary.contains("9.00 = 6.00 effect (0.00 terrain) + 2.00 future + 1.00 team"),
+		"the displayed arithmetic should contain only values that determine the total"
+	)
+	assert_true(summary.contains("40.00 risk ignored"), "the log should retain approximate threat as an ignored diagnostic")
+	assert_true(summary.contains("50.00 exact reply ignored"), "the log should retain exact counterplay as an ignored diagnostic")
 
 
 func test_effect_forecasts_clamp_health_and_support_custom_utility() -> void:
@@ -79,7 +96,7 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 	var units: Array[TacticalCharacter] = [caster, ally, opponent]
 	var targeting := AbilityTargetingScript.new(Vector2i(4, 4)) as AbilityTargeting
 	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
-	var profile := _profile(0.0)
+	var profile := _profile()
 
 	var heal := AbilityDefinitionScript.new() as AbilityDefinition
 	heal.effect = AbilityDefinition.PrimaryEffect.HEAL
@@ -300,7 +317,7 @@ func test_virtual_origin_targeting_does_not_move_live_unit() -> void:
 func test_cell_target_ai_prunes_zero_utility_empty_casts() -> void:
 	var shot := _make_damage_ability("Cell Shot", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 10)
 	shot.target_flags = AbilityDefinition.TargetFlags.ENEMY | AbilityDefinition.TargetFlags.CELL
-	var profile := _profile(0.0)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile)
 	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
 	var units: Array[TacticalCharacter] = [enemy, target]
@@ -385,7 +402,7 @@ func test_opportunity_forecast_consumes_reaction_applies_status_and_truncates_pa
 		Vector2i(2, 1),
 		6.0,
 		[],
-		_profile(1.0)
+		_profile()
 	)
 	var melee_weapon := ItemDefinition.new()
 	melee_weapon.weapon_type = ItemDefinition.WeaponType.MELEE
@@ -469,7 +486,7 @@ func test_opportunity_forecast_consumes_reaction_applies_status_and_truncates_pa
 func test_general_ai_prioritizes_the_highest_value_usable_ability() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
 	var fallback := _make_damage_ability("Magic Fallback", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 10)
-	var profile := _profile(0.0)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i(2, 2), 3.0, [slash, fallback], profile)
 	var target := _make_unit(true, Vector2i(3, 2), 3.0, [])
 	var plan := _choose(enemy, [enemy, target], Vector2i(7, 7))
@@ -480,7 +497,7 @@ func test_general_ai_prioritizes_the_highest_value_usable_ability() -> void:
 func test_general_ai_uses_an_available_fallback_from_its_loadout() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
 	var fallback := _make_damage_ability("Magic Fallback", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 10)
-	var profile := _profile(0.0)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i(0, 2), 2.0, [slash, fallback], profile)
 	var target := _make_unit(true, Vector2i(6, 2), 3.0, [])
 	var plan := _choose(enemy, [enemy, target], Vector2i(8, 6))
@@ -491,7 +508,7 @@ func test_general_ai_uses_an_available_fallback_from_its_loadout() -> void:
 func test_general_ai_uses_weapon_compatible_abilities_without_style_fields() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
-	var profile := _profile(1.0)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i(3, 3), 3.0, [slash, shot], profile, ItemDefinition.WeaponType.RANGED)
 	var target := _make_unit(true, Vector2i(5, 3), 3.0, [])
 	var plan := _choose(enemy, [enemy, target], Vector2i(10, 7))
@@ -503,7 +520,7 @@ func test_candidate_search_is_capped_and_never_generates_split_movement() -> voi
 	var shot := _make_damage_ability("Point Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
 	shot.target_flags = AbilityDefinition.TargetFlags.ENEMY | AbilityDefinition.TargetFlags.CELL
 	shot.area_of_effect = 3
-	var profile := _profile(1.0)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i(0, 1), 2.0, [shot], profile)
 	var targets: Array[TacticalCharacter] = []
 	for index in range(8):
@@ -516,14 +533,18 @@ func test_candidate_search_is_capped_and_never_generates_split_movement() -> voi
 	planner.choose_plan(enemy, units, pathfinder, targeting)
 	assert_true(planner.last_candidate_count <= 32, "the planner should score no more than 32 tactical candidates")
 	assert_true(planner.last_exact_reply_count <= 3, "only the best three candidates should receive an exact reply")
+	var exact_diagnostic_count := 0
 	for candidate in planner.ranked_candidates:
 		assert_ne(candidate.sequence, EnemyTurnPlan.Sequence.MOVE_CAST_MOVE, "split movement should remain serialized but never be generated")
+		if candidate.exact_reply_evaluated:
+			exact_diagnostic_count += 1
+	assert_eq(exact_diagnostic_count, planner.last_exact_reply_count, "exact-reply diagnostics should be marked without affecting rank")
 
 
 func test_action_first_filters_non_action_plans_when_a_positive_cast_exists() -> void:
 	var shot := _make_damage_ability("Committed Shot", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 12)
 	var counter := _make_damage_ability("Long Counter", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 100)
-	var enemy := _make_unit(false, Vector2i(0, 1), 3.0, [shot], _profile(2.0))
+	var enemy := _make_unit(false, Vector2i(0, 1), 3.0, [shot], _profile())
 	var target := _make_unit(true, Vector2i(4, 1), 0.0, [counter])
 	var units: Array[TacticalCharacter] = [enemy, target]
 	var pathfinder := GridPathfinderScript.new(Vector2i(7, 4)) as GridPathfinder
@@ -532,9 +553,38 @@ func test_action_first_filters_non_action_plans_when_a_positive_cast_exists() ->
 
 	var plan := planner.choose_plan(enemy, units, pathfinder, targeting)
 
-	assert_eq(plan.ability, shot, "maximum risk aversion should not suppress an available positive action")
+	assert_eq(plan.ability, shot, "a positive action should replace inactivity")
 	for candidate in planner.ranked_candidates:
 		assert_ne(candidate.ability, null, "non-action plans should be filtered whenever an actionable plan exists")
+
+
+func test_active_rule_forces_positive_healing_buffs_and_hostile_statuses() -> void:
+	var heal := AbilityDefinitionScript.new() as AbilityDefinition
+	heal.display_name = "Committed Heal"
+	heal.effect = AbilityDefinition.PrimaryEffect.HEAL
+	heal.effect_amount = 25
+	heal.scaling_stat = UnitStat.Type.NONE
+	heal.target_flags = AbilityDefinition.TargetFlags.FRIEND
+	var healer := _make_unit(false, Vector2i(1, 1), 2.0, [heal], _profile())
+	var wounded_ally := _make_unit(false, Vector2i(2, 1), 2.0, [])
+	var opponent := _make_unit(true, Vector2i(1, 2), 2.0, [])
+	wounded_ally.current_health = 50
+	var heal_plan := _choose(healer, [healer, wounded_ally, opponent], Vector2i(6, 5))
+	assert_eq(heal_plan.ability, heal, "positive healing should always outrank Hold")
+
+	var focus := load("res://resources/abilities/focus.tres") as AbilityDefinition
+	var buffer := _make_unit(false, Vector2i(1, 1), 2.0, [focus], _profile())
+	var focus_plan := _choose(buffer, [buffer, opponent], Vector2i(6, 5))
+	assert_eq(focus_plan.ability, focus, "a positive self-buff should always outrank Hold")
+
+	var slow := AbilityDefinitionScript.new() as AbilityDefinition
+	slow.display_name = "Committed Slow"
+	slow.effect = AbilityDefinition.PrimaryEffect.STATUS
+	slow.status_effect = load("res://resources/statuses/slow.tres") as StatusEffectDefinition
+	slow.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	var controller := _make_unit(false, Vector2i(1, 1), 2.0, [slow], _profile())
+	var slow_plan := _choose(controller, [controller, opponent], Vector2i(6, 5))
+	assert_eq(slow_plan.ability, slow, "a positive hostile status should always outrank Hold")
 
 
 func test_action_first_requires_a_move_cast_even_when_counterplay_is_lethal() -> void:
@@ -544,35 +594,72 @@ func test_action_first_requires_a_move_cast_even_when_counterplay_is_lethal() ->
 	var target := _make_unit(true, Vector2i(4, 1), 0.0, [counter])
 	var units: Array[TacticalCharacter] = [enemy, target]
 
-	enemy.enemy_ai_profile = _profile(2.0)
+	enemy.enemy_ai_profile = _profile()
 	var plan := _choose(enemy, units, Vector2i(6, 4))
-	assert_eq(plan.ability, shot, "an action requiring movement should still beat Hold at maximum risk aversion")
+	assert_eq(plan.ability, shot, "an action requiring movement should still beat Hold")
 	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_CAST, "the enemy should move into range and perform the action")
 	assert_true(plan.counterplay_score > plan.effect_score, "the regression scenario should retain its punishing exact reply")
 	assert_true(plan.score_breakdown.has("counterplay"), "counterplay should remain represented in the score breakdown")
+	assert_true(plan.exact_reply_evaluated, "the chosen candidate should receive an exact-reply diagnostic")
+	assert_true(is_zero_approx(plan.threat_penalty), "forecast risk must not create a score penalty")
+	assert_true(
+		is_equal_approx(
+			plan.total_score,
+			plan.effect_score + plan.position_score + plan.coordination_score
+		),
+		"ignored counterplay must not change the offensive total"
+	)
+	assert_true(plan.get_debug_summary().contains("exact reply ignored"), "the AI Log should label exact replies as diagnostic-only")
 	assert_eq(enemy.grid_cell, Vector2i(0, 1), "planning must not mutate the enemy position")
 	assert_eq(enemy.current_health, 100, "planning must not mutate live health")
 	assert_eq(target.current_health, 100, "forecast damage must remain side-effect-free")
 
 
-func test_action_first_allows_cautious_post_cast_repositioning() -> void:
+func test_post_cast_movement_does_not_retreat_for_safety() -> void:
 	var shot := _make_damage_ability("Point Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
 	var counter := _make_damage_ability("Short Counter", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
-	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [shot], _profile(2.0))
+	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [shot], _profile())
 	var target := _make_unit(true, Vector2i(3, 3), 0.0, [counter])
 	var start_distance := AbilityTargetingScript.new(Vector2i(7, 6)).get_weighted_distance(enemy.grid_cell, target.grid_cell)
 	var plan := _choose(enemy, [enemy, target], Vector2i(7, 6))
 	var end_distance := AbilityTargetingScript.new(Vector2i(7, 6)).get_weighted_distance(plan.get_end_cell(enemy.grid_cell), target.grid_cell)
 
-	assert_eq(plan.ability, shot, "the cautious enemy should perform its available action")
-	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.CAST_MOVE, "remaining movement should stay available after the action")
-	assert_true(end_distance > start_distance, "risk aversion should still reward safer post-action positioning")
+	assert_eq(plan.ability, shot, "the enemy should perform its available action")
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.CAST_ONLY, "danger alone must not generate a post-action retreat")
+	assert_true(is_equal_approx(end_distance, start_distance), "the enemy should hold its offensive position when movement adds no future value")
+	assert_true(plan.threat_score > 0.0, "the retained diagnostic should still report the nearby counterattack")
+
+
+func test_post_cast_positioning_can_move_for_future_offense() -> void:
+	var shot := _make_damage_ability("Future Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
+	var enemy := _make_unit(false, Vector2i(0, 1), 2.0, [shot], _profile())
+	var target := _make_unit(true, Vector2i(4, 1), 0.0, [])
+	var units := _typed_units([enemy, target])
+	var grid_size := Vector2i(6, 3)
+	var snapshot := AIBoardSnapshot.from_battle(units, grid_size)
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
+	var initiative: Array[TacticalCharacter] = []
+	planner._prepare_decision(enemy, snapshot, initiative)
+	var reachable := {
+		Vector2i(0, 1): 0.0,
+		Vector2i(1, 1): 1.0,
+		Vector2i(2, 1): 2.0,
+	}
+	var destination := planner._select_best_offensive_destination(
+		enemy,
+		enemy.grid_cell,
+		reachable,
+		snapshot,
+		targeting
+	)
+	assert_eq(destination, Vector2i(2, 1), "offense-only repositioning should maximize next-turn ability access")
 
 
 func test_action_first_preserves_movement_when_the_action_is_spent() -> void:
 	var shot := _make_damage_ability("Spent Shot", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
 	var counter := _make_damage_ability("Short Counter", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
-	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [shot], _profile(2.0))
+	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [shot], _profile())
 	var target := _make_unit(true, Vector2i(3, 3), 0.0, [counter])
 	enemy.spend_ability_action()
 	var plan := _choose(enemy, [enemy, target], Vector2i(7, 6))
@@ -581,10 +668,32 @@ func test_action_first_preserves_movement_when_the_action_is_spent() -> void:
 	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "movement-only behavior should remain available when no action can be taken")
 
 
+func test_spent_action_pursues_the_next_useful_support_position() -> void:
+	var heal := AbilityDefinitionScript.new() as AbilityDefinition
+	heal.display_name = "Future Heal"
+	heal.effect = AbilityDefinition.PrimaryEffect.HEAL
+	heal.effect_amount = 25
+	heal.scaling_stat = UnitStat.Type.NONE
+	heal.range = 1.0
+	heal.target_flags = AbilityDefinition.TargetFlags.FRIEND
+	var healer := _make_unit(false, Vector2i(1, 1), 2.0, [heal], _profile())
+	var wounded_ally := _make_unit(false, Vector2i(5, 1), 0.0, [])
+	var opponent := _make_unit(true, Vector2i(1, 5), 0.0, [])
+	wounded_ally.current_health = 50
+	healer.spend_ability_action()
+
+	var plan := _choose(healer, [healer, wounded_ally, opponent], Vector2i(7, 7))
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "a spent action should preserve active setup movement")
+	assert_true(
+		plan.get_end_cell(healer.grid_cell).x > healer.grid_cell.x,
+		"the healer should follow the route toward next turn's useful heal instead of the nearer opponent"
+	)
+
+
 func test_melee_enemy_pursues_attack_range_instead_of_retreating_from_ranged_threat() -> void:
 	var slash := load("res://resources/abilities/enemy_slash.tres") as AbilityDefinition
 	var counter := _make_damage_ability("Long Counter", AbilityDefinition.DeliveryType.PROJECTILE, 5.0, 35)
-	var enemy := _make_unit(false, Vector2i(7, 11), 2.0, [slash], _profile(2.0))
+	var enemy := _make_unit(false, Vector2i(7, 11), 2.0, [slash], _profile())
 	var target := _make_unit(true, Vector2i(4, 7), 6.0, [counter])
 	var grid_size := Vector2i(12, 12)
 	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
@@ -601,34 +710,152 @@ func test_melee_enemy_pursues_attack_range_instead_of_retreating_from_ranged_thr
 	assert_eq(plan.ability, null, "the melee enemy should still be unable to attack this turn")
 	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "the melee enemy should spend its turn pursuing")
 	assert_true(end_distance < start_distance, "melee pursuit should reduce the distance to attack range")
-	assert_eq(plan.get_end_cell(enemy.grid_cell), Vector2i(6, 10), "the sample melee enemy should take its best gap-closing step")
+	assert_ne(plan.get_end_cell(enemy.grid_cell), enemy.grid_cell, "the sample melee enemy should change cells along its full pursuit route")
 	assert_eq(planner.ranked_candidates.size(), 1, "retreat and Hold should not compete with a valid melee pursuit")
 
 
-func test_threat_forecast_prefers_an_equally_effective_safe_destination() -> void:
+func test_terrain_showcase_melee_enemy_advances_until_it_can_strike() -> void:
+	var map_scene := load("res://scenes/maps/terrain_showcase.tscn") as PackedScene
+	var map_root := track(map_scene.instantiate())
+	var enemy := map_root.get_node("Characters/MeleeEnemy") as TacticalCharacter
+	var target := map_root.get_node("Characters/FriendB") as TacticalCharacter
+	enemy.starting_grid_cell = Vector2i(6, 5)
+	enemy._ready()
+	target._ready()
+	enemy.reset_movement()
+	enemy.reset_ability_action()
+
+	var walls: Dictionary = {}
+	for child in map_root.get_node("Walls").get_children():
+		if child is TacticalWall:
+			walls[child.grid_cell] = true
+	var terrain: Dictionary = {}
+	var movement_costs: Dictionary = {}
+	for child in map_root.get_node("Terrain").get_children():
+		if child is TacticalTile and child.definition != null:
+			terrain[child.grid_cell] = child.definition
+			movement_costs[child.grid_cell] = child.definition.get_movement_cost_multiplier()
+	var grid := map_root.get_node("Grid") as IsometricGrid
+	var pathfinder := GridPathfinderScript.new(grid.grid_size) as GridPathfinder
+	pathfinder.set_cell_cost_multipliers(movement_costs)
+	var targeting := AbilityTargetingScript.new(grid.grid_size) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var units := _typed_units([enemy, target])
+
+	var first_plan := planner.choose_plan(enemy, units, pathfinder, targeting, walls, terrain)
+	assert_eq(first_plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "the reported (6,5) showcase state should advance instead of Hold")
+	assert_ne(first_plan.get_end_cell(enemy.grid_cell), enemy.grid_cell, "the first showcase pursuit should change cells")
+	assert_false(first_plan.pre_cast_path.is_empty(), "the first showcase pursuit should expose its executable route")
+
+	enemy._set_runtime_grid_cell_immediate(first_plan.get_end_cell(enemy.grid_cell))
+	enemy.reset_movement()
+	enemy.reset_ability_action()
+	var second_plan := planner.choose_plan(enemy, units, pathfinder, targeting, walls, terrain)
+	assert_ne(second_plan.sequence, EnemyTurnPlan.Sequence.HOLD, "successive showcase turns should never stall while activity is possible")
+	assert_true(second_plan.ability != null, "the showcase warrior should attack once its pursuit reaches Strike range")
+	assert_eq(second_plan.ability.display_name, "Strike", "the showcase warrior should finish its pursuit with its configured attack")
+
+
+func test_active_rule_uses_best_effort_movement_when_no_attack_route_exists() -> void:
+	var enemy := _make_unit(false, Vector2i(0, 1), 2.0, [], _profile())
+	var target := _make_unit(true, Vector2i(4, 1), 2.0, [])
+	var walls := {
+		Vector2i(2, 0): true,
+		Vector2i(2, 1): true,
+		Vector2i(2, 2): true,
+	}
+	var grid_size := Vector2i(5, 3)
+	var pathfinder := GridPathfinderScript.new(grid_size) as GridPathfinder
+	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+	var units := _typed_units([enemy, target])
+
+	var first_plan := planner.choose_plan(enemy, units, pathfinder, targeting, walls)
+	assert_eq(first_plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "a sealed-off unit should still make a best-effort move")
+	assert_eq(first_plan.get_end_cell(enemy.grid_cell), Vector2i(1, 1), "best effort should choose the legal cell closest to the opponent")
+
+	enemy._set_runtime_grid_cell_immediate(Vector2i(1, 1))
+	enemy.reset_movement()
+	var next_plan := planner.choose_plan(enemy, units, pathfinder, targeting, walls)
+	assert_eq(next_plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "a local minimum should still produce deterministic activity")
+	assert_ne(next_plan.get_end_cell(enemy.grid_cell), enemy.grid_cell, "best-effort movement must exclude the current cell")
+
+
+func test_active_rule_holds_only_without_a_legal_action_or_cell_change() -> void:
+	var enemy := _make_unit(false, Vector2i(2, 2), 2.0, [], _profile())
+	var target := _make_unit(true, Vector2i(4, 4), 2.0, [])
+	var units := _typed_units([enemy, target])
+	var grid_size := Vector2i(5, 5)
+	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
+	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
+
+	enemy._remaining_movement = 0.0
+	var immobile_plan := planner.choose_plan(
+		enemy,
+		units,
+		GridPathfinderScript.new(grid_size),
+		targeting
+	)
+	assert_eq(immobile_plan.sequence, EnemyTurnPlan.Sequence.HOLD, "a unit with no affordable cell change may Hold")
+
+	enemy.reset_movement()
+	var surrounding_walls: Dictionary = {}
+	for x in range(1, 4):
+		for y in range(1, 4):
+			var cell := Vector2i(x, y)
+			if cell != enemy.grid_cell:
+				surrounding_walls[cell] = true
+	var trapped_plan := planner.choose_plan(
+		enemy,
+		units,
+		GridPathfinderScript.new(grid_size),
+		targeting,
+		surrounding_walls
+	)
+	assert_eq(trapped_plan.sequence, EnemyTurnPlan.Sequence.HOLD, "a physically trapped unit may Hold")
+
+
+func test_snapshot_occupancy_ignores_defeated_enemies_only() -> void:
+	var actor := _make_unit(false, Vector2i(0, 0), 2.0, [])
+	var removed_enemy := _make_unit(false, Vector2i(1, 0), 2.0, [])
+	var defeated_friendly := _make_unit(true, Vector2i(0, 1), 2.0, [])
+	removed_enemy.apply_damage(removed_enemy.current_health)
+	defeated_friendly.apply_damage(defeated_friendly.current_health)
+	var snapshot := AIBoardSnapshot.from_battle(
+		_typed_units([actor, removed_enemy, defeated_friendly]),
+		Vector2i(4, 4)
+	)
+	var blocked := snapshot.get_blocked_cells(actor)
+	assert_false(blocked.has(removed_enemy.grid_cell), "a defeated enemy should not obstruct simulated routes")
+	assert_true(blocked.has(defeated_friendly.grid_cell), "a defeated friendly should retain its simulated blocker")
+
+
+func test_threat_diagnostics_do_not_choose_a_safer_destination() -> void:
 	var counter := _make_damage_ability("Counter", AbilityDefinition.DeliveryType.MELEE, 1.0, 20)
-	var profile := _profile(1.0)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [], profile)
 	var target := _make_unit(true, Vector2i(3, 3), 0.0, [counter])
 	var plan := _choose(enemy, [enemy, target], Vector2i(7, 6))
 	var end_distance := AbilityTargetingScript.new(Vector2i(7, 6)).get_weighted_distance(plan.get_end_cell(enemy.grid_cell), target.grid_cell)
-	assert_true(end_distance > 3.0, "threat scoring should select an equally effective cell outside movement-plus-counter range; got %s with %.2f threat" % [plan.get_end_cell(enemy.grid_cell), plan.threat_score])
-	assert_true(is_zero_approx(plan.threat_score), "the selected safe destination should have no direct incoming threat")
-	assert_true(plan.score_breakdown.has("threat"), "threat should be represented in the score breakdown")
+	assert_true(end_distance <= 1.0 + 0.0001, "best-effort movement should press the opponent instead of seeking safety")
+	assert_true(plan.threat_score > 0.0, "the selected aggressive destination should retain incoming-threat diagnostics")
+	assert_true(is_zero_approx(plan.threat_penalty), "incoming threat must not reduce the plan total")
+	assert_true(bool(plan.score_breakdown.get("risk_ignored", false)), "the score breakdown should mark risk as ignored")
 
 
-func test_moderate_threat_still_allows_a_rewarding_melee_attack() -> void:
+func test_threat_diagnostics_are_ignored_for_a_rewarding_melee_attack() -> void:
 	var slash := _make_damage_ability("Slash", AbilityDefinition.DeliveryType.MELEE, 1.0, 30)
 	var counter := _make_damage_ability("Counter", AbilityDefinition.DeliveryType.MELEE, 1.0, 10)
-	var profile := _profile(0.35)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i(2, 2), 0.0, [slash], profile)
 	var target := _make_unit(true, Vector2i(3, 2), 0.0, [counter])
 	var plan := _choose(enemy, [enemy, target], Vector2i(6, 5))
-	assert_eq(plan.ability, slash, "moderate threat should not outweigh a strong adjacent melee attack")
+	assert_eq(plan.ability, slash, "forecast threat should not affect a strong adjacent melee attack")
 	assert_true(is_equal_approx(plan.threat_score, 10.0), "the plan should expose the opponent's strongest direct response")
-	assert_true(is_equal_approx(plan.threat_penalty, 3.5), "the plan should expose the weighted threat penalty")
+	assert_true(is_zero_approx(plan.threat_penalty), "the plan should never apply a threat penalty")
 	assert_true(is_equal_approx(plan.score_breakdown.threat_score, 10.0), "the debug breakdown should expose raw threat")
-	assert_true(is_equal_approx(plan.score_breakdown.threat_penalty, 3.5), "the debug breakdown should expose weighted threat")
+	assert_true(is_zero_approx(plan.score_breakdown.threat_penalty), "the debug breakdown should expose that no penalty was applied")
+	assert_true(plan.get_debug_summary().contains("risk ignored"), "the AI Log should label risk as diagnostic-only")
 
 
 func test_threat_forecast_respects_walls_line_of_sight_and_defeat() -> void:
@@ -640,7 +867,7 @@ func test_threat_forecast_respects_walls_line_of_sight_and_defeat() -> void:
 	var pathfinder := GridPathfinderScript.new(grid_size) as GridPathfinder
 	var targeting := AbilityTargetingScript.new(grid_size) as AbilityTargeting
 	var planner := EnemyAIPlannerScript.new() as EnemyAIPlanner
-	var profile := _profile(0.0)
+	var profile := _profile()
 	var open_snapshot := AIBoardSnapshot.from_battle(units, grid_size)
 	assert_true(planner._estimate_incoming_threat(enemy, open_snapshot, pathfinder, targeting, profile) > 0.0, "a clear in-range projectile should contribute threat")
 
@@ -661,7 +888,7 @@ func test_threat_forecast_respects_walls_line_of_sight_and_defeat() -> void:
 
 func test_walls_block_ai_ability_targeting() -> void:
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
-	var profile := _profile(0.0)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile, ItemDefinition.WeaponType.RANGED)
 	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
 	var pathfinder := GridPathfinderScript.new(Vector2i(5, 1)) as GridPathfinder
@@ -674,7 +901,7 @@ func test_walls_block_ai_ability_targeting() -> void:
 
 func test_ai_skips_incompatible_abilities_and_resumes_after_weapon_swap() -> void:
 	var shot := load("res://resources/abilities/enemy_shot.tres") as AbilityDefinition
-	var profile := _profile(0.0)
+	var profile := _profile()
 	var enemy := _make_unit(false, Vector2i.ZERO, 0.0, [shot], profile)
 	var target := _make_unit(true, Vector2i(3, 0), 0.0, [])
 	var melee_plan := _choose(enemy, [enemy, target], Vector2i(5, 2))
@@ -691,8 +918,8 @@ func test_ai_skips_incompatible_abilities_and_resumes_after_weapon_swap() -> voi
 func test_team_coordination_prefers_shared_and_setup_defeat_targets() -> void:
 	var b1_attack := _make_damage_ability("B1 Attack", AbilityDefinition.DeliveryType.PROJECTILE, 3.0, 20)
 	var b2_attack := _make_damage_ability("B2 Follow-up", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
-	var b1 := _make_unit(false, Vector2i(2, 1), 0.0, [b1_attack], _profile(0.0))
-	var b2 := _make_unit(false, Vector2i(5, 2), 0.0, [b2_attack], _profile(0.0))
+	var b1 := _make_unit(false, Vector2i(2, 1), 0.0, [b1_attack], _profile())
+	var b2 := _make_unit(false, Vector2i(5, 2), 0.0, [b2_attack], _profile())
 	var a1 := _make_unit(true, Vector2i(4, 0), 0.0, [])
 	var a2 := _make_unit(true, Vector2i(4, 2), 0.0, [])
 	var units := _typed_units([b1, b2, a1, a2])
@@ -768,7 +995,7 @@ func test_reachability_tree_reconstructs_cached_weighted_paths() -> void:
 	)
 	var path := pathfinder.reconstruct_reachable_path(result, Vector2i(2, 1))
 	assert_true(path.size() >= 3, "the shared reachability result should reconstruct a complete path")
-	assert_false(path.has(Vector2i(1, 1)), "equal-cost reconstruction should retain safer path preferences")
+	assert_false(path.has(Vector2i(1, 1)), "equal-cost reconstruction should retain lower-damage path preferences")
 	assert_true(pathfinder.get_path_cost(path) <= 5.0, "the reconstructed path should respect the original movement budget")
 
 
@@ -995,17 +1222,35 @@ func test_sample_scene_uses_goblin_archetypes_and_dev_history() -> void:
 	assert_eq(end_turn.anchor_top, 1.0, "End Turn should anchor to the bottom edge")
 	assert_eq(end_turn.offset_right, -16.0, "End Turn should keep the requested right margin")
 	assert_eq(end_turn.offset_bottom, -16.0, "End Turn should keep the requested bottom margin")
+	assert_eq(end_turn.text, "End Turn [Space]", "End Turn should advertise its keyboard shortcut")
+	assert_true(end_turn.tooltip_text.contains("Space"), "End Turn's tooltip should include its shortcut")
 	assert_true(battle.has_node("HUD/TopRightActions"), "the shared battle HUD should expose a top-right action row")
 	var actions := battle.get_node("HUD/TopRightActions") as HBoxContainer
 	assert_eq(actions.anchor_left, 1.0, "the action row should anchor to the right edge")
 	assert_eq(actions.offset_top, 118.0, "the action row should sit beneath the turn-order display")
-	assert_eq(actions.get_child_count(), 3, "the action row should contain only Dev, Inventory, and Levels")
+	assert_eq(actions.offset_left, -520.0, "the action row should leave room for all five actions")
+	assert_true(
+		battle.get_node("HUD/DevModePanel").get_index() < actions.get_index(),
+		"the action row should be authored above the Dev input blocker"
+	)
+	assert_eq(actions.get_child_count(), 5, "the action row should contain Dev, Names, Inventory, Restart, and Levels")
 	assert_eq(actions.get_child(0).name, "DevButton", "Dev should be first in the top-right action row")
-	assert_eq(actions.get_child(1).name, "InventoryButton", "Inventory should be second in the top-right action row")
-	assert_eq(actions.get_child(2).name, "LevelsButton", "Levels should be third in the top-right action row")
+	assert_eq(actions.get_child(1).name, "NamesButton", "Names should follow Dev in the top-right action row")
+	assert_eq(actions.get_child(2).name, "InventoryButton", "Inventory should be third in the top-right action row")
+	assert_eq(actions.get_child(3).name, "RestartButton", "Restart should be fourth in the top-right action row")
+	assert_eq(actions.get_child(4).name, "LevelsButton", "Levels should remain last in the top-right action row")
+	var names_button := actions.get_node("NamesButton") as Button
+	assert_true(names_button.toggle_mode, "Names should be a one-click toggle")
+	assert_true(names_button.button_pressed, "unit names should begin visible")
+	assert_eq(names_button.text, "Names: On", "the name toggle should expose its current state")
+	var restart_button := actions.get_node("RestartButton") as Button
+	assert_eq(restart_button.text, "Restart", "the restart action should have a clear label")
+	assert_eq(restart_button.tooltip_text, "Restart this battle from round one", "Restart should describe its immediate effect")
+	assert_eq(restart_button.custom_minimum_size, Vector2(90.0, 40.0), "Restart should match the compact HUD action sizing")
 	assert_eq(actions.get_node("DevButton").text, "Dev", "the developer history button should keep its compact label")
-	assert_true(battle.has_node("HUD/DevHistoryPanel"), "the shared battle HUD should contain an AI score history panel")
-	assert_false(battle.get_node("HUD/DevHistoryPanel").visible, "AI scores should stay off the battlefield until Dev is pressed")
+	assert_true(battle.has_node("HUD/DevModePanel"), "the shared battle HUD should contain the expanded developer drawer")
+	assert_false(battle.get_node("HUD/DevModePanel").visible, "developer controls should stay off the battlefield until Dev is pressed")
+	assert_true(battle.has_node("HUD/DevModePanel/Drawer/Margin/Main/Tabs/AILog"), "AI score history should remain available in the developer drawer")
 
 
 func _assert_enemy_definition(
@@ -1060,10 +1305,8 @@ func _choose(
 	return planner.choose_plan(actor, _typed_units(units_value), pathfinder, targeting)
 
 
-func _profile(risk_aversion: float = 1.0) -> EnemyAIProfile:
-	var profile := EnemyAIProfileScript.new() as EnemyAIProfile
-	profile.risk_aversion = risk_aversion
-	return profile
+func _profile() -> EnemyAIProfile:
+	return EnemyAIProfileScript.new() as EnemyAIProfile
 
 
 func _make_unit(

@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3 uid="uid://3ue0j7my7j3p"]
+[gd_scene load_steps=6 format=3 uid="uid://3ue0j7my7j3p"]
 
 [ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="1_actor"]
 [ext_resource type="Resource" uid="uid://b4os1tck6c5md" path="res://resources/enemies/goblin_warrior.tres" id="2_definition"]
 [ext_resource type="Texture2D" path="res://assets/characters/goblin_swordsman_left.png" id="3_left"]
 [ext_resource type="Texture2D" path="res://assets/characters/goblin_swordsman_right.png" id="4_right"]
+[ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="5_name_label"]
 
 [node name="GoblinWarrior" type="Node2D"]
 script = ExtResource("1_actor")
@@ -11,3 +12,5 @@ definition = ExtResource("2_definition")
 facing_left_texture = ExtResource("3_left")
 facing_right_texture = ExtResource("4_right")
 initial_facing = 0
+
+[node name="UnitNameLabel" parent="." instance=ExtResource("5_name_label")]

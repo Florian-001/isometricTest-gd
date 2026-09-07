@@ -1,0 +1,65 @@
+[gd_scene format=3 ]
+
+[ext_resource type="Script"  path="res://scripts/battle_map.gd" id="1_map"]
+[ext_resource type="Script"  path="res://scripts/isometric_grid.gd" id="2_grid"]
+[ext_resource type="Script"  path="res://scripts/tactical_terrain.gd" id="3_terrain"]
+[ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="4_palette"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="5_friend_a"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="6_friend_b"]
+[ext_resource type="Script"  path="res://scripts/ability_definition.gd" id="6_yfbn5"]
+[ext_resource type="Resource"  path="res://resources/items/goblin_bow.tres" id="7_04l5s"]
+[ext_resource type="Resource"  path="res://resources/abilities/arrow.tres" id="7_7gw14"]
+[ext_resource type="Script"  path="res://scripts/item_definition.gd" id="7_t7vv0"]
+[ext_resource type="PackedScene"  path="res://scenes/enemies/goblin_warrior.tscn" id="7_warrior"]
+[ext_resource type="Resource"  path="res://resources/items/iron_sword.tres" id="8_04l5s"]
+[ext_resource type="Resource"  path="res://resources/abilities/strike.tres" id="11_6q8p0"]
+
+[ext_resource type="Script" path="res://scripts/run_spawn_point.gd" id="run_spawn"]
+
+[node name="GoblinSkirmish" type="Node2D"]
+script = ExtResource("1_map")
+
+[node name="Grid" type="Node2D" parent="."]
+position = Vector2(640, 96)
+script = ExtResource("2_grid")
+
+[node name="Terrain" type="Node" parent="."]
+script = ExtResource("3_terrain")
+palette = ExtResource("4_palette")
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="Characters" type="Node2D" parent="."]
+
+[node name="GoblinWarriorA" parent="Characters" instance=ExtResource("7_warrior")]
+z_index = 105
+ability_overrides = Array[ExtResource("6_yfbn5")]([ExtResource("11_6q8p0")])
+starting_grid_cell = Vector2i(3, 2)
+
+[node name="GoblinWarriorB" parent="Characters" instance=ExtResource("7_warrior")]
+z_index = 108
+starting_grid_cell = Vector2i(6, 2)
+
+[node name="GoblinWarriorC" parent="Characters" instance=ExtResource("7_warrior")]
+z_index = 111
+starting_grid_cell = Vector2i(9, 2)
+
+[node name="GoblinWarriorC2" parent="Characters" instance=ExtResource("7_warrior")]
+z_index = 104
+starting_grid_cell = Vector2i(4, 0)
+
+[node name="GoblinWarriorC3" parent="Characters" instance=ExtResource("7_warrior")]
+z_index = 107
+starting_grid_cell = Vector2i(7, 0)
+
+[node name="PartySpawns" type="Node2D" parent="."]
+
+[node name="Member1" type="Marker2D" parent="PartySpawns"]
+position = Vector2(400, 408)
+script = ExtResource("run_spawn")
+grid_cell = Vector2i(4, 9)
+
+[node name="Member2" type="Marker2D" parent="PartySpawns"]
+position = Vector2(544, 480)
+script = ExtResource("run_spawn")
+grid_cell = Vector2i(7, 9)

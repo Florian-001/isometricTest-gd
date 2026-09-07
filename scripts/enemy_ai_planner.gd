@@ -6,7 +6,6 @@ const MAX_TARGETS_PER_ABILITY := 3
 const MAX_AREA_CENTERS_PER_ABILITY := 2
 const MAX_CANDIDATES := 32
 const MAX_CAST_CANDIDATES := 12
-const MAX_SAFE_ORIGIN_PROBES := 8
 const EXACT_REPLY_LIMIT := 3
 const FUTURE_VALUE_WEIGHT := 0.25
 const SHARED_PRESSURE_WEIGHT := 0.25
@@ -31,12 +30,8 @@ var _line_of_sight := GridLineOfSight.new()
 var _static_geometry_key := ""
 var _line_of_sight_cache: Dictionary = {}
 var _decision_snapshot: AIBoardSnapshot
-var _decision_pathfinder: GridPathfinder
-var _decision_targeting: AbilityTargeting
-var _decision_profile: EnemyAIProfile
 var _initiative_order: Array[TacticalCharacter] = []
 var _reachability_cache: Dictionary = {}
-var _quick_danger_cache: Dictionary = {}
 var _future_value_cache: Dictionary = {}
 var _followup_cache: Dictionary = {}
 var _threat_cache: Dictionary = {}
@@ -72,7 +67,7 @@ func choose_plan(
 		wall_cells,
 		terrain_definitions
 	)
-	_prepare_decision(actor, snapshot, pathfinder, targeting, profile, initiative_order)
+	_prepare_decision(actor, snapshot, initiative_order)
 
 	var generation_started := Time.get_ticks_msec()
 	var candidates := _generate_candidates(
@@ -93,11 +88,12 @@ func choose_plan(
 		return EnemyTurnPlan.new()
 
 	_apply_coordination_scores(actor, candidates, snapshot, pathfinder, targeting, profile)
+	candidates.sort_custom(_compare_total_plans)
+
 	var threat_started := Time.get_ticks_msec()
-	_apply_threat_scores(actor, candidates, snapshot, pathfinder, targeting, profile)
+	_annotate_threat_scores(actor, candidates, snapshot, pathfinder, targeting, profile)
 	last_threat_evaluation_duration_ms = Time.get_ticks_msec() - threat_started
 
-	candidates.sort_custom(_compare_immediate_plans)
 	var exact_count := mini(EXACT_REPLY_LIMIT, candidates.size())
 	for index in range(exact_count):
 		var plan := candidates[index]
@@ -117,14 +113,12 @@ func choose_plan(
 			profile
 		)
 		last_exact_reply_count += 1
-		var score_before_danger := plan.immediate_score + plan.threat_penalty
-		plan.counterplay_score = maxf(0.0, exact_reply) * profile.risk_aversion
-		plan.total_score = score_before_danger - plan.counterplay_score
+		plan.counterplay_score = maxf(0.0, exact_reply)
+		plan.exact_reply_evaluated = true
 		plan.score_breakdown["exact_reply"] = exact_reply
 		plan.score_breakdown["counterplay"] = plan.counterplay_score
-		plan.score_breakdown["total"] = plan.total_score
-
-	candidates.sort_custom(_compare_total_plans)
+		plan.score_breakdown["exact_reply_evaluated"] = true
+		plan.score_breakdown["risk_ignored"] = true
 	ranked_candidates = candidates
 	last_planning_duration_ms = Time.get_ticks_msec() - planning_started
 	return candidates[0]
@@ -145,17 +139,10 @@ func _reset_metrics() -> void:
 func _prepare_decision(
 	actor: TacticalCharacter,
 	snapshot: AIBoardSnapshot,
-	pathfinder: GridPathfinder,
-	targeting: AbilityTargeting,
-	profile: EnemyAIProfile,
 	initiative_order: Array[TacticalCharacter]
 ) -> void:
 	_decision_snapshot = snapshot
-	_decision_pathfinder = pathfinder
-	_decision_targeting = targeting
-	_decision_profile = profile
 	_reachability_cache.clear()
-	_quick_danger_cache.clear()
 	_future_value_cache.clear()
 	_followup_cache.clear()
 	_threat_cache.clear()
@@ -177,13 +164,10 @@ func _ensure_static_geometry(snapshot: AIBoardSnapshot) -> void:
 
 func _ensure_decision(
 	actor: TacticalCharacter,
-	snapshot: AIBoardSnapshot,
-	pathfinder: GridPathfinder,
-	targeting: AbilityTargeting,
-	profile: EnemyAIProfile
+	snapshot: AIBoardSnapshot
 ) -> void:
 	if _decision_snapshot != snapshot:
-		_prepare_decision(actor, snapshot, pathfinder, targeting, profile, [])
+		_prepare_decision(actor, snapshot, [])
 
 
 func _generate_candidates(
@@ -200,7 +184,7 @@ func _generate_candidates(
 	var candidates: Array[EnemyTurnPlan] = []
 	if not snapshot.is_living(actor):
 		return candidates
-	_ensure_decision(actor, snapshot, pathfinder, targeting, profile)
+	_ensure_decision(actor, snapshot)
 
 	var seen: Dictionary = {}
 	var start := snapshot.get_cell(actor)
@@ -215,7 +199,7 @@ func _generate_candidates(
 	var reachable := reachable_result["costs"] as Dictionary
 
 	var hold := EnemyTurnPlan.new()
-	_finalize_plan(hold, actor, start, snapshot, targeting, profile, include_position)
+	_finalize_plan(hold, actor, start, snapshot, targeting, include_position)
 	_plan_state_cache[hold] = snapshot.duplicate_state()
 	_append_unique(candidates, seen, hold, start)
 	if snapshot.is_stunned(actor):
@@ -297,7 +281,7 @@ func _generate_candidates(
 		if plan.ability != null:
 			has_action_candidate = true
 			break
-	# Safety can choose among useful actions, but it must not replace one with inactivity.
+	# Useful actions always replace inactivity; diagnostics never affect this filter.
 	if has_action_candidate:
 		var action_candidates: Array[EnemyTurnPlan] = []
 		for plan in candidates:
@@ -305,10 +289,12 @@ func _generate_candidates(
 				action_candidates.append(plan)
 		return action_candidates
 
+	var has_future_action_route := false
 	if candidates.size() < MAX_CANDIDATES:
 		var pursue := _build_pursuit_candidate(
 			actor,
 			start,
+			movement_budget,
 			reachable_result,
 			snapshot,
 			pathfinder,
@@ -317,21 +303,14 @@ func _generate_candidates(
 			include_position
 		)
 		if pursue != null:
+			has_future_action_route = true
 			_append_unique(candidates, seen, pursue, start)
-			# A melee-focused unit gains nothing by replacing progress toward attack
-			# range with a safer retreat. Fall back to safety only when pursuit fails.
+			# Melee-focused units always keep following their future attack route.
 			if _has_only_usable_melee_hostile_abilities(actor, snapshot):
 				return [pursue]
 
-	if candidates.size() < MAX_CANDIDATES and _quick_cell_danger(
-		actor,
-		start,
-		snapshot,
-		pathfinder,
-		targeting,
-		profile
-	) > COST_EPSILON:
-		var disengage := _build_disengage_candidate(
+	if not has_future_action_route and candidates.size() < MAX_CANDIDATES:
+		var best_effort := _build_best_effort_move_candidate(
 			actor,
 			start,
 			reachable_result,
@@ -341,8 +320,12 @@ func _generate_candidates(
 			profile,
 			include_position
 		)
-		if disengage != null:
-			_append_unique(candidates, seen, disengage, start)
+		if best_effort != null:
+			_append_unique(candidates, seen, best_effort, start)
+
+	var active_candidates := _get_active_candidates(candidates)
+	if not active_candidates.is_empty():
+		return active_candidates
 
 	return candidates
 
@@ -416,7 +399,7 @@ func _build_cast_candidate(
 		var target_order_index := _initiative_order.find(primary)
 		if target_order_index >= 0:
 			plan.target_turn_order_index = target_order_index
-	_finalize_plan(plan, actor, start, state, targeting, profile, include_position)
+	_finalize_plan(plan, actor, start, state, targeting, include_position)
 	_plan_state_cache[plan] = state.duplicate_state()
 	return plan
 
@@ -448,14 +431,12 @@ func _build_cast_move_candidate(
 		pathfinder,
 		_get_terrain_path_penalties(actor, cast_state, profile)
 	)
-	var destination := _select_safest_destination(
+	var destination := _select_best_offensive_destination(
 		actor,
 		movement_start,
 		reachability["costs"] as Dictionary,
 		cast_state,
-		pathfinder,
-		targeting,
-		profile
+		targeting
 	)
 	if destination == movement_start:
 		return null
@@ -480,7 +461,7 @@ func _build_cast_move_candidate(
 	plan.movement_cost = pathfinder.get_path_cost(actual_path)
 	plan.terrain_score += float(forecast["score"])
 	plan.effect_score += float(forecast["score"])
-	_finalize_plan(plan, actor, start, post_state, targeting, profile, include_position)
+	_finalize_plan(plan, actor, start, post_state, targeting, include_position)
 	_plan_state_cache[plan] = post_state.duplicate_state()
 	return plan
 
@@ -488,6 +469,7 @@ func _build_cast_move_candidate(
 func _build_pursuit_candidate(
 	actor: TacticalCharacter,
 	start: Vector2i,
+	movement_budget: float,
 	reachability: Dictionary,
 	snapshot: AIBoardSnapshot,
 	pathfinder: GridPathfinder,
@@ -495,40 +477,26 @@ func _build_pursuit_candidate(
 	profile: EnemyAIProfile,
 	include_position: bool
 ) -> EnemyTurnPlan:
-	var reachable := reachability["costs"] as Dictionary
-	var current_gap := _get_cast_gap(actor, start, snapshot, targeting)
-	var best_cell := start
-	var best_gap := current_gap
-	var best_danger := INF
-	var best_cost := INF
-	for cell in _sorted_cells(reachable.keys()):
-		if cell == start:
-			continue
-		var gap := _get_cast_gap(actor, cell, snapshot, targeting)
-		if gap >= current_gap - COST_EPSILON:
-			continue
-		var danger := _quick_cell_danger(actor, cell, snapshot, pathfinder, targeting, profile)
-		var cost := float(reachable[cell])
-		if (
-			gap < best_gap - COST_EPSILON
-			or (
-				is_equal_approx(gap, best_gap)
-				and (
-					danger < best_danger - COST_EPSILON
-					or (
-						is_equal_approx(danger, best_danger)
-						and (
-							cost < best_cost - COST_EPSILON
-							or (is_equal_approx(cost, best_cost) and _cell_less(cell, best_cell))
-						)
-					)
-				)
-			)
-		):
-			best_cell = cell
-			best_gap = gap
-			best_danger = danger
-			best_cost = cost
+	var full_reachability := _get_reachability(
+		actor,
+		start,
+		INF,
+		snapshot,
+		pathfinder,
+		_get_terrain_path_penalties(actor, snapshot, profile)
+	)
+	var route := _get_best_future_action_route(
+		actor,
+		start,
+		full_reachability,
+		snapshot,
+		pathfinder,
+		targeting
+	)
+	var turn_path := _trim_path_to_budget(route, movement_budget, pathfinder)
+	if turn_path.size() < 2:
+		return null
+	var best_cell := turn_path[turn_path.size() - 1]
 	return _build_move_candidate(
 		actor,
 		start,
@@ -538,11 +506,101 @@ func _build_pursuit_candidate(
 		pathfinder,
 		targeting,
 		profile,
-		include_position
+		include_position,
+		turn_path
 	)
 
 
-func _build_disengage_candidate(
+func _get_best_future_action_route(
+	actor: TacticalCharacter,
+	start: Vector2i,
+	full_reachability: Dictionary,
+	snapshot: AIBoardSnapshot,
+	pathfinder: GridPathfinder,
+	targeting: AbilityTargeting
+) -> Array[Vector2i]:
+	var reachable := full_reachability["costs"] as Dictionary
+	var preference_costs := full_reachability["preference_costs"] as Dictionary
+	var best: Dictionary = {}
+	var abilities := actor.get_abilities()
+	for ability_index in range(abilities.size()):
+		var ability := abilities[ability_index]
+		if not _can_use_ability_in_snapshot(actor, ability, snapshot):
+			continue
+		for target_cell in _get_relevant_target_cells(actor, ability, snapshot, targeting):
+			for origin in _sorted_cells(reachable.keys()):
+				if origin == start or not _is_valid_primary_target(
+					actor,
+					origin,
+					target_cell,
+					ability,
+					snapshot,
+					targeting
+				):
+					continue
+				var rough_value := _rough_cast_value(
+					actor,
+					origin,
+					ability,
+					target_cell,
+					snapshot,
+					targeting
+				)
+				if rough_value <= COST_EPSILON:
+					continue
+				var option := {
+					"origin": origin,
+					"target": target_cell,
+					"ability_index": ability_index,
+					"route_cost": float(reachable[origin]),
+					"rough_value": rough_value,
+					"path_penalty": float(preference_costs.get(origin, 0.0)),
+				}
+				if best.is_empty() or _future_route_less(option, best):
+					best = option
+	if best.is_empty():
+		var empty: Array[Vector2i] = []
+		return empty
+	return pathfinder.reconstruct_reachable_path(
+		full_reachability,
+		best["origin"] as Vector2i
+	)
+
+
+func _future_route_less(a: Dictionary, b: Dictionary) -> bool:
+	if not is_equal_approx(float(a["route_cost"]), float(b["route_cost"])):
+		return float(a["route_cost"]) < float(b["route_cost"])
+	if not is_equal_approx(float(a["rough_value"]), float(b["rough_value"])):
+		return float(a["rough_value"]) > float(b["rough_value"])
+	if not is_equal_approx(float(a["path_penalty"]), float(b["path_penalty"])):
+		return float(a["path_penalty"]) < float(b["path_penalty"])
+	if int(a["ability_index"]) != int(b["ability_index"]):
+		return int(a["ability_index"]) < int(b["ability_index"])
+	if a["target"] != b["target"]:
+		return _cell_less(a["target"] as Vector2i, b["target"] as Vector2i)
+	return _cell_less(a["origin"] as Vector2i, b["origin"] as Vector2i)
+
+
+func _trim_path_to_budget(
+	path: Array[Vector2i],
+	budget: float,
+	pathfinder: GridPathfinder
+) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	if path.is_empty():
+		return result
+	result.append(path[0])
+	var spent := 0.0
+	for index in range(1, path.size()):
+		var step_cost := pathfinder.get_step_cost(path[index - 1], path[index])
+		if spent + step_cost > maxf(0.0, budget) + COST_EPSILON:
+			break
+		spent += step_cost
+		result.append(path[index])
+	return result
+
+
+func _build_best_effort_move_candidate(
 	actor: TacticalCharacter,
 	start: Vector2i,
 	reachability: Dictionary,
@@ -552,26 +610,38 @@ func _build_disengage_candidate(
 	profile: EnemyAIProfile,
 	include_position: bool
 ) -> EnemyTurnPlan:
-	var destination := _select_safest_destination(
-		actor,
-		start,
-		reachability["costs"] as Dictionary,
-		snapshot,
-		pathfinder,
-		targeting,
-		profile
-	)
-	return _build_move_candidate(
-		actor,
-		start,
-		destination,
-		reachability,
-		snapshot,
-		pathfinder,
-		targeting,
-		profile,
-		include_position
-	)
+	var opponents := snapshot.get_living_opponents(actor)
+	if opponents.is_empty():
+		return null
+	var reachable := reachability["costs"] as Dictionary
+	var best_distance := INF
+	for cell in _sorted_cells(reachable.keys()):
+		if cell == start:
+			continue
+		var distance := _nearest_opponent_distance(actor, cell, snapshot, targeting)
+		if distance < best_distance - COST_EPSILON:
+			best_distance = distance
+	var best_plan: EnemyTurnPlan = null
+	for cell in _sorted_cells(reachable.keys()):
+		if cell == start or not is_equal_approx(
+			_nearest_opponent_distance(actor, cell, snapshot, targeting),
+			best_distance
+		):
+			continue
+		var plan := _build_move_candidate(
+			actor,
+			start,
+			cell,
+			reachability,
+			snapshot,
+			pathfinder,
+			targeting,
+			profile,
+			include_position
+		)
+		if plan != null and (best_plan == null or _plan_less(plan, best_plan, true)):
+			best_plan = plan
+	return best_plan
 
 
 func _build_move_candidate(
@@ -583,11 +653,16 @@ func _build_move_candidate(
 	pathfinder: GridPathfinder,
 	targeting: AbilityTargeting,
 	profile: EnemyAIProfile,
-	include_position: bool
+	include_position: bool,
+	preferred_path: Array[Vector2i] = []
 ) -> EnemyTurnPlan:
 	if destination == start:
 		return null
-	var path := pathfinder.reconstruct_reachable_path(reachability, destination)
+	var path: Array[Vector2i] = []
+	if preferred_path.is_empty():
+		path = pathfinder.reconstruct_reachable_path(reachability, destination)
+	else:
+		path.assign(preferred_path)
 	if path.size() < 2:
 		return null
 	var state := snapshot.duplicate_state()
@@ -600,7 +675,7 @@ func _build_move_candidate(
 		pathfinder
 	)
 	var actual_path := forecast["path"] as Array[Vector2i]
-	if actual_path.size() < 2 or actual_path[actual_path.size() - 1] != destination:
+	if actual_path.size() < 2:
 		return null
 	var plan := EnemyTurnPlan.new()
 	plan.sequence = EnemyTurnPlan.Sequence.MOVE_ONLY
@@ -608,9 +683,23 @@ func _build_move_candidate(
 	plan.movement_cost = pathfinder.get_path_cost(actual_path)
 	plan.terrain_score = float(forecast["score"])
 	plan.effect_score = plan.terrain_score
-	_finalize_plan(plan, actor, start, state, targeting, profile, include_position)
+	_finalize_plan(plan, actor, start, state, targeting, include_position)
 	_plan_state_cache[plan] = state.duplicate_state()
 	return plan
+
+
+func _get_active_candidates(
+	candidates: Array[EnemyTurnPlan]
+) -> Array[EnemyTurnPlan]:
+	var active: Array[EnemyTurnPlan] = []
+	for plan in candidates:
+		if (
+			plan.ability != null
+			or plan.pre_cast_path.size() > 1
+			or plan.post_cast_path.size() > 1
+		):
+			active.append(plan)
+	return active
 
 
 func _finalize_plan(
@@ -619,7 +708,6 @@ func _finalize_plan(
 	start: Vector2i,
 	snapshot: AIBoardSnapshot,
 	targeting: AbilityTargeting,
-	profile: EnemyAIProfile,
 	include_position: bool
 ) -> void:
 	var end_cell := snapshot.get_cell(actor)
@@ -630,32 +718,7 @@ func _finalize_plan(
 		if include_position and snapshot.is_living(actor)
 		else 0.0
 	)
-	var safety_gain := 0.0
-	if (
-		include_position
-		and snapshot.is_living(actor)
-		and _decision_pathfinder != null
-		and _decision_targeting != null
-	):
-		safety_gain = maxf(
-			0.0,
-			_quick_cell_danger(
-				actor,
-				start,
-				snapshot,
-				_decision_pathfinder,
-				_decision_targeting,
-				profile
-			) - _quick_cell_danger(
-				actor,
-				end_cell,
-				snapshot,
-				_decision_pathfinder,
-				_decision_targeting,
-				profile
-			)
-		) * FUTURE_VALUE_WEIGHT * profile.risk_aversion
-	plan.position_score = future_score + safety_gain
+	plan.position_score = future_score
 	plan.preferred_delivery_score = 0.0
 	plan.immediate_score = plan.effect_score + plan.position_score + plan.coordination_score
 	plan.total_score = plan.immediate_score
@@ -669,6 +732,8 @@ func _finalize_plan(
 		"threat_penalty": 0.0,
 		"exact_reply": 0.0,
 		"counterplay": 0.0,
+		"exact_reply_evaluated": false,
+		"risk_ignored": true,
 		"total": plan.total_score,
 	}
 
@@ -966,7 +1031,7 @@ func _get_followup_allies_before_target(
 	return result
 
 
-func _apply_threat_scores(
+func _annotate_threat_scores(
 	actor: TacticalCharacter,
 	candidates: Array[EnemyTurnPlan],
 	initial_state: AIBoardSnapshot,
@@ -999,13 +1064,11 @@ func _apply_threat_scores(
 			_threat_cache[state_key] = threat_score
 			last_threat_evaluation_count += 1
 		plan.threat_score = threat_score
-		plan.threat_penalty = threat_score * profile.risk_aversion
-		plan.immediate_score -= plan.threat_penalty
-		plan.total_score = plan.immediate_score
-		plan.score_breakdown["threat"] = plan.threat_penalty
+		plan.threat_penalty = 0.0
+		plan.score_breakdown["threat"] = threat_score
 		plan.score_breakdown["threat_score"] = plan.threat_score
-		plan.score_breakdown["threat_penalty"] = plan.threat_penalty
-		plan.score_breakdown["total"] = plan.total_score
+		plan.score_breakdown["threat_penalty"] = 0.0
+		plan.score_breakdown["risk_ignored"] = true
 
 
 func _estimate_incoming_threat(
@@ -1617,78 +1680,34 @@ func _select_cast_origins(
 		var cheapest_cost := float(reachable[cheapest])
 		if cost < cheapest_cost - COST_EPSILON or (is_equal_approx(cost, cheapest_cost) and _cell_less(cell, cheapest)):
 			cheapest = cell
-	var safest := cheapest
-	var safest_danger := INF
-	var danger_probes: Array[Vector2i] = []
-	if _has_usable_hostile_ability(caster, snapshot):
-		danger_probes = valid.duplicate()
-		danger_probes.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-			var distance_a := _nearest_opponent_distance(caster, a, snapshot, targeting)
-			var distance_b := _nearest_opponent_distance(caster, b, snapshot, targeting)
-			if not is_equal_approx(distance_a, distance_b):
-				return distance_a > distance_b
-			var cost_a := float(reachable[a])
-			var cost_b := float(reachable[b])
-			if not is_equal_approx(cost_a, cost_b):
-				return cost_a < cost_b
-			return _cell_less(a, b)
-		)
-		if danger_probes.size() > MAX_SAFE_ORIGIN_PROBES:
-			danger_probes.resize(MAX_SAFE_ORIGIN_PROBES)
-		if not danger_probes.has(cheapest):
-			danger_probes.append(cheapest)
-		var current := snapshot.get_cell(caster)
-		if valid.has(current) and not danger_probes.has(current):
-			danger_probes.append(current)
-	else:
-		danger_probes.append(cheapest)
-	for cell in danger_probes:
-		var danger := _quick_cell_danger(
-			caster,
-			cell,
-			snapshot,
-			_decision_pathfinder,
-			targeting,
-			_decision_profile
-		)
+	var best_offensive := cheapest
+	var best_offensive_score := -INF
+	for cell in valid:
+		var offensive_score := _estimate_future_value(caster, cell, snapshot, targeting)
 		if (
-			danger < safest_danger - COST_EPSILON
+			offensive_score > best_offensive_score + COST_EPSILON
 			or (
-				is_equal_approx(danger, safest_danger)
+				is_equal_approx(offensive_score, best_offensive_score)
 				and (
-					float(reachable[cell]) < float(reachable[safest]) - COST_EPSILON
+					float(reachable[cell]) < float(reachable[best_offensive]) - COST_EPSILON
 					or (
-						is_equal_approx(float(reachable[cell]), float(reachable[safest]))
-						and _cell_less(cell, safest)
+						is_equal_approx(float(reachable[cell]), float(reachable[best_offensive]))
+						and _cell_less(cell, best_offensive)
 					)
 				)
 			)
 		):
-			safest = cell
-			safest_danger = danger
+			best_offensive = cell
+			best_offensive_score = offensive_score
 	var result: Array[Vector2i] = []
 	var start := snapshot.get_cell(caster)
 	if valid.has(start):
 		result.append(start)
 	if not result.has(cheapest):
 		result.append(cheapest)
-	if not result.has(safest):
-		result.append(safest)
+	if not result.has(best_offensive):
+		result.append(best_offensive)
 	return result
-
-
-func _has_usable_hostile_ability(actor: TacticalCharacter, snapshot: AIBoardSnapshot) -> bool:
-	for opponent in snapshot.get_living_opponents(actor):
-		for ability in opponent.get_abilities():
-			if (
-				_can_use_ability_in_snapshot(opponent, ability, snapshot)
-				and (
-					ability.has_target_flag(AbilityDefinition.TargetFlags.ENEMY)
-					or ability.has_target_flag(AbilityDefinition.TargetFlags.CELL)
-				)
-			):
-				return true
-	return false
 
 
 func _has_only_usable_melee_hostile_abilities(
@@ -1748,22 +1767,20 @@ func _get_cheapest_valid_origin(
 	return best
 
 
-func _select_safest_destination(
+func _select_best_offensive_destination(
 	actor: TacticalCharacter,
 	start: Vector2i,
 	reachable: Dictionary,
 	snapshot: AIBoardSnapshot,
-	pathfinder: GridPathfinder,
-	targeting: AbilityTargeting,
-	profile: EnemyAIProfile
+	targeting: AbilityTargeting
 ) -> Vector2i:
 	var best := start
-	var best_score := _quick_position_value(actor, start, snapshot, pathfinder, targeting, profile)
+	var best_score := _estimate_future_value(actor, start, snapshot, targeting)
 	var best_cost := 0.0
 	for cell in _sorted_cells(reachable.keys()):
 		if cell == start:
 			continue
-		var score := _quick_position_value(actor, cell, snapshot, pathfinder, targeting, profile)
+		var score := _estimate_future_value(actor, cell, snapshot, targeting)
 		var cost := float(reachable[cell])
 		if (
 			score > best_score + COST_EPSILON
@@ -1779,58 +1796,6 @@ func _select_safest_destination(
 			best_score = score
 			best_cost = cost
 	return best
-
-
-func _quick_position_value(
-	actor: TacticalCharacter,
-	cell: Vector2i,
-	snapshot: AIBoardSnapshot,
-	pathfinder: GridPathfinder,
-	targeting: AbilityTargeting,
-	profile: EnemyAIProfile
-) -> float:
-	var future := _estimate_immediate_cast_value_from_cell(actor, cell, snapshot, targeting)
-	var danger := _quick_cell_danger(actor, cell, snapshot, pathfinder, targeting, profile)
-	return future * FUTURE_VALUE_WEIGHT - danger * profile.risk_aversion
-
-
-func _quick_cell_danger(
-	actor: TacticalCharacter,
-	cell: Vector2i,
-	snapshot: AIBoardSnapshot,
-	pathfinder: GridPathfinder,
-	targeting: AbilityTargeting,
-	profile: EnemyAIProfile
-) -> float:
-	var key := "%s|%s|%s" % [_get_snapshot_key(snapshot), actor.get_instance_id(), cell]
-	if _quick_danger_cache.has(key):
-		last_cache_hit_count += 1
-		return float(_quick_danger_cache[key])
-	var probe := snapshot.duplicate_state()
-	probe.set_cell(actor, cell)
-	var danger := 0.0
-	for opponent in probe.get_living_opponents(actor):
-		var estimate := _estimate_unit_action_against_target(
-			opponent,
-			actor,
-			probe,
-			pathfinder,
-			targeting,
-			profile,
-			false
-		)
-		var movement_pressure := float(estimate.get("movement_cost", 0.0)) * 0.5
-		danger = maxf(danger, maxf(0.0, float(estimate.get("score", 0.0)) - movement_pressure))
-	var terrain_probe := probe.duplicate_state()
-	var terrain_score := _forecast_terrain_trigger(
-		actor,
-		TileTriggeredEffectDefinition.Trigger.ENTER,
-		terrain_probe,
-		profile
-	)
-	danger += maxf(0.0, -terrain_score)
-	_quick_danger_cache[key] = danger
-	return danger
 
 
 func _estimate_immediate_cast_value_from_cell(
@@ -1884,24 +1849,6 @@ func _estimate_future_value(
 				_rough_unit_priority(actor, unit, ability, snapshot) * access_ratio
 			)
 	_future_value_cache[key] = best
-	return best
-
-
-func _get_cast_gap(
-	actor: TacticalCharacter,
-	cell: Vector2i,
-	snapshot: AIBoardSnapshot,
-	targeting: AbilityTargeting
-) -> float:
-	var best := INF
-	for ability in actor.get_abilities():
-		if not _can_use_ability_in_snapshot(actor, ability, snapshot):
-			continue
-		for target_cell in _get_relevant_target_cells(actor, ability, snapshot, targeting):
-			best = minf(
-				best,
-				maxf(0.0, targeting.get_weighted_distance(cell, target_cell) - ability.range)
-			)
 	return best
 
 
@@ -2124,6 +2071,7 @@ func _copy_plan(source: EnemyTurnPlan) -> EnemyTurnPlan:
 	result.threat_penalty = source.threat_penalty
 	result.immediate_score = source.immediate_score
 	result.counterplay_score = source.counterplay_score
+	result.exact_reply_evaluated = source.exact_reply_evaluated
 	result.total_score = source.total_score
 	result.score_breakdown = source.score_breakdown.duplicate()
 	return result
@@ -2188,10 +2136,6 @@ func _descriptor_less(a: Dictionary, b: Dictionary) -> bool:
 	if a["target"] != b["target"]:
 		return _cell_less(a["target"] as Vector2i, b["target"] as Vector2i)
 	return _cell_less(a["origin"] as Vector2i, b["origin"] as Vector2i)
-
-
-func _compare_immediate_plans(a: EnemyTurnPlan, b: EnemyTurnPlan) -> bool:
-	return _plan_less(a, b, false)
 
 
 func _compare_total_plans(a: EnemyTurnPlan, b: EnemyTurnPlan) -> bool:

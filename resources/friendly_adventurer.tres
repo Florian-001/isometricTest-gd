@@ -11,7 +11,10 @@
 [resource]
 script = ExtResource("1_definition")
 display_name = "Friendly Adventurer"
-constitution = 25
+strength = 1
+dexterity = 1
+intelligence = 1
+constitution = 3
 body_color = Color(0.16, 0.53, 1, 1)
 health_bar_color = Color(0.2, 0.92, 0.42, 1)
 abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_fireball"), ExtResource("4_arrow"), ExtResource("5_heal"), ExtResource("6_beam")])

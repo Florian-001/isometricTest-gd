@@ -215,18 +215,19 @@ func test_multiple_tile_effects_execute_in_order_and_stop_after_defeat() -> void
 	assert_true(unit._defeat_emitted, "later effects should not revive or continue after defeat")
 
 
-func test_ai_avoids_fire_when_safe_positioning_is_better() -> void:
+func test_active_ai_prefers_closest_progress_without_a_future_action() -> void:
 	var profile := _profile()
 	var actor := _make_unit(false, Vector2i(0, 1), 1.414, [], profile)
 	var target := _make_unit(true, Vector2i(2, 1), 0.0, [])
 	var fire := load("res://resources/tiles/fire.tres") as TileDefinition
 	var terrain := {Vector2i(1, 1): fire}
 	var plan := _choose(actor, [actor, target], Vector2i(4, 3), terrain)
-	assert_false(
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "an enemy without abilities should still choose active movement")
+	assert_true(
 		plan.pre_cast_path.has(Vector2i(1, 1)),
-		"AI should choose an equally useful safe route around Fire: %s" % plan.get_debug_summary()
+		"best-effort movement should choose the legal cell closest to the opponent: %s" % plan.get_debug_summary()
 	)
-	assert_true(plan.terrain_score >= 0.0, "the selected safe route should not include terrain damage")
+	assert_true(plan.terrain_score < 0.0, "immediate terrain damage should remain visible even when activity is mandatory")
 
 
 func test_ai_accepts_fire_when_the_attack_reward_is_greater() -> void:
@@ -242,7 +243,23 @@ func test_ai_accepts_fire_when_the_attack_reward_is_greater() -> void:
 	assert_true(plan.terrain_score < 0.0, "Fire damage should be visible in the selected plan score")
 
 
-func test_lethal_fire_plan_is_rejected_when_holding_is_safer() -> void:
+func test_future_action_route_prefers_lower_damage_when_travel_time_ties() -> void:
+	var shot := _damage_ability(1.0, 20)
+	var actor := _make_unit(false, Vector2i(0, 0), 2.0, [shot], _profile())
+	var target := _make_unit(true, Vector2i(3, 1), 0.0, [])
+	var fire := load("res://resources/tiles/fire.tres") as TileDefinition
+	var plan := _choose(
+		actor,
+		[actor, target],
+		Vector2i(5, 3),
+		{Vector2i(1, 0): fire}
+	)
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "the target should remain beyond this turn's movement budget")
+	assert_true(plan.pre_cast_path.has(Vector2i(1, 1)), "equal-time future routes should use the lower-damage path")
+	assert_false(plan.pre_cast_path.has(Vector2i(1, 0)), "the equal-time route should avoid Fire")
+
+
+func test_active_ai_enters_lethal_fire_when_it_is_the_only_move() -> void:
 	var profile := _profile()
 	var actor := _make_unit(false, Vector2i(0, 0), 2.0, [], profile)
 	actor.current_health = 1
@@ -254,13 +271,13 @@ func test_lethal_fire_plan_is_rejected_when_holding_is_safer() -> void:
 		Vector2i(3, 1),
 		{Vector2i(1, 0): fire}
 	)
-	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.HOLD, "AI should not enter lethal Fire for positioning alone")
+	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "activity should outrank Hold even when the only move is lethal")
+	assert_true(plan.pre_cast_path.has(Vector2i(1, 0)), "the forced active plan should enter the only available Fire cell")
 
 
 func test_counterplay_forecast_applies_responder_turn_start_fire() -> void:
 	var counter := _damage_ability(1.0, 20)
 	var profile := _profile()
-	profile.risk_aversion = 1.0
 	var actor := _make_unit(false, Vector2i(0, 0), 0.0, [], profile)
 	var responder := _make_unit(true, Vector2i(0, 1), 0.0, [counter])
 	responder.current_health = 1
@@ -334,9 +351,7 @@ func _choose(
 
 
 func _profile() -> EnemyAIProfile:
-	var profile := EnemyAIProfileScript.new() as EnemyAIProfile
-	profile.risk_aversion = 0.0
-	return profile
+	return EnemyAIProfileScript.new() as EnemyAIProfile
 
 
 func _damage_ability(range_value: float, amount: int) -> AbilityDefinition:

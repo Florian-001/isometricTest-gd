@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WallDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/wall_definition.gd" id="1_wall"]
+
+[resource]
+script = ExtResource("1_wall")
+display_name = "Tall Earthen Wall"
+wall_height = 68.0
+top_color = Color(0.552941, 0.454902, 0.337255, 1)
+left_color = Color(0.341176, 0.262745, 0.188235, 1)
+right_color = Color(0.435294, 0.337255, 0.235294, 1)
+outline_color = Color(0.141176, 0.105882, 0.0862745, 1)
+outline_width = 1.5

@@ -295,6 +295,37 @@ func calculate_damage(caster: TacticalCharacter) -> int:
 	return total
 
 
+## Describes every damaging term using the selected caster's live stats and equipment.
+func get_damage_calculation_description(caster: TacticalCharacter) -> String:
+	if not has_damage():
+		return "No damage"
+	var calculations: Array[String] = []
+	if effect == PrimaryEffect.DAMAGE:
+		calculations.append(DamageCalculator.get_amount_calculation_description(
+			caster,
+			damage_type,
+			innate_damage,
+			scaling_stat,
+			scaling_amount,
+			get_required_weapon_type()
+		))
+	else:
+		for additional_effect in effects:
+			if additional_effect is DamageEffectDefinition:
+				var damage_effect := additional_effect as DamageEffectDefinition
+				calculations.append(DamageCalculator.get_amount_calculation_description(
+					caster,
+					int(damage_effect.damage_type),
+					damage_effect.innate_damage,
+					damage_effect.scaling_stat,
+					damage_effect.scaling_percentage,
+					get_required_weapon_type()
+				))
+	if calculations.size() == 1:
+		return "Damage: %s" % calculations[0]
+	return "Damage: %d total · %s" % [calculate_damage(caster), " · ".join(calculations)]
+
+
 ## Returns the configured primary Damage or Heal amount. Status and None have no numeric result.
 func calculate_primary_effect_amount(caster: TacticalCharacter) -> int:
 	match effect:

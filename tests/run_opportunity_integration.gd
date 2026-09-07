@@ -80,6 +80,7 @@ func _run() -> void:
 		Callable(self, "_resolve_step")
 	)
 	_check(doomed.current_health == 0, "lethal opportunity damage should defeat the mover")
+	_check(not doomed.is_present_on_map() and not doomed.visible, "opportunity defeat should remove an enemy from the map")
 	_check(doomed.grid_cell == Vector2i(2, 5), "a defeated mover should remain in its pre-step cell")
 	_check(is_equal_approx(doomed.remaining_movement, movement_before), "a lethal pre-step reaction should not charge the untraversed step")
 

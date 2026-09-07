@@ -8,6 +8,14 @@ extends Node2D
 		grid_cell = value
 		_sync_with_grid()
 
+@export_category("Wall Preset")
+@export var definition: WallDefinition:
+	set(value):
+		_unwatch_definition()
+		definition = value
+		_watch_definition()
+		queue_redraw()
+
 @export_category("Wall Appearance")
 @export_range(8.0, 160.0, 1.0) var wall_height: float = 68.0:
 	set(value):
@@ -38,6 +46,7 @@ var _grid: IsometricGrid
 
 
 func _ready() -> void:
+	_watch_definition()
 	_find_grid()
 	_sync_with_grid()
 	queue_redraw()
@@ -47,6 +56,63 @@ func initialize(grid: IsometricGrid) -> void:
 	_grid = grid
 	_sync_with_grid()
 	queue_redraw()
+
+
+func capture_setup_state() -> Dictionary:
+	var style_path := ""
+	if definition != null:
+		style_path = definition.resource_path
+	return {
+		"cell": [grid_cell.x, grid_cell.y],
+		"definition": style_path,
+		"appearance": {
+			"wall_height": get_resolved_wall_height(),
+			"top_color": get_resolved_top_color().to_html(true),
+			"left_color": get_resolved_left_color().to_html(true),
+			"right_color": get_resolved_right_color().to_html(true),
+			"outline_color": get_resolved_outline_color().to_html(true),
+			"outline_width": get_resolved_outline_width(),
+		},
+	}
+
+
+func apply_setup_state(state: Dictionary) -> void:
+	var cell_value: Array = state.get("cell", [0, 0])
+	grid_cell = Vector2i(int(cell_value[0]), int(cell_value[1]))
+	var style_path := String(state.get("definition", ""))
+	definition = load(style_path) as WallDefinition if not style_path.is_empty() else null
+	var appearance: Dictionary = state.get("appearance", {})
+	if definition == null and not appearance.is_empty():
+		wall_height = float(appearance.get("wall_height", wall_height))
+		top_color = Color(String(appearance.get("top_color", top_color.to_html(true))))
+		left_color = Color(String(appearance.get("left_color", left_color.to_html(true))))
+		right_color = Color(String(appearance.get("right_color", right_color.to_html(true))))
+		outline_color = Color(String(appearance.get("outline_color", outline_color.to_html(true))))
+		outline_width = float(appearance.get("outline_width", outline_width))
+
+
+func get_resolved_wall_height() -> float:
+	return definition.wall_height if definition != null else wall_height
+
+
+func get_resolved_top_color() -> Color:
+	return definition.top_color if definition != null else top_color
+
+
+func get_resolved_left_color() -> Color:
+	return definition.left_color if definition != null else left_color
+
+
+func get_resolved_right_color() -> Color:
+	return definition.right_color if definition != null else right_color
+
+
+func get_resolved_outline_color() -> Color:
+	return definition.outline_color if definition != null else outline_color
+
+
+func get_resolved_outline_width() -> float:
+	return definition.outline_width if definition != null else outline_width
 
 
 func _get_configuration_warnings() -> PackedStringArray:
@@ -112,19 +178,33 @@ func _draw() -> void:
 	var floor_right := Vector2(half_width, 0.0)
 	var floor_bottom := Vector2(0.0, half_height)
 	var floor_left := Vector2(-half_width, 0.0)
-	var lift := Vector2(0.0, -wall_height)
+	var lift := Vector2(0.0, -get_resolved_wall_height())
 	var top_top := floor_top + lift
 	var top_right := floor_right + lift
 	var top_bottom := floor_bottom + lift
 	var top_left := floor_left + lift
 
-	_draw_face(PackedVector2Array([top_left, top_bottom, floor_bottom, floor_left]), left_color)
-	_draw_face(PackedVector2Array([top_bottom, top_right, floor_right, floor_bottom]), right_color)
-	_draw_face(PackedVector2Array([top_top, top_right, top_bottom, top_left]), top_color)
+	_draw_face(PackedVector2Array([top_left, top_bottom, floor_bottom, floor_left]), get_resolved_left_color())
+	_draw_face(PackedVector2Array([top_bottom, top_right, floor_right, floor_bottom]), get_resolved_right_color())
+	_draw_face(PackedVector2Array([top_top, top_right, top_bottom, top_left]), get_resolved_top_color())
 
 
 func _draw_face(points: PackedVector2Array, color: Color) -> void:
 	draw_colored_polygon(points, color)
 	var outline := points.duplicate()
 	outline.append(points[0])
-	draw_polyline(outline, outline_color, outline_width, true)
+	draw_polyline(outline, get_resolved_outline_color(), get_resolved_outline_width(), true)
+
+
+func _watch_definition() -> void:
+	if definition != null and not definition.changed.is_connected(_on_definition_changed):
+		definition.changed.connect(_on_definition_changed)
+
+
+func _unwatch_definition() -> void:
+	if definition != null and definition.changed.is_connected(_on_definition_changed):
+		definition.changed.disconnect(_on_definition_changed)
+
+
+func _on_definition_changed() -> void:
+	queue_redraw()

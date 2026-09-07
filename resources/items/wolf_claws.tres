@@ -2,7 +2,11 @@
 
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="1_item"]
 
+
+[ext_resource type="Texture2D" path="res://assets/item_icons/wolf_claws.svg" id="inventory_icon"]
+
 [resource]
 script = ExtResource("1_item")
+icon = ExtResource("inventory_icon")
 display_name = "Wolf Claws"
 weapon_type = 0

@@ -1,299 +1,439 @@
 extends SceneTree
 
-var _failed := false
+var _failed: bool = false
+var inventory: GeneralInventory
+var screen: InventoryScreen
+var character: TacticalCharacter
+var other: TacticalCharacter
+var sword: ItemDefinition = load("res://resources/items/iron_sword.tres")
+var bow: ItemDefinition = load("res://resources/items/frost_bow.tres")
+var armor: ItemDefinition = load("res://resources/items/ranger_armor.tres")
+var charm: ItemDefinition = load("res://resources/items/sage_charm.tres")
+var _capture_directory: String = ""
+var _mouse_position := Vector2.ZERO
+var _mouse_down: bool = false
 
 
 func _init() -> void:
-	call_deferred("_run")
+	_run.call_deferred()
 
 
 func _run() -> void:
-	var main_scene := load("res://scenes/battle.tscn") as PackedScene
-	var terrain_showcase := load("res://resources/maps/terrain_showcase.tres") as BattleMapDefinition
-	var main := main_scene.instantiate()
-	main.map_definition = terrain_showcase
-	root.add_child(main)
+	root.size = Vector2i(1280, 720)
+	# A watchdog makes unexpected script errors fail instead of silently timing out.
+	create_timer(40.0).timeout.connect(func() -> void: push_error("Inventory test timed out"); quit(1))
+	var args := OS.get_cmdline_user_args()
+	if args.size() >= 1:
+		_capture_directory = args[0]
+	if args.size() >= 2:
+		var dimensions := args[1].split("x")
+		root.size = Vector2i(int(dimensions[0]), int(dimensions[1]))
+	inventory = GeneralInventory.new()
+	root.add_child(inventory)
+	character = _make_character("Inventory Fixture")
+	other = _make_character("Second Fixture")
+	screen = (load("res://scenes/inventory_screen.tscn") as PackedScene).instantiate() as InventoryScreen
+	root.add_child(screen)
+	screen.setup(inventory, [character, other])
+	screen.open_for(character)
 	await process_frame
-
-	var inventory := main.get_node("GeneralInventory") as GeneralInventory
-	var screen := main.get_node("HUD/InventoryScreen") as InventoryScreen
-	var friend_a := main.characters_container.get_node("FriendA") as TacticalCharacter
-	var friend_b := main.characters_container.get_node("FriendB") as TacticalCharacter
-	var equipment_entries := screen.equipment_entries
-
-	var starting_property := _get_property_info(inventory, &"starting_items")
-	_check(not starting_property.is_empty(), "GeneralInventory should expose Starting Items in the Inspector")
-	_check(starting_property.get("type") == TYPE_ARRAY, "GeneralInventory Starting Items should be an array")
-	_check(bool(int(starting_property.get("usage", 0)) & PROPERTY_USAGE_EDITOR), "GeneralInventory Starting Items should be Inspector-editable")
-	_check(String(starting_property.get("hint_string", "")).contains("ItemDefinition"), "GeneralInventory Starting Items should accept only ItemDefinition resources")
-	_check(_get_property_info(main, &"starting_items").is_empty(), "the Battle root should not duplicate the inventory-owned starting-item field")
-	_check(inventory.starting_items.size() == 6, "GeneralInventory should expose all configured unused sample items")
-	_check(
-		inventory.starting_items.map(func(item: ItemDefinition): return item.display_name)
-		== ["Iron Sword", "Ranger Armor", "Sage Charm", "Wooden Sword", "Ranger Bow", "Frost Bow"],
-		"Frost Bow should be added after the existing unused items"
-	)
-	_check(inventory.get_items().size() == 6, "the general inventory should start with six unused sample items")
-	main._on_inventory_button_toggled(true)
-	_check(screen.visible, "the Inventory button should open the inventory screen")
-	_check(screen.general_entries.get_child_count() == 6, "the screen should list every unused item")
-	_check(equipment_entries.get_child_count() == 3, "the character inventory should show all equipment slots")
-	_check(_find_item_button(screen, "Iron Sword").text.contains("Melee"), "unused Melee weapons should show their type")
-	_check(_find_item_button(screen, "Ranger Bow").text.contains("Ranged"), "unused Ranged weapons should show their type")
-	_check(_find_item_button(screen, "Frost Bow").text.contains("Slow"), "weapon summaries should show their applied status")
-	_check(_find_item_button(screen, "Frost Bow").tooltip_text.contains("Reduce Movement Range by 30%"), "weapon tooltips should describe their applied status")
-	_check(_find_item_button(screen, "Iron Sword").text.contains("20 DMG"), "unused weapons should show their damage")
-	_check(screen.stats_entries.get_child_count() == 8, "character details should show all eight combat-stat rows")
-	_check(_stat_value(screen, "health") == "48 / 48", "the selected character should show current and maximum Health")
-	_check(_stat_value(screen, "movement") == "6.5", "Movement should include the selected character's Speed adjustment")
-	_check(_stat_value(screen, "strength") == "10", "FriendA should lose the inherited Iron Sword Strength bonus")
-	_check(_stat_change(screen, "strength").is_empty(), "Frost Bow should not add Strength")
-	_check(_stat_value(screen, "dexterity") == "12", "the selected character should show effective Dexterity")
-	_check(_stat_change(screen, "dexterity") == "(+2)", "Dexterity should show its equipment-only increase")
-	_check(_stat_value(screen, "intelligence") == "12", "the selected character should show effective Intelligence")
-	_check(_stat_change(screen, "intelligence") == "(+2)", "Intelligence should show its equipment-only increase")
-	_check(_stat_value(screen, "constitution") == "12", "the selected character should show its Constitution override")
-	_check(_stat_value(screen, "speed") == "12", "the selected character should show effective Speed")
-	_check(_stat_value(screen, "weapon_damage") == "10", "FriendA should start with Frost Bow damage")
-	_check(_stat_change(screen, "weapon_damage") == "(+10)", "Frost Bow damage should be identified as an equipment contribution")
-	_check(
-		screen.ability_entries.get_child_count() == friend_a.get_abilities().size(),
-		"the selected character should show its full ability loadout"
-	)
-	_check(_ability_summary(screen, "Fireball") == "32 DMG", "magical damage should use current effective Intelligence")
-	_check(_ability_summary(screen, "Arrow") == "17 DMG", "FriendA's Frost Bow should enable Arrow at its live total")
-	_check(_ability_summary(screen, "Heal") == "37 HEAL", "healing should use current effective Intelligence")
-	_check(_ability_summary(screen, "Strike") == "Requires a Melee weapon", "FriendA's Frost Bow should leave Strike visible but unavailable")
-	_check(_ability_summary(screen, "Charge") == "Requires a Melee weapon", "FriendA's Frost Bow should leave Charge visible but unavailable")
-	_check(_ability_tooltip(screen, "Arrow").contains("Weapon applies Slow"), "FriendA's Arrow tooltip should describe Frost Bow Slow")
-	_check(_ability_tooltip(screen, "Ice Shard").contains("Slow"), "ability tooltips should include their applied status")
-
-	screen.character_picker.item_selected.emit(1)
-	_check(_stat_value(screen, "speed") == "8", "changing the picker should show the newly selected character's Speed")
-	_check(_stat_value(screen, "movement") == "4.5", "changing the picker should show the newly selected character's Movement")
-	screen.character_picker.item_selected.emit(0)
-
-	var weapon_button := equipment_entries.get_child(0) as Button
-	_check(weapon_button.text.contains("Frost Bow"), "FriendA should start with Frost Bow equipped")
-	_check(weapon_button.text.contains("Ranged"), "equipped weapons should show their type")
-	_check(weapon_button.text.contains("10 DMG"), "equipped weapons should show their damage")
-	_check(weapon_button.text.contains("Slow"), "equipped weapons should show their applied status")
-	weapon_button.pressed.emit()
-	_check(friend_a.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON) == null, "clicking equipped gear should unequip it")
-	_check(inventory.get_items().size() == 7, "unequipped gear should return to the general inventory")
-	_check(_stat_value(screen, "strength") == "10", "unequipping Frost Bow should leave Strength unchanged")
-	_check(_stat_change(screen, "strength").is_empty(), "a removed equipment bonus should disappear from the comparison")
-	_check(_stat_value(screen, "weapon_damage") == "0", "unequipping a weapon should immediately clear weapon damage")
-	_check(_ability_summary(screen, "Arrow") == "Requires a Ranged weapon", "unequipping Frost Bow should disable Arrow")
-	_check(_ability_summary(screen, "Strike") == "Requires a Melee weapon", "an unarmed character should also leave Strike unavailable")
-	_check(_ability_summary(screen, "Fireball") == "32 DMG", "unrelated magical damage should remain unchanged")
-
-	var sword_button := _find_item_button(screen, "Iron Sword")
-	sword_button.pressed.emit()
-	_check(friend_a.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON) != null, "clicking an unused item should equip it")
-	_check(inventory.get_items().size() == 6, "equipping an item should remove it from the general inventory")
-	_check(_stat_value(screen, "strength") == "12", "equipping Iron Sword should add its Strength bonus")
-	_check(_ability_summary(screen, "Strike") == "32 DMG", "equipping Iron Sword should enable and update Strike")
-	_check(_ability_summary(screen, "Charge") == "32 DMG", "equipping Iron Sword should enable and update Charge")
-	_check(inventory.starting_items.size() == 6, "runtime equipment transfers must not mutate GeneralInventory's configured starting array")
-
-	var ranger_bow_button := _find_item_button(screen, "Ranger Bow")
-	ranger_bow_button.pressed.emit()
-	_check(friend_a.get_equipped_weapon_type() == ItemDefinition.WeaponType.RANGED, "equipping Ranger Bow should replace the Melee sword")
-	_check(_ability_summary(screen, "Arrow") == "17 DMG", "Arrow should update to Ranger Bow damage plus Dexterity scaling")
-	_check(_ability_summary(screen, "Strike") == "Requires a Melee weapon", "Strike should become unavailable after a Ranged weapon swap")
-	var arrow := friend_a.get_abilities()[1]
-	main._on_ability_selected(arrow)
-	_check(main._selected_ability == arrow, "a compatible Ranged ability should enter targeting")
-	_find_item_button(screen, "Iron Sword").pressed.emit()
-	_check(main._selected_ability == null, "equipping an incompatible weapon should cancel active targeting")
-	_check(_ability_summary(screen, "Strike") == "32 DMG", "restoring a Melee weapon should immediately restore Strike")
-
-	_find_item_button(screen, "Frost Bow").pressed.emit()
-	_check(friend_a.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON).display_name == "Frost Bow", "Frost Bow should be equippable from the unused inventory")
-	_check(_ability_summary(screen, "Arrow") == "17 DMG", "Frost Bow should preserve Arrow's expected live damage")
-	_check(_ability_tooltip(screen, "Arrow").contains("Weapon applies Slow"), "ability tooltips should update with the equipped weapon status")
-	_find_item_button(screen, "Iron Sword").pressed.emit()
-	_check(not _ability_tooltip(screen, "Arrow").contains("Weapon applies Slow"), "swapping weapons should immediately remove the old weapon status tooltip")
-
-	friend_a.apply_damage(5)
-	_check(_stat_value(screen, "health") == "43 / 48", "health signals should refresh an open character-details panel")
-	friend_a.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
-	_check(_stat_value(screen, "weapon_damage") == "0", "direct equipment changes should refresh the open Inventory")
-	_check((screen.equipment_entries.get_child(0) as Button).disabled, "direct equipment changes should also refresh the equipment slots")
-	friend_a.equip_item(load("res://resources/items/iron_sword.tres") as ItemDefinition)
-	_check(_stat_value(screen, "weapon_damage") == "20", "direct re-equipping should restore the live details")
-
-	var half_weapon := AbilityDefinition.new()
-	half_weapon.display_name = "Half Weapon"
-	half_weapon.ability_type = AbilityDefinition.AbilityType.MELEE
-	half_weapon.effect = AbilityDefinition.PrimaryEffect.DAMAGE
-	half_weapon.scaling_stat = DamageCalculator.ScalingSource.WEAPON
-	half_weapon.scaling_amount = 50.0
-	var utility_definition := CharacterDefinition.new()
-	utility_definition.abilities = [
-		load("res://resources/abilities/focus.tres") as AbilityDefinition,
-		load("res://resources/abilities/slow.tres") as AbilityDefinition,
-		AbilityDefinition.new(),
-		half_weapon,
-	]
-	utility_definition.abilities[2].display_name = "Custom Utility"
-	var utility_character := TacticalCharacter.new()
-	utility_character.name = "UtilityCharacter"
-	utility_character.definition = utility_definition
-	root.add_child(utility_character)
-	utility_character.equip_item(load("res://resources/items/goblin_club.tres") as ItemDefinition)
-	var details_scene := load("res://scenes/inventory_screen.tscn") as PackedScene
-	var utility_screen := details_scene.instantiate() as InventoryScreen
-	root.add_child(utility_screen)
-	var utility_inventory := GeneralInventory.new()
-	root.add_child(utility_inventory)
-	var repeated_item := load("res://resources/items/iron_sword.tres") as ItemDefinition
-	var repeated_start: Array[ItemDefinition] = [repeated_item, repeated_item]
-	utility_inventory.initialize_starting_items(repeated_start)
-	_check(utility_inventory.get_items().size() == 2, "repeating an Inspector item should create two runtime entries")
-	_check(utility_inventory.take_item(repeated_item), "one repeated item should be removable independently")
-	_check(utility_inventory.get_items().size() == 1, "removing one repeated item should retain the second copy")
-	_check(repeated_start.size() == 2, "runtime inventory changes should not mutate the configured source array")
-	var utility_characters: Array[TacticalCharacter] = [utility_character]
-	utility_screen.setup(utility_inventory, utility_characters)
-	_check(_ability_summary(utility_screen, "Focus") == "Focus", "additional status abilities should show their status name")
-	_check(_ability_summary(utility_screen, "Slow") == "Slow", "direct status abilities should show their status name")
-	_check(_ability_summary(utility_screen, "Custom Utility") == "Utility", "other non-numeric abilities should use the Utility summary")
-	_check(_ability_summary(utility_screen, "Half Weapon") == "6 DMG", "Inventory should display 50% of Goblin Club's 12 weapon damage")
-	_check(_ability_tooltip(utility_screen, "Half Weapon").contains("weapon damage x50%"), "Inventory tooltips should show the Weapon scaling formula")
-	_check(utility_screen.ability_entries.get_child(0) is PanelContainer, "Inventory abilities should be read-only entries rather than action buttons")
-	_check(_stat_change(utility_screen, "speed") == "(-1)", "equipment penalties should display as negative changes")
-	_check(_stat_change_color(utility_screen, "speed") == InventoryScreen.NEGATIVE_CHANGE_COLOR, "equipment penalties should use the negative change color")
-	_check(_stat_change_color(screen, "strength") == InventoryScreen.POSITIVE_CHANGE_COLOR, "equipment bonuses should use the positive change color")
-
-	var empty_screen := details_scene.instantiate() as InventoryScreen
-	root.add_child(empty_screen)
-	var no_characters: Array[TacticalCharacter] = []
-	empty_screen.setup(utility_inventory, no_characters)
-	_check((empty_screen.stats_entries.get_child(0) as Label).text == "No character selected", "missing characters should show a stats empty state")
-	_check((empty_screen.ability_entries.get_child(0) as Label).text == "No abilities available", "missing characters should show an abilities empty state")
-	var stun := load("res://resources/statuses/stun.tres") as StatusEffectDefinition
-	friend_a.reset_movement()
-	friend_a.reset_ability_action()
-	friend_a.reset_opportunity_reaction()
-	_check(main.turn_manager.current_unit == friend_a, "the Stun HUD fixture should use the current friendly")
-	_check(friend_a.apply_status(stun, stun), "the current friendly should accept reusable Stun")
-	_check(main.turn_manager.current_unit == friend_a, "Stun should not automatically end a friendly turn")
-	_check(main.end_turn_button.text == "End Turn", "a stunned friendly should retain the normal End Turn control")
-	_check(not main.end_turn_button.disabled, "a stunned friendly should still be allowed to press End Turn")
-	_check(_ability_summary(screen, "Fireball") == "Stunned", "Inventory ability summaries should use the centralized Stunned reason")
-	for button in main.ability_bar.get_node("Margin/HBox").get_children():
-		_check((button as Button).disabled, "every battlefield ability should be disabled while its caster is stunned")
-		_check((button as Button).get_meta("unavailable_reason") == "Stunned", "Ability Bar entries should expose the Stunned reason")
-
-	friend_b.apply_damage(friend_b.current_health)
-	_check(screen.character_picker.item_count == 1, "defeated friendly characters should be removed from the Inventory picker")
-	friend_a.apply_damage(friend_a.current_health)
-	_check(main._combat_over, "defeating the final friendly should end combat")
-	_check(main.turn_manager.current_unit == null, "combat end should clear the active AI turn loop")
-	_check(main.end_turn_button.text == "Battle Ended", "the End Turn control should report completed combat")
-	_check(main.end_turn_button.disabled, "turn controls should remain disabled after combat ends")
-	var ended_round: int = main.turn_manager.round_number
+	_test_model()
+	_test_equipment_statistics()
+	await _test_ui()
+	await _test_save_flow()
+	await _test_battle_signals()
+	await _capture_overview()
+	screen.queue_free()
+	inventory.queue_free()
+	character.queue_free()
+	other.queue_free()
 	await process_frame
-	await process_frame
-	await process_frame
-	_check(main.turn_manager.current_unit == null, "AI turns should not restart after defeat")
-	_check(main.turn_manager.round_number == ended_round, "rounds should not advance after defeat")
-
-	screen.close_screen()
-	_check(not screen.visible, "the Close button behavior should hide the inventory screen")
-
-	empty_screen.queue_free()
-	utility_screen.queue_free()
-	utility_character.queue_free()
-	utility_inventory.queue_free()
-	main.queue_free()
-	await process_frame
-
-	var empty_main := main_scene.instantiate()
-	empty_main.map_definition = terrain_showcase
-	var empty_starting_items: Array[ItemDefinition] = []
-	(empty_main.get_node("GeneralInventory") as GeneralInventory).starting_items = empty_starting_items
-	root.add_child(empty_main)
-	await process_frame
-	_check(
-		(empty_main.get_node("GeneralInventory") as GeneralInventory).get_items().is_empty(),
-		"an empty GeneralInventory Starting Items array should create an empty unused inventory"
-	)
-	_check(
-		(empty_main.characters_container.get_node("FriendA") as TacticalCharacter).get_equipped_items().size() == 3,
-		"an empty unused inventory should not change character starting equipment"
-	)
-	empty_main.queue_free()
-	await process_frame
-	if _failed:
-		quit(1)
-	else:
+	if not _failed:
 		print("INVENTORY_INTEGRATION_OK")
-		quit(0)
+	quit(1 if _failed else 0)
+
+
+func _make_character(display_name: String) -> TacticalCharacter:
+	var unit := TacticalCharacter.new()
+	unit.definition = CharacterDefinition.new()
+	unit.definition.display_name = display_name
+	unit.definition.abilities = [load("res://resources/abilities/strike.tres"), load("res://resources/abilities/arrow.tres"), load("res://resources/abilities/fireball.tres")]
+	root.add_child(unit)
+	return unit
+
+
+func _reset() -> void:
+	for slot in ItemDefinition.EquipmentSlot.values():
+		character.unequip_item(slot)
+	inventory.initialize_starting_items([sword, bow, armor, charm, sword])
+	screen.open_for(character)
+
+
+func _test_model() -> void:
+	for file_name in DirAccess.get_files_at("res://resources/items"):
+		if file_name.ends_with(".tres"):
+			var item := load("res://resources/items/" + file_name) as ItemDefinition
+			_check(item != null and item.icon != null, file_name + " has assigned artwork")
+	_reset()
+	var config: Array[ItemDefinition] = [sword, null, sword]
+	inventory.initialize_starting_items(config)
+	_check(inventory.get_items().size() == 2, "starting nulls ignored, duplicate copies retained")
+	_check(inventory.take_item(sword) and inventory.get_item_at(0) == null and inventory.get_item_at(1) == sword, "take leaves a stable vacant cell")
+	_check(config == [sword, null, sword], "starting resources remain unchanged")
+	inventory.add_item(bow)
+	_check(inventory.get_slots() == [bow, sword], "add fills first gap")
+	_check(not inventory.move_or_swap(9, 0) and not inventory.move_or_swap(0, -1), "invalid moves rejected")
+	_check(inventory.move_or_swap(0, 17), "moving beyond current cells grows storage")
+	_check(inventory.get_item_at(17) == bow and inventory.get_item_at(1) == sword and inventory.get_items().size() == 2, "moving preserves holes and count")
+	_check(inventory.move_or_swap(17, 1) and inventory.get_item_at(17) == sword and inventory.get_item_at(1) == bow, "occupied inventory cells swap")
+	var revision := inventory.revision
+	inventory.move_or_swap(17, 17)
+	_check(inventory.revision == revision, "same-cell drop is a no-op")
+	# Every source type is tested against every equipment destination.
+	for item in [sword, armor, charm]:
+		for slot in ItemDefinition.EquipmentSlot.values():
+			inventory.initialize_starting_items([item])
+			var before := inventory.get_slots()
+			var equipment := character.get_equipped_items()
+			var accepted := inventory.equip_from_slot(0, character, slot)
+			_check(accepted == (item.slot == slot), "equipment type %d into slot %d" % [item.slot, slot])
+			if not accepted:
+				_check(inventory.get_slots() == before and character.get_equipped_items() == equipment, "invalid equipment drop is atomic")
+	_reset()
+	character.equip_item(bow)
+	var events := [0]
+	var listener := func() -> void: events[0] += 1
+	inventory.items_changed.connect(listener)
+	_check(inventory.equip_from_slot(4, character, 0), "equip exact duplicate copy")
+	_check(inventory.get_item_at(0) == sword and inventory.get_item_at(4) == bow, "replaced gear returns to dragged copy's cell")
+	_check(events[0] == 1, "one inventory notification per transfer")
+	inventory.items_changed.disconnect(listener)
+	var snapshot := inventory.get_slots()
+	_check(not inventory.unequip_to_slot(character, 0, 2), "weapon cannot swap with inventory armor")
+	_check(inventory.get_slots() == snapshot and character.get_equipped_item(0) == sword, "invalid reverse swap changes neither side")
+	_check(inventory.unequip_to_slot(character, 0, 1) and character.get_equipped_item(0) == bow and inventory.get_item_at(1) == sword, "reverse compatible swap")
+	_check(inventory.unequip_to_slot(character, 0, 12) and character.get_equipped_item(0) == null and inventory.get_item_at(12) == bow, "unequip into exact empty destination")
+	_check(not inventory.equip_from_slot(0, null, 0), "missing character rejected")
+	var health := character.current_health
+	character.current_health = 0
+	_check(not inventory.equip_from_slot(0, character, 0), "defeated character rejected")
+	character.current_health = health
+
+
+func _test_ui() -> void:
+	_reset()
+	await _frames(3)
+	_check(screen.general_entries.columns == 5 and screen.general_entries.get_child_count() >= 20, "five-column grid with at least four rows")
+	_check(screen.equipment_entries.get_child_count() == 3, "three labeled equipment cells")
+	_check(_cell(0).artwork.texture == sword.icon and sword.icon != null, "item icons render from resources")
+	_check(_equipment(0).artwork.texture != null and _equipment(0).artwork.modulate.a < 1.0, "empty equipment uses faint category symbols")
+	var fallback := ItemDefinition.new()
+	_check(screen.get_item_icon(fallback) != null, "unassigned artwork uses category fallback")
+	await _click(_cell(0))
+	_check(character.get_equipped_item(0) == null and inventory.get_item_at(0) == sword, "single click selects without equipping")
+	await _click(_cell(0), true)
+	_check(character.get_equipped_item(0) == sword and inventory.get_item_at(0) == null, "double-click equips")
+	await _click(_equipment(0), true)
+	_check(character.get_equipped_item(0) == null and inventory.get_item_at(0) == sword, "double-click unequips into first gap")
+	_equipment(0).grab_focus()
+	_cell(0).grab_focus()
+	var enter := InputEventKey.new()
+	enter.keycode = KEY_ENTER
+	enter.pressed = true
+	root.push_input(enter, true)
+	enter = enter.duplicate()
+	enter.pressed = false
+	root.push_input(enter, true)
+	await _frames(2)
+	_check(character.get_equipped_item(0) == sword, "Enter equips focused item")
+	_reset()
+	await _frames(2)
+	await _drag(_cell(0), _cell(8))
+	_check(inventory.get_item_at(8) == sword and inventory.get_item_at(0) == null, "native mouse drag moves to empty cell")
+	await _drag(_cell(8), _cell(1))
+	_check(inventory.get_item_at(8) == bow and inventory.get_item_at(1) == sword, "native mouse drag swaps cells")
+	await _drag(_cell(1), _equipment(1))
+	_check(inventory.get_item_at(1) == sword and character.get_equipped_item(1) == null, "native invalid equipment drop rejected")
+	await _drag(_cell(1), _equipment(0))
+	_check(character.get_equipped_item(0) == sword and inventory.get_item_at(1) == null, "native mouse drag equips")
+	await _drag(_equipment(0), _cell(2))
+	_check(character.get_equipped_item(0) == sword and inventory.get_item_at(2) == armor, "native invalid reverse swap rejected")
+	await _drag(_equipment(0), _cell(8))
+	_check(character.get_equipped_item(0) == bow and inventory.get_item_at(8) == sword, "native compatible reverse swap")
+	await _drag(_equipment(0), _cell(7))
+	_check(character.get_equipped_item(0) == null and inventory.get_item_at(7) == bow, "native mouse drag unequips")
+	var before := inventory.get_slots()
+	await _begin_drag(_cell(7))
+	await _motion(Vector2(15, 15))
+	await _release()
+	_check(inventory.get_slots() == before, "outside drop preserves contents")
+	await _begin_drag(_cell(7))
+	var cancel := InputEventKey.new()
+	cancel.keycode = KEY_ESCAPE
+	cancel.pressed = true
+	root.push_input(cancel, true)
+	await _release()
+	_check(inventory.get_slots() == before and screen.visible, "Escape cancels drag without closing inventory")
+	var payload := screen.create_drag_payload(_cell(7))
+	inventory.add_item(charm)
+	_check(not screen.can_drop_on(_equipment(0), payload), "changed inventory rejects stale drag")
+	await _frames(2)
+	payload = screen.create_drag_payload(_cell(7))
+	screen.open_for(other)
+	_check(not screen.can_drop_on(_equipment(0), payload), "changed selection rejects stale drag")
+	screen.open_for(character)
+	await _begin_drag(_cell(7))
+	screen.close_screen()
+	_check(not root.gui_is_dragging(), "closing cancels native drag")
+	await _release()
+	screen.open_for(character)
+	await _frames(2)
+	_check(inventory.get_item_at(7) == bow, "reopening retains arrangement")
+	await _begin_drag(_cell(7))
+	character.apply_damage(character.current_health)
+	_check(not root.gui_is_dragging(), "defeat cancels an active drag")
+	await _release()
+	character.current_health = character.get_max_health()
+	screen._refresh_character_details()
+	await _motion(_cell(7).get_global_rect().get_center())
+	await create_timer(0.3).timeout
+	_check(screen.item_details.visible and screen.item_details.title.text == bow.display_name, "hover opens adjacent item card")
+	_check(screen.item_details.body.text.contains("Slow") and screen.item_details.body.text.contains(str(bow.weapon_damage)), "hover includes damage and status description")
+	_check(not screen.item_details.get_global_rect().intersects(_cell(7).get_global_rect()), "hover card sits next to source item")
+	await _capture("hover")
+	# Resource-authored modifier operations are represented without losing signs.
+	var modifier_item := ItemDefinition.new()
+	modifier_item.display_name = "Modifier fixture"
+	for operation in StatModifierDefinition.Operation.values():
+		var modifier := StatModifierDefinition.new()
+		modifier.operation = operation
+		modifier.value = -0.25 if operation != 0 else 2.0
+		modifier_item.modifiers.append(modifier)
+	screen.item_details.show_item(modifier_item, false)
+	_check(screen.item_details.body.text.contains("+2 Strength") and screen.item_details.body.text.contains("-25%") and screen.item_details.body.text.contains("multiplicative"), "hover describes every modifier operation")
+	var marker := Control.new()
+	root.add_child(marker)
+	marker.position = root.get_visible_rect().size - Vector2(70, 70)
+	marker.size = Vector2(64, 64)
+	screen.item_details.place_next_to(marker)
+	_check(root.get_visible_rect().encloses(screen.item_details.get_global_rect()), "edge hover card stays in viewport")
+	_check(screen.item_details.position.x < marker.position.x, "right-edge hover flips left")
+	marker.queue_free()
+	for index in range(35):
+		inventory.add_item(armor)
+	await _frames(4)
+	_check(screen.general_entries.get_child_count() >= 45, "inventory grows with spare cells")
+	screen.inventory_scroll.scroll_vertical = 140
+	await _frames(3)
+	_check(not screen.item_details.visible, "scrolling dismisses obsolete hover card")
+	await _capture("scroll")
+	var no_characters: Array[TacticalCharacter] = []
+	screen.setup(inventory, no_characters)
+	_check(not screen.can_drop_on(_equipment(0), screen.create_drag_payload(_cell(0))), "equipment drop without selected character rejected")
+	screen.setup(inventory, [character, other])
+
+
+func _test_save_flow() -> void:
+	inventory.initialize_starting_items([sword, sword, armor])
+	inventory.move_or_swap(1, 18)
+	var saved := inventory.capture_state()
+	_check(saved.size() == 19 and saved[1] == "" and saved[18] == sword.resource_path, "save records exact slots including gaps")
+	inventory.restore_state(saved)
+	_check(inventory.capture_state() == saved and inventory.get_items().size() == 3, "save restore preserves duplicates and positions")
+	inventory.restore_state([sword.resource_path, armor.resource_path])
+	_check(inventory.get_slots() == [sword, armor], "legacy compact saves load unchanged")
+	var controller := RunController.new()
+	controller.config = load("res://resources/run/default_run.tres")
+	controller.save_path = "res://.godot/inventory_validation/run.json"
+	root.add_child(controller)
+	_check(controller.new_run(10), "create isolated run checkpoint")
+	controller.state.inventory.assign(saved)
+	_check(controller.save_store.save_run(controller.state), "save sparse run inventory")
+	controller.state = controller.save_store.load_run()
+	_check(controller.state.inventory == saved, "reload sparse run inventory")
+	var state_before := controller.state.to_data().duplicate(true)
+	var node_id := controller.state.available_rooms()[0]
+	controller.state.graph.get_node_by_id(node_id).type = RunMapGraph.NodeType.SHOP
+	_check(controller.select_room(node_id) and controller.buy_offer(0), "purchase with sparse inventory")
+	_check(controller.state.inventory[1] != "" and controller.state.inventory[18] == sword.resource_path, "shop fills gap without shifting other items")
+	controller.state = RunState.from_data(state_before)
+	controller.state.graph.get_node_by_id(node_id).type = RunMapGraph.NodeType.CHEST
+	_check(controller.select_room(node_id), "treasure with sparse inventory")
+	_check(controller.state.inventory[1] != "" and controller.state.inventory[18] == sword.resource_path, "reward fills gap without shifting other items")
+	controller.state = RunState.from_data(state_before)
+	controller.state.graph.get_node_by_id(node_id).type = RunMapGraph.NodeType.NORMAL_COMBAT
+	var received: Array = []
+	controller.battle_requested.connect(func(_encounter, _members, items, _id) -> void: received.assign(items))
+	_check(controller.select_room(node_id), "start battle from sparse inventory checkpoint")
+	if received != saved:
+		print("HANDOFF_EXPECTED=", saved, " RECEIVED=", received, " PENDING=", controller.state.pending)
+	_check(received == saved, "battle handoff keeps exact slots")
+	var results: Array[Dictionary] = []
+	for member in controller.state.party:
+		results.append({"id": member.id, "health": member.health, "max_health": member.max_health, "equipment": Array(member.equipment)})
+	_check(controller.finish_battle(node_id, true, results, saved), "battle returns sparse inventory")
+	_check(controller.save_store.load_run().inventory == saved, "completed battle checkpoint retains arrangement")
+	var independent_snapshot := controller.state.to_data()
+	controller.state.add_inventory_item(charm.resource_path)
+	_check(independent_snapshot.inventory == saved, "vacancy filling cannot mutate a rollback snapshot")
+	controller.queue_free()
+	await process_frame
+
+
+func _test_battle_signals() -> void:
+	screen.hide()
+	var battle := (load("res://scenes/battle.tscn") as PackedScene).instantiate() as TacticalBattle
+	battle.map_definition = load("res://resources/maps/goblin_skirmish.tres")
+	root.add_child(battle)
+	await process_frame
+	var unit: TacticalCharacter = battle.turn_manager.current_unit
+	_check(unit.is_friendly(), "battle fixture starts with a friendly turn")
+	var ui: InventoryScreen = battle.inventory_screen
+	var pack: GeneralInventory = battle.general_inventory
+	pack.initialize_starting_items([bow])
+	battle._on_inventory_button_toggled(true)
+	ui.open_for(unit)
+	pack.equip_from_slot(0, unit, 0)
+	await _frames(2)
+	var arrow := load("res://resources/abilities/arrow.tres") as AbilityDefinition
+	unit.override_template_abilities = true
+	unit.ability_overrides = [arrow]
+	unit.reset_ability_action()
+	battle._on_ability_selected(arrow)
+	_check(battle._selected_ability == arrow, "ranged weapon enables ability targeting")
+	_check(unit.get_equipped_weapon_type() == ItemDefinition.WeaponType.RANGED, "battle equipment changes use actual actor API")
+	for row in ui.stats_entries.get_children():
+		if row.get_meta("stat_key", "") == "weapon_damage":
+			_check(row.get_meta("value_text") == str(bow.weapon_damage), "battle details refresh live weapon damage")
+	await _capture("battle")
+	pack.add_item(sword)
+	var sword_index := pack.get_slots().find(sword)
+	pack.equip_from_slot(sword_index, unit, 0)
+	await _frames(2)
+	_check(unit.get_equipped_weapon_type() == ItemDefinition.WeaponType.MELEE, "battle equipment can change weapon type")
+	_check(battle._selected_ability == null and not arrow.can_be_used_by(unit), "weapon swap cancels incompatible targeting and ability availability")
+	var saved := battle.capture_save_payload(false)
+	pack.move_or_swap(sword_index, 17)
+	saved = battle.capture_save_payload(false)
+	_check(saved.runtime.inventory.size() == 18, "scenario checkpoint includes sparse grid")
+	var directory := "res://.godot/inventory_validation/scenarios"
+	var result := ScenarioSaveStore.save_new(saved, directory)
+	_check(result.ok, "scenario save validates sparse inventory")
+	if result.ok:
+		var loaded := ScenarioSaveStore.load_save(result.path, directory)
+		_check(loaded.ok and loaded.payload.runtime.inventory == saved.runtime.inventory, "scenario disk round trip preserves gaps")
+		pack.initialize_starting_items([])
+		_check(battle._restore_runtime_state(loaded.payload.runtime), "scenario runtime restores")
+		_check(pack.capture_state() == saved.runtime.inventory, "scenario restore returns exact grid positions")
+	battle.queue_free()
+	await _frames(2)
+
+
+func _capture_overview() -> void:
+	_reset()
+	character.equip_item(bow)
+	character.equip_item(armor)
+	character.equip_item(charm)
+	screen.open_for(character)
+	await _motion(Vector2(20, 20))
+	await _frames(4)
+	await _capture("overview")
+
+
+func _test_equipment_statistics() -> void:
+	var suite := (load("res://tests/test_stats_system.gd") as Script).new() as McpTestSuite
+	for method in [
+		"test_equipment_modifier_order_replacement_and_shared_template_isolation",
+		"test_effective_stats_without_equipment_keep_statuses_and_speed_movement_rules",
+		"test_constitution_drives_health_modifiers_inspector_and_ai_snapshots",
+	]:
+		suite._reset()
+		suite.setup()
+		suite.call(method)
+		suite.teardown()
+		suite._free_tracked()
+		_check(not suite._failed, method + ": " + suite._message)
+
+
+func _cell(index: int) -> InventoryItemSlot:
+	return screen.general_entries.get_child(index) as InventoryItemSlot
+
+
+func _equipment(slot: int) -> InventoryItemSlot:
+	return screen.equipment_entries.get_child(slot).get_node("Slot") as InventoryItemSlot
+
+
+func _click(cell: Control, double_click: bool = false) -> void:
+	await _motion(cell.get_global_rect().get_center())
+	var event := InputEventMouseButton.new()
+	event.position = _mouse_position
+	event.global_position = _mouse_position
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = true
+	event.double_click = double_click
+	root.push_input(event, true)
+	_mouse_down = true
+	await _release()
+
+
+func _motion(point: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = point
+	event.global_position = point
+	event.relative = point - _mouse_position
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT if _mouse_down else 0
+	_mouse_position = point
+	root.push_input(event, true)
+	await process_frame
+
+
+func _begin_drag(cell: Control) -> void:
+	await _motion(cell.get_global_rect().get_center())
+	var event := InputEventMouseButton.new()
+	event.position = _mouse_position
+	event.global_position = _mouse_position
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT
+	event.pressed = true
+	root.push_input(event, true)
+	_mouse_down = true
+	await process_frame
+	await _motion(_mouse_position + Vector2(18, 0))
+	_check(root.gui_is_dragging(), "mouse movement starts native drag")
+	_check(not screen.item_details.visible, "drag hides hover card")
+
+
+func _drag(source: Control, destination: Control) -> void:
+	await _begin_drag(source)
+	await _motion(destination.get_global_rect().get_center())
+	await _release()
+
+
+func _release() -> void:
+	var event := InputEventMouseButton.new()
+	event.position = _mouse_position
+	event.global_position = _mouse_position
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = false
+	root.push_input(event, true)
+	_mouse_down = false
+	await _frames(3)
+
+
+func _frames(count: int) -> void:
+	for frame in count:
+		await process_frame
+
+
+func _capture(label: String) -> void:
+	if _capture_directory.is_empty() or DisplayServer.get_name() == "headless":
+		return
+	await RenderingServer.frame_post_draw
+	var path := _capture_directory.path_join("inventory_%s_%dx%d.png" % [label, root.size.x, root.size.y])
+	_check(root.get_texture().get_image().save_png(path) == OK, "capture " + label)
 
 
 func _check(condition: bool, message: String) -> void:
-	if condition:
-		return
-	_failed = true
-	push_error(message)
-
-
-func _get_property_info(object: Object, property_name: StringName) -> Dictionary:
-	for property_info in object.get_property_list():
-		if StringName(property_info.name) == property_name:
-			return property_info
-	return {}
-
-
-func _find_stat_row(screen: InventoryScreen, key: String) -> Control:
-	for row in screen.stats_entries.get_children():
-		if row.get_meta("stat_key", "") == key:
-			return row as Control
-	return null
-
-
-func _stat_value(screen: InventoryScreen, key: String) -> String:
-	var row := _find_stat_row(screen, key)
-	return str(row.get_meta("value_text", "")) if row != null else ""
-
-
-func _stat_change(screen: InventoryScreen, key: String) -> String:
-	var row := _find_stat_row(screen, key)
-	return str(row.get_meta("change_text", "")) if row != null else ""
-
-
-func _stat_change_color(screen: InventoryScreen, key: String) -> Color:
-	var row := _find_stat_row(screen, key)
-	if row == null:
-		return Color.TRANSPARENT
-	return (row.get_node("Change") as Label).get_theme_color("font_color")
-
-
-func _find_ability_entry(screen: InventoryScreen, ability_name: String) -> Control:
-	for entry in screen.ability_entries.get_children():
-		var ability := entry.get_meta("ability") as AbilityDefinition
-		if ability != null and ability.display_name == ability_name:
-			return entry as Control
-	return null
-
-
-func _ability_summary(screen: InventoryScreen, ability_name: String) -> String:
-	var entry := _find_ability_entry(screen, ability_name)
-	return str(entry.get_meta("summary_text", "")) if entry != null else ""
-
-
-func _ability_tooltip(screen: InventoryScreen, ability_name: String) -> String:
-	var entry := _find_ability_entry(screen, ability_name)
-	return entry.tooltip_text if entry != null else ""
-
-
-func _find_item_button(screen: InventoryScreen, item_name: String) -> Button:
-	for entry in screen.general_entries.get_children():
-		if entry is Button:
-			var item := entry.get_meta("item") as ItemDefinition
-			if item != null and item.display_name == item_name:
-				return entry as Button
-	return null
+	if not condition:
+		_failed = true
+		push_error(message)

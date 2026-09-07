@@ -31,6 +31,16 @@ func _run() -> void:
 	_check(first_battle.terrain.get_child_count() == 6, "Terrain Showcase should preserve all six special tiles")
 	_check(first_battle.walls_container.get_child_count() == 3, "Terrain Showcase should preserve all three walls")
 	_check(first_battle.characters_container.get_child_count() == 4, "Terrain Showcase should preserve all four units")
+	_check(manager.unit_names_visible, "a new app session should default unit names to visible")
+	_check(first_battle.names_button.button_pressed, "the first battle should show the pressed Names toggle")
+	for child in first_battle.characters_container.get_children():
+		if child is TacticalCharacter:
+			var name_label := child.get_node("UnitNameLabel") as Label
+			_check(name_label.text == str(child.name), "world labels should show each map instance name")
+			_check(name_label.visible, "unit names should begin visible on the first map")
+	first_battle.names_button.button_pressed = false
+	_check(not manager.unit_names_visible, "the map manager should retain the hidden-name session preference")
+	_check(first_battle.names_button.text == "Names: Off", "the first battle toggle should show Names: Off")
 
 	var first_friend := first_battle.characters_container.get_node("FriendA") as TacticalCharacter
 	first_friend.apply_damage(5)
@@ -59,6 +69,8 @@ func _run() -> void:
 	var second_battle := manager.current_battle
 	_check(is_instance_valid(second_battle), "selecting Goblin Skirmish should create a battle")
 	_check(second_battle.map_definition == manager.levels[1], "the second battle should receive Goblin Skirmish")
+	_check(not second_battle.unit_names_visible, "a new map should inherit the session name preference")
+	_check(not second_battle.names_button.button_pressed, "the inherited hidden state should update the HUD toggle")
 	_check(second_battle.general_inventory.get_items().size() == 6, "a new level should receive fresh General Inventory contents")
 	_check(second_battle.grid.grid_size == Vector2i(12, 12), "Goblin Skirmish should use a 12x12 grid")
 	_check(second_battle.terrain.get_child_count() == 0, "Goblin Skirmish should have no special tiles")
@@ -88,6 +100,77 @@ func _run() -> void:
 	expected_enemy_cells.sort()
 	_check(actual_enemy_cells == expected_enemy_cells, "Goblin Warriors should use the requested opposite-side formation")
 
+	var restart_unit := friendlies[0]
+	var restart_unit_id := restart_unit.scenario_unit_id
+	var restart_starting_cell := restart_unit.starting_grid_cell
+	var starting_equipment := _item_paths(restart_unit.get_equipped_items())
+	var starting_inventory := second_battle.general_inventory.capture_state()
+	var starting_map_path := second_battle.map_definition.resource_path
+	var starting_instance_id := second_battle.get_instance_id()
+	var starting_active_id := second_battle.turn_manager.current_unit.scenario_unit_id
+	var burning := load("res://resources/statuses/burning.tres") as StatusEffectDefinition
+	restart_unit.apply_damage(5)
+	restart_unit._set_runtime_grid_cell_immediate(Vector2i(0, 0))
+	_check(restart_unit.apply_status(burning), "restart fixture should apply a runtime status")
+	second_battle.turn_manager.round_number = 4
+	var active_before_restart := second_battle.turn_manager.current_unit
+	active_before_restart.reset_movement()
+	active_before_restart.spend_movement(1.0)
+	active_before_restart.reset_ability_action()
+	active_before_restart.spend_ability_action()
+	active_before_restart.reset_opportunity_reaction()
+	active_before_restart.spend_opportunity_reaction()
+	var runtime_item: ItemDefinition
+	for item in second_battle.general_inventory.get_items():
+		if not starting_equipment.has(item.resource_path):
+			runtime_item = item
+			break
+	_check(runtime_item != null, "restart fixture should find alternate runtime equipment")
+	if runtime_item != null:
+		_check(second_battle.general_inventory.take_item(runtime_item), "restart fixture should remove an inventory item")
+		var replaced := restart_unit.equip_item(runtime_item)
+		if replaced != null:
+			second_battle.general_inventory.add_item(replaced)
+	var defeated_enemy := enemies[0] if enemies[0] != active_before_restart else enemies[1]
+	var defeated_enemy_id := defeated_enemy.scenario_unit_id
+	defeated_enemy.apply_damage(defeated_enemy.current_health)
+	_check(not defeated_enemy.is_present_on_map(), "restart fixture should remove a defeated enemy")
+	_check(second_battle.general_inventory.capture_state() != starting_inventory, "restart fixture should alter runtime inventory")
+	second_battle.restart_button.pressed.emit()
+	await process_frame
+
+	var restarted_battle := manager.current_battle
+	_check(is_instance_valid(restarted_battle), "Restart should create a replacement battle")
+	_check(restarted_battle.get_instance_id() != starting_instance_id, "Restart should replace the old battle instance")
+	_check(not restarted_battle.unit_names_visible, "Restart should preserve the session name preference")
+	_check(not restarted_battle.names_button.button_pressed, "Restart should keep the Names toggle off")
+	_check(restarted_battle.map_definition.resource_path == starting_map_path, "Restart should keep the current map")
+	_check(restarted_battle.turn_manager.round_number == 1, "Restart should return combat to round one")
+	_check(restarted_battle.turn_manager.current_unit.scenario_unit_id == starting_active_id, "Restart should rebuild the initial turn order")
+	_check(restarted_battle.turn_manager.current_unit.ability_available, "Restart should restore the active unit's ability action")
+	_check(restarted_battle.turn_manager.current_unit.opportunity_reaction_available, "Restart should restore the active unit's reaction")
+	_check(
+		is_equal_approx(
+			restarted_battle.turn_manager.current_unit.remaining_movement,
+			restarted_battle.turn_manager.current_unit.get_movement_range()
+		),
+		"Restart should restore the active unit's movement"
+	)
+	var restarted_unit := _find_unit(restarted_battle, restart_unit_id)
+	_check(restarted_unit != null, "Restart should preserve configured units")
+	if restarted_unit != null:
+		_check(restarted_unit.current_health == restarted_unit.get_max_health(), "Restart should restore full health")
+		_check(restarted_unit.grid_cell == restart_starting_cell, "Restart should restore the configured starting cell")
+		_check(restarted_unit.get_active_statuses().is_empty(), "Restart should clear runtime statuses")
+		_check(_item_paths(restarted_unit.get_equipped_items()) == starting_equipment, "Restart should restore starting equipment")
+	var restarted_enemy := _find_unit(restarted_battle, defeated_enemy_id)
+	_check(restarted_enemy != null and restarted_enemy.current_health == restarted_enemy.get_max_health(), "Restart should restore defeated units")
+	_check(restarted_enemy != null and restarted_enemy.is_present_on_map(), "Restart should return defeated units to the map")
+	_check(restarted_battle.general_inventory.capture_state() == starting_inventory, "Restart should restore starting inventory")
+	_check(not restarted_battle.return_to_levels_dialog.visible, "Restart should not open a confirmation dialog")
+	_check(not paused, "Restart should leave battle processing unpaused")
+	second_battle = restarted_battle
+
 	manager.return_to_level_select()
 	await process_frame
 	manager.queue_free()
@@ -104,3 +187,18 @@ func _check(condition: bool, message: String) -> void:
 		return
 	_failed = true
 	push_error(message)
+
+
+func _find_unit(battle: TacticalBattle, unit_id: String) -> TacticalCharacter:
+	for unit in battle._characters:
+		if unit.scenario_unit_id == unit_id:
+			return unit
+	return null
+
+
+func _item_paths(items: Array[ItemDefinition]) -> Array[String]:
+	var paths: Array[String] = []
+	for item in items:
+		if item != null:
+			paths.append(item.resource_path)
+	return paths

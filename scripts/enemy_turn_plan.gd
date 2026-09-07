@@ -30,6 +30,7 @@ var threat_score := 0.0
 var threat_penalty := 0.0
 var immediate_score := 0.0
 var counterplay_score := 0.0
+var exact_reply_evaluated := false
 var total_score := 0.0
 var score_breakdown: Dictionary = {}
 
@@ -81,13 +82,18 @@ func get_debug_summary() -> String:
 	if ability != null:
 		action += " %s from %s @ %s" % [ability.display_name, cast_origin, target_cell]
 	action += " -> %s" % end_cell
-	return "%s | %.2f = %.2f effect (%.2f terrain) + %.2f future + %.2f team - %.2f risk - %.2f exact reply" % [
+	var exact_reply_text := (
+		"%.2f exact reply ignored" % counterplay_score
+		if exact_reply_evaluated
+		else "exact reply not evaluated"
+	)
+	return "%s | %.2f = %.2f effect (%.2f terrain) + %.2f future + %.2f team | %.2f risk ignored · %s" % [
 		action,
 		total_score,
 		effect_score,
 		terrain_score,
 		position_score,
 		coordination_score,
-		threat_penalty,
-		counterplay_score,
+		threat_score,
+		exact_reply_text,
 	]

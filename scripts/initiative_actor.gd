@@ -28,6 +28,10 @@ signal stats_changed
 signal equipment_changed(slot: ItemDefinition.EquipmentSlot, item: ItemDefinition)
 signal statuses_changed
 
+@export_category("Scenario Identity")
+## Stable identifier used by developer scenario saves and status-source references.
+@export var scenario_unit_id: String = ""
+
 @export_category("Character Template")
 @export var definition: CharacterDefinition:
 	set(value):
@@ -56,8 +60,8 @@ signal statuses_changed
 		queue_redraw()
 
 @export_custom(
-	PROPERTY_HINT_RANGE,
-	"4,3996,1,or_greater",
+	PROPERTY_HINT_NONE,
+	"",
 	PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY
 ) var max_health: int:
 	get:
@@ -84,6 +88,10 @@ signal statuses_changed
 @export_category("Starting Equipment Overrides")
 ## Applied after the Character Template equipment. Matching slots replace inherited items.
 @export var starting_equipment_overrides: Array[ItemDefinition] = []
+## When enabled, Complete Equipment Overrides replaces the template loadout entirely.
+## Missing slots are intentionally empty. Existing scenes keep the legacy layered behavior.
+@export var use_complete_equipment_override: bool = false
+@export var complete_equipment_overrides: Array[ItemDefinition] = []
 
 @export_category("Placement and Presentation")
 @export var facing_left_texture: Texture2D:
@@ -122,6 +130,8 @@ var opportunity_reaction_available: bool:
 		return _opportunity_reaction_available and can_use_opportunity_reactions()
 var _grid: IsometricGrid
 var _defeat_emitted := false
+## Run battles opt into permanent defeat; standalone encounters keep revival behavior.
+var permanent_defeat: bool = false
 var _remaining_movement := 0.0
 var _ability_available := false
 var _opportunity_reaction_available := true
@@ -131,13 +141,18 @@ var _runtime_stats_initialized := false
 var _editor_syncing_placement := false
 var _editor_position_sync_queued := false
 var _editor_cell_sync_queued := false
+var _unit_name_visible := true
+var _unit_name_label: Label
 
 
 func _ready() -> void:
+	_unit_name_label = get_node_or_null("UnitNameLabel") as Label
 	_initialize_runtime_stats()
 	grid_cell = starting_grid_cell
 	current_facing = initial_facing
 	current_health = get_max_health()
+	_sync_map_presence()
+	_refresh_unit_name_label()
 	if Engine.is_editor_hint():
 		set_notify_transform(true)
 		_queue_editor_position_sync()
@@ -145,6 +160,8 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_PATH_RENAMED and is_node_ready():
+		_refresh_unit_name_label()
 	if (
 		what == NOTIFICATION_TRANSFORM_CHANGED
 		and Engine.is_editor_hint()
@@ -227,6 +244,32 @@ func is_friendly() -> bool:
 	return definition != null and definition.faction == CharacterDefinition.Faction.FRIENDLY
 
 
+func is_present_on_map() -> bool:
+	return is_friendly() or current_health > 0
+
+
+func _sync_map_presence() -> void:
+	visible = is_present_on_map()
+
+
+func set_unit_name_visible(value: bool) -> void:
+	_unit_name_visible = value
+	_refresh_unit_name_label()
+
+
+func is_unit_name_visible() -> bool:
+	return _unit_name_visible
+
+
+func _refresh_unit_name_label() -> void:
+	if not is_instance_valid(_unit_name_label):
+		_unit_name_label = get_node_or_null("UnitNameLabel") as Label
+	if _unit_name_label == null:
+		return
+	_unit_name_label.text = str(name)
+	_unit_name_label.visible = _unit_name_visible
+
+
 func set_facing(value: Facing) -> void:
 	if current_facing == value:
 		return
@@ -265,7 +308,9 @@ func get_enemy_ai_profile() -> EnemyAIProfile:
 
 
 func get_movement_range() -> float:
-	return clampf(get_effective_stat(UnitStat.Type.MOVEMENT_RANGE), 0.0, 10.0)
+	return UnitStat.get_scaling_rules().clamp_effective_movement_range(
+		get_effective_stat(UnitStat.Type.MOVEMENT_RANGE)
+	)
 
 
 func _get_base_movement_range() -> float:
@@ -275,7 +320,9 @@ func _get_base_movement_range() -> float:
 
 
 func get_initiative() -> int:
-	return roundi(get_effective_stat(UnitStat.Type.SPEED))
+	return UnitStat.get_scaling_rules().calculate_initiative(
+		get_effective_stat(UnitStat.Type.SPEED)
+	)
 
 
 func get_base_stat(stat: UnitStat.Type) -> float:
@@ -305,10 +352,10 @@ func _get_base_stat_for_sources(stat: UnitStat.Type, include_equipment: bool) ->
 				return float(speed_override)
 			return float(definition.speed) if definition != null else 0.0
 		UnitStat.Type.MOVEMENT_RANGE:
-			var speed_adjustment := (
-				_calculate_effective_stat(UnitStat.Type.SPEED, include_equipment) - 10.0
-			) * 0.25
-			return clampf(_get_base_movement_range() + speed_adjustment, 2.0, 10.0)
+			return UnitStat.get_scaling_rules().calculate_speed_adjusted_base_movement(
+				_get_base_movement_range(),
+				_calculate_effective_stat(UnitStat.Type.SPEED, include_equipment)
+			)
 		_:
 			return 0.0
 
@@ -323,14 +370,14 @@ func get_effective_stat_without_equipment(stat: UnitStat.Type) -> float:
 	return _calculate_effective_stat(stat, false)
 
 
-func _calculate_effective_stat(stat: UnitStat.Type, include_equipment: bool) -> float:
+func _calculate_effective_stat(stat: UnitStat.Type, include_equipment: bool, include_statuses: bool = true) -> float:
 	if stat == UnitStat.Type.NONE:
 		return 0.0
 	_initialize_runtime_stats()
 	var flat_total := 0.0
 	var percent_add_total := 0.0
 	var percent_multiplier := 1.0
-	for modifier in _get_all_modifiers(include_equipment):
+	for modifier in _get_all_modifiers(include_equipment, include_statuses):
 		if modifier == null or modifier.stat != stat:
 			continue
 		match modifier.operation:
@@ -547,6 +594,234 @@ func get_abilities() -> Array[AbilityDefinition]:
 	return empty_abilities
 
 
+func set_dev_stat_override(stat: UnitStat.Type, value: float) -> void:
+	var previous_movement := get_movement_range()
+	var previous_max_health := get_max_health()
+	match stat:
+		UnitStat.Type.STRENGTH:
+			strength_override = maxi(0, roundi(value))
+		UnitStat.Type.DEXTERITY:
+			dexterity_override = maxi(0, roundi(value))
+		UnitStat.Type.INTELLIGENCE:
+			intelligence_override = maxi(0, roundi(value))
+		UnitStat.Type.CONSTITUTION:
+			constitution_override = maxi(0, roundi(value))
+		UnitStat.Type.SPEED:
+			speed_override = maxi(0, roundi(value))
+		UnitStat.Type.MOVEMENT_RANGE:
+			movement_range_override = maxf(0.0, value)
+		_:
+			return
+	_notify_stats_changed(previous_movement, previous_max_health)
+
+
+func clear_dev_stat_override(stat: UnitStat.Type) -> void:
+	var previous_movement := get_movement_range()
+	var previous_max_health := get_max_health()
+	match stat:
+		UnitStat.Type.STRENGTH:
+			strength_override = -1
+		UnitStat.Type.DEXTERITY:
+			dexterity_override = -1
+		UnitStat.Type.INTELLIGENCE:
+			intelligence_override = -1
+		UnitStat.Type.CONSTITUTION:
+			constitution_override = -1
+		UnitStat.Type.SPEED:
+			speed_override = -1
+		UnitStat.Type.MOVEMENT_RANGE:
+			movement_range_override = -1.0
+		_:
+			return
+	_notify_stats_changed(previous_movement, previous_max_health)
+
+
+func set_dev_ability_loadout(values: Array[AbilityDefinition]) -> void:
+	override_template_abilities = true
+	ability_overrides.assign(values)
+
+
+func reset_dev_ability_loadout() -> void:
+	override_template_abilities = false
+	ability_overrides.clear()
+
+
+func set_dev_equipment(slot: ItemDefinition.EquipmentSlot, item: ItemDefinition) -> void:
+	if not use_complete_equipment_override:
+		complete_equipment_overrides.assign(get_equipped_items())
+		use_complete_equipment_override = true
+	for index in range(complete_equipment_overrides.size() - 1, -1, -1):
+		var existing := complete_equipment_overrides[index]
+		if existing != null and existing.slot == slot:
+			complete_equipment_overrides.remove_at(index)
+	if item != null:
+		complete_equipment_overrides.append(item)
+	if item == null:
+		unequip_item(slot)
+	else:
+		equip_item(item)
+
+
+func reset_dev_equipment_to_template() -> void:
+	var previous_movement := get_movement_range()
+	var previous_max_health := get_max_health()
+	use_complete_equipment_override = false
+	complete_equipment_overrides.clear()
+	starting_equipment_overrides.clear()
+	_runtime_stats_initialized = false
+	_initialize_runtime_stats()
+	_notify_stats_changed(previous_movement, previous_max_health)
+	for slot in [
+		ItemDefinition.EquipmentSlot.WEAPON,
+		ItemDefinition.EquipmentSlot.ARMOR,
+		ItemDefinition.EquipmentSlot.ACCESSORY,
+	]:
+		equipment_changed.emit(slot, get_equipped_item(slot))
+
+
+func set_grid_cell_immediate(cell: Vector2i) -> void:
+	starting_grid_cell = cell
+	_set_runtime_grid_cell_immediate(cell)
+
+
+func _set_runtime_grid_cell_immediate(cell: Vector2i) -> void:
+	grid_cell = cell
+	if _grid != null:
+		global_position = _grid.grid_to_global(cell)
+	_update_sorting()
+	queue_redraw()
+
+
+func capture_setup_state() -> Dictionary:
+	return {
+		"id": scenario_unit_id,
+		"name": str(name),
+		"scene": scene_file_path,
+		"definition": definition.resource_path if definition != null else "",
+		"faction": int(definition.faction) if definition != null else -1,
+		"cell": [starting_grid_cell.x, starting_grid_cell.y],
+		"initial_facing": int(initial_facing),
+		"stat_overrides": {
+			"strength": strength_override,
+			"dexterity": dexterity_override,
+			"intelligence": intelligence_override,
+			"constitution": constitution_override,
+			"speed": speed_override,
+			"movement_range": movement_range_override,
+		},
+		"override_abilities": override_template_abilities,
+		"abilities": _resource_paths(ability_overrides),
+		"complete_equipment": use_complete_equipment_override,
+		"equipment": _resource_paths(complete_equipment_overrides),
+		"legacy_equipment": _resource_paths(starting_equipment_overrides),
+	}
+
+
+func apply_setup_state(state: Dictionary) -> void:
+	scenario_unit_id = str(state.get("id", ""))
+	var definition_path := str(state.get("definition", ""))
+	if ResourceLoader.exists(definition_path):
+		definition = load(definition_path) as CharacterDefinition
+	var cell_value: Array = state.get("cell", [0, 0])
+	if cell_value.size() >= 2:
+		starting_grid_cell = Vector2i(int(cell_value[0]), int(cell_value[1]))
+	initial_facing = int(state.get("initial_facing", Facing.RIGHT))
+	var stats: Dictionary = state.get("stat_overrides", {})
+	strength_override = int(stats.get("strength", -1))
+	dexterity_override = int(stats.get("dexterity", -1))
+	intelligence_override = int(stats.get("intelligence", -1))
+	constitution_override = int(stats.get("constitution", -1))
+	speed_override = int(stats.get("speed", -1))
+	movement_range_override = float(stats.get("movement_range", -1.0))
+	override_template_abilities = bool(state.get("override_abilities", false))
+	ability_overrides = _load_abilities(state.get("abilities", []))
+	use_complete_equipment_override = bool(state.get("complete_equipment", false))
+	complete_equipment_overrides = _load_items(state.get("equipment", []))
+	starting_equipment_overrides = _load_items(state.get("legacy_equipment", []))
+	_runtime_stats_initialized = false
+
+
+func capture_runtime_state() -> Dictionary:
+	var statuses: Array[Dictionary] = []
+	for active_status in _active_statuses:
+		if active_status.definition == null:
+			continue
+		var source_resource := ""
+		var source_kind := ""
+		if active_status.source is Resource:
+			source_resource = (active_status.source as Resource).resource_path
+			source_kind = "resource"
+		elif active_status.source is TacticalCharacter:
+			source_kind = "unit"
+		statuses.append({
+			"definition": active_status.definition.resource_path,
+			"remaining_turns": active_status.remaining_turns,
+			"processed_this_turn": active_status.processed_this_turn,
+			"source_kind": source_kind,
+			"source_resource": source_resource,
+			"source_unit": (
+				active_status.source_unit.scenario_unit_id
+				if is_instance_valid(active_status.source_unit)
+				else ""
+			),
+		})
+	return {
+		"id": scenario_unit_id,
+		"cell": [grid_cell.x, grid_cell.y],
+		"facing": int(current_facing),
+		"current_health": current_health,
+		"remaining_movement": _remaining_movement,
+		"ability_available": _ability_available,
+		"reaction_available": _opportunity_reaction_available,
+		"equipped_items": _resource_paths(get_equipped_items()),
+		"statuses": statuses,
+	}
+
+
+func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
+	var cell_value: Array = state.get("cell", [starting_grid_cell.x, starting_grid_cell.y])
+	if cell_value.size() >= 2:
+		_set_runtime_grid_cell_immediate(Vector2i(int(cell_value[0]), int(cell_value[1])))
+	current_facing = int(state.get("facing", initial_facing))
+	var saved_health := int(state.get("current_health", get_max_health()))
+	_remaining_movement = maxf(0.0, float(state.get("remaining_movement", 0.0)))
+	_ability_available = bool(state.get("ability_available", false))
+	_opportunity_reaction_available = bool(state.get("reaction_available", false))
+	_equipped_items.clear()
+	_runtime_stats_initialized = true
+	for item in _load_items(state.get("equipped_items", [])):
+		_equipped_items[item.slot] = item
+	_active_statuses.clear()
+	for raw_status in state.get("statuses", []):
+		if not raw_status is Dictionary:
+			continue
+		var status: Dictionary = raw_status
+		var definition_path := str(status.get("definition", ""))
+		var status_definition := load(definition_path) as StatusEffectDefinition
+		if status_definition == null:
+			continue
+		var source_unit := units_by_id.get(str(status.get("source_unit", ""))) as TacticalCharacter
+		var source: Object = null
+		var source_resource_path := str(status.get("source_resource", ""))
+		if not source_resource_path.is_empty():
+			source = load(source_resource_path)
+		elif str(status.get("source_kind", "")) == "unit":
+			source = source_unit
+		var restored := ActiveStatus.new(status_definition, source, source_unit)
+		restored.remaining_turns = int(status.get("remaining_turns", status_definition.duration_turns))
+		restored.processed_this_turn = bool(status.get("processed_this_turn", false))
+		_active_statuses.append(restored)
+	current_health = clampi(saved_health, 0, get_max_health())
+	_defeat_emitted = current_health <= 0
+	_sync_map_presence()
+	health_changed.emit(current_health, get_max_health())
+	movement_remaining_changed.emit(remaining_movement, get_movement_range())
+	ability_availability_changed.emit(ability_available)
+	opportunity_reaction_availability_changed.emit(opportunity_reaction_available)
+	statuses_changed.emit()
+	queue_redraw()
+
+
 func reset_movement() -> void:
 	_remaining_movement = get_movement_range() if current_health > 0 else 0.0
 	movement_remaining_changed.emit(remaining_movement, get_movement_range())
@@ -640,6 +915,7 @@ func apply_damage(amount: int) -> void:
 	health_changed.emit(current_health, get_max_health())
 	queue_redraw()
 	_show_damage_number(damage_taken)
+	_sync_map_presence()
 	if current_health == 0 and not _defeat_emitted:
 		_ability_available = false
 		ability_availability_changed.emit(false)
@@ -650,7 +926,7 @@ func apply_damage(amount: int) -> void:
 
 
 func heal(amount: int) -> void:
-	if amount <= 0:
+	if amount <= 0 or (permanent_defeat and _defeat_emitted):
 		return
 	var previous_health := current_health
 	var maximum_health := get_max_health()
@@ -658,12 +934,21 @@ func heal(amount: int) -> void:
 	if current_health > 0:
 		_defeat_emitted = false
 	if current_health != previous_health:
+		_sync_map_presence()
 		health_changed.emit(current_health, maximum_health)
 		queue_redraw()
 
 
 func get_max_health() -> int:
-	return roundi(maxf(1.0, get_effective_stat(UnitStat.Type.CONSTITUTION)) * 4.0)
+	return UnitStat.get_scaling_rules().calculate_max_health(
+		get_effective_stat(UnitStat.Type.CONSTITUTION)
+	)
+
+
+func get_max_health_without_statuses() -> int:
+	return UnitStat.get_scaling_rules().calculate_max_health(
+		_calculate_effective_stat(UnitStat.Type.CONSTITUTION, true, false)
+	)
 
 
 func _get_configuration_warnings() -> PackedStringArray:
@@ -686,7 +971,12 @@ func _get_configuration_warnings() -> PackedStringArray:
 				)
 			occupied_slots[item.slot] = true
 	var override_slots: Dictionary = {}
-	for item in starting_equipment_overrides:
+	var configured_overrides := (
+		complete_equipment_overrides
+		if use_complete_equipment_override
+		else starting_equipment_overrides
+	)
+	for item in configured_overrides:
 		if item == null:
 			continue
 		if override_slots.has(item.slot):
@@ -705,21 +995,54 @@ func _initialize_runtime_stats() -> void:
 	_equipped_items.clear()
 	if definition == null:
 		return
-	for item in definition.starting_equipment:
-		if item != null:
-			_equipped_items[item.slot] = item
-	for item in starting_equipment_overrides:
-		if item != null:
-			_equipped_items[item.slot] = item
+	if not use_complete_equipment_override:
+		for item in definition.starting_equipment:
+			if item != null:
+				_equipped_items[item.slot] = item
+		for item in starting_equipment_overrides:
+			if item != null:
+				_equipped_items[item.slot] = item
+	else:
+		for item in complete_equipment_overrides:
+			if item != null:
+				_equipped_items[item.slot] = item
 
 
-func _get_all_modifiers(include_equipment: bool = true) -> Array[StatModifierDefinition]:
+func _resource_paths(resources: Array) -> Array[String]:
+	var paths: Array[String] = []
+	for resource in resources:
+		if resource is Resource and not (resource as Resource).resource_path.is_empty():
+			paths.append((resource as Resource).resource_path)
+	return paths
+
+
+func _load_abilities(values) -> Array[AbilityDefinition]:
+	var result: Array[AbilityDefinition] = []
+	for value in values:
+		var ability := load(str(value)) as AbilityDefinition
+		if ability != null:
+			result.append(ability)
+	return result
+
+
+func _load_items(values) -> Array[ItemDefinition]:
+	var result: Array[ItemDefinition] = []
+	for value in values:
+		var item := load(str(value)) as ItemDefinition
+		if item != null:
+			result.append(item)
+	return result
+
+
+func _get_all_modifiers(include_equipment: bool = true, include_statuses: bool = true) -> Array[StatModifierDefinition]:
 	var result: Array[StatModifierDefinition] = []
 	if include_equipment:
 		for item in get_equipped_items():
 			for modifier in item.modifiers:
 				if modifier != null:
 					result.append(modifier)
+	if not include_statuses:
+		return result
 	for active_status in _active_statuses:
 		if active_status.definition == null:
 			continue

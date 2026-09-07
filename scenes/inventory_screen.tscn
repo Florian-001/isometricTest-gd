@@ -1,6 +1,14 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/inventory_screen.gd" id="1_screen"]
+
+[ext_resource type="PackedScene" path="res://scenes/inventory_item_slot.tscn" id="slot"]
+[ext_resource type="PackedScene" path="res://scenes/inventory_item_details.tscn" id="details"]
+[ext_resource type="Theme" path="res://resources/ui/inventory_theme.tres" id="theme"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/iron_sword.svg" id="weapon"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/ranger_bow.svg" id="ranged"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/ranger_armor.svg" id="armor"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/sage_charm.svg" id="accessory"]
 
 [node name="InventoryScreen" type="Control"]
 visible = false
@@ -12,7 +20,13 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
+theme = ExtResource("theme")
 script = ExtResource("1_screen")
+item_slot_scene = ExtResource("slot")
+weapon_fallback_icon = ExtResource("weapon")
+ranged_fallback_icon = ExtResource("ranged")
+armor_fallback_icon = ExtResource("armor")
+accessory_fallback_icon = ExtResource("accessory")
 
 [node name="Dim" type="ColorRect" parent="."]
 layout_mode = 1
@@ -24,6 +38,7 @@ grow_vertical = 2
 color = Color(0.01, 0.018, 0.03, 0.78)
 
 [node name="Panel" type="PanelContainer" parent="Dim"]
+theme_type_variation = &"InventoryWindow"
 custom_minimum_size = Vector2(1160, 620)
 layout_mode = 1
 anchors_preset = 8
@@ -82,7 +97,7 @@ layout_mode = 2
 [node name="Hint" type="Label" parent="Dim/Panel/Margin/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.72, 0.82, 1)
-text = "Click an unused item to equip it. Click equipped gear to return it to the general inventory."
+text = "Drag to move or swap · Double-click to equip or unequip · Hover for details"
 
 [node name="Columns" type="HBoxContainer" parent="Dim/Panel/Margin/VBox"]
 layout_mode = 2
@@ -90,7 +105,7 @@ size_flags_vertical = 3
 theme_override_constants/separation = 16
 
 [node name="GeneralPanel" type="PanelContainer" parent="Dim/Panel/Margin/VBox/Columns"]
-custom_minimum_size = Vector2(320, 0)
+custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 
@@ -120,15 +135,17 @@ layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="Entries" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll"]
+[node name="Entries" type="GridContainer" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 8
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 5
 
 [node name="EquipmentPanel" type="PanelContainer" parent="Dim/Panel/Margin/VBox/Columns"]
-custom_minimum_size = Vector2(320, 0)
+custom_minimum_size = Vector2(244, 0)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 0
 
 [node name="Margin" type="MarginContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel"]
 layout_mode = 2
@@ -144,16 +161,19 @@ theme_override_constants/separation = 10
 [node name="Title" type="Label" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 19
-text = "Character Equipment"
+text = "Equipment"
 
 [node name="CharacterName" type="Label" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.72, 1, 1)
 text = "Character"
+autowrap_mode = 3
 
-[node name="EquipmentEntries" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox"]
+[node name="EquipmentEntries" type="GridContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 3
 
 [node name="DetailsPanel" type="PanelContainer" parent="Dim/Panel/Margin/VBox/Columns"]
 custom_minimum_size = Vector2(400, 0)
@@ -199,3 +219,120 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
+
+[node name="Cell00" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell01" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell02" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell03" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell04" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell05" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell06" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell07" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell08" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell09" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell10" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell11" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell12" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell13" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell14" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell15" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell16" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell17" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell18" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Cell19" parent="Dim/Panel/Margin/VBox/Columns/GeneralPanel/Margin/VBox/Scroll/Entries" instance=ExtResource("slot")]
+layout_mode = 2
+
+[node name="Weapon" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 8
+
+[node name="Slot" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries/Weapon" instance=ExtResource("slot")]
+layout_mode = 2
+equipment_slot = 0
+empty_icon = ExtResource("weapon")
+
+[node name="Label" type="Label" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries/Weapon"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "Weapon"
+
+[node name="Armor" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 8
+
+[node name="Slot" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries/Armor" instance=ExtResource("slot")]
+layout_mode = 2
+equipment_slot = 1
+empty_icon = ExtResource("armor")
+
+[node name="Label" type="Label" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries/Armor"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "Armor"
+
+[node name="Accessory" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 8
+
+[node name="Slot" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries/Accessory" instance=ExtResource("slot")]
+layout_mode = 2
+equipment_slot = 2
+empty_icon = ExtResource("accessory")
+
+[node name="Label" type="Label" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries/Accessory"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "Accessory"
+
+[node name="HoverTimer" type="Timer" parent="."]
+wait_time = 0.2
+one_shot = true
+
+[node name="ItemDetails" parent="." instance=ExtResource("details")]
+layout_mode = 0
+
+[connection signal="timeout" from="HoverTimer" to="." method="_on_hover_timeout"]

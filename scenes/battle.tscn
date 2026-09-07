@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/initiative_battle_controller.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/initiative_turn_manager.gd" id="2_turn_manager"]
@@ -14,20 +14,33 @@
 [ext_resource type="Resource" path="res://resources/items/wooden_sword.tres" id="12_wooden_sword"]
 [ext_resource type="Resource" path="res://resources/items/ranger_bow.tres" id="13_ranger_bow"]
 [ext_resource type="Resource" path="res://resources/items/frost_bow.tres" id="14_frost_bow"]
+[ext_resource type="Resource" path="res://resources/dev_tool_catalog.tres" id="15_dev_catalog"]
+[ext_resource type="PackedScene" path="res://scenes/dev_mode_panel.tscn" id="16_dev_panel"]
+[ext_resource type="Script" path="res://scripts/dev_terrain_editor.gd" id="17_dev_terrain"]
 
 [node name="Battle" type="Node2D"]
+process_mode = 3
 script = ExtResource("1_controller")
+dev_tool_catalog = ExtResource("15_dev_catalog")
 
 [node name="MapContainer" type="Node2D" parent="."]
+process_mode = 1
 
 [node name="GeneralInventory" type="Node" parent="."]
+process_mode = 1
 script = ExtResource("6_inventory")
 starting_items = Array[ExtResource("8_item_type")]([ExtResource("9_sword"), ExtResource("10_armor"), ExtResource("11_charm"), ExtResource("12_wooden_sword"), ExtResource("13_ranger_bow"), ExtResource("14_frost_bow")])
 
 [node name="TurnManager" type="Node" parent="."]
+process_mode = 1
 script = ExtResource("2_turn_manager")
 
+[node name="DevTerrainEditor" type="Node" parent="."]
+process_mode = 3
+script = ExtResource("17_dev_terrain")
+
 [node name="TacticalCamera" type="Camera2D" parent="."]
+process_mode = 1
 position = Vector2(640, 360)
 script = ExtResource("3_camera")
 
@@ -69,14 +82,18 @@ offset_right = -16.0
 offset_bottom = -16.0
 grow_horizontal = 0
 grow_vertical = 0
+tooltip_text = "End the current turn (Space)"
 theme_override_font_sizes/font_size = 16
-text = "End Turn"
+text = "End Turn [Space]"
+
+[node name="DevModePanel" parent="HUD" instance=ExtResource("16_dev_panel")]
 
 [node name="TopRightActions" type="HBoxContainer" parent="HUD"]
+z_index = 10
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -312.0
+offset_left = -520.0
 offset_top = 118.0
 offset_right = -16.0
 offset_bottom = 158.0
@@ -87,9 +104,18 @@ alignment = 2
 [node name="DevButton" type="Button" parent="HUD/TopRightActions"]
 custom_minimum_size = Vector2(82, 40)
 layout_mode = 2
-tooltip_text = "Show AI decision score history"
+tooltip_text = "Pause and edit the current scenario"
 theme_override_font_sizes/font_size = 15
 text = "Dev"
+
+[node name="NamesButton" type="Button" parent="HUD/TopRightActions"]
+custom_minimum_size = Vector2(102, 40)
+layout_mode = 2
+tooltip_text = "Hide unit names below units"
+theme_override_font_sizes/font_size = 15
+toggle_mode = true
+button_pressed = true
+text = "Names: On"
 
 [node name="InventoryButton" type="Button" parent="HUD/TopRightActions"]
 custom_minimum_size = Vector2(108, 40)
@@ -99,67 +125,19 @@ theme_override_font_sizes/font_size = 15
 toggle_mode = true
 text = "Inventory"
 
+[node name="RestartButton" type="Button" parent="HUD/TopRightActions"]
+custom_minimum_size = Vector2(90, 40)
+layout_mode = 2
+tooltip_text = "Restart this battle from round one"
+theme_override_font_sizes/font_size = 15
+text = "Restart"
+
 [node name="LevelsButton" type="Button" parent="HUD/TopRightActions"]
 custom_minimum_size = Vector2(90, 40)
 layout_mode = 2
 tooltip_text = "Return to level selection"
 theme_override_font_sizes/font_size = 15
 text = "Levels"
-
-[node name="DevHistoryPanel" type="PanelContainer" parent="HUD"]
-visible = false
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = -610.0
-offset_right = 666.0
-offset_bottom = -70.0
-grow_vertical = 0
-
-[node name="Margin" type="MarginContainer" parent="HUD/DevHistoryPanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 10
-
-[node name="VBox" type="VBoxContainer" parent="HUD/DevHistoryPanel/Margin"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Header" type="HBoxContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
-layout_mode = 2
-
-[node name="Title" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
-theme_override_font_sizes/font_size = 18
-text = "AI Debug Score History"
-
-[node name="Spacer" type="Control" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="CloseHint" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.68, 0.78, 1)
-theme_override_font_sizes/font_size = 12
-text = "Press Dev to close"
-
-[node name="HistoryScroll" type="ScrollContainer" parent="HUD/DevHistoryPanel/Margin/VBox"]
-custom_minimum_size = Vector2(0, 480)
-layout_mode = 2
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-
-[node name="DebugText" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/HistoryScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 12
-text = "No AI decisions recorded yet."
-autowrap_mode = 2
 
 [node name="InventoryScreen" parent="HUD" instance=ExtResource("7_inventory_screen")]
 

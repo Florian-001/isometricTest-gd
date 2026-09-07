@@ -85,9 +85,40 @@ func test_character_health_and_defeat_signal() -> void:
 	assert_eq(character.current_health, 100, "healing should clamp to maximum health")
 	character.apply_damage(150)
 	assert_eq(character.current_health, 0, "damage should clamp to zero")
+	assert_true(character.is_present_on_map(), "defeated friendly units should remain on the map")
+	assert_true(character.visible, "defeated friendly units should retain their presentation")
 	assert_eq(defeated_calls[0], 1, "defeat should emit once on reaching zero")
 	character.apply_damage(1)
 	assert_eq(defeated_calls[0], 1, "defeat should not repeat while already defeated")
+
+	var enemy_definition = CharacterDefinitionScript.new()
+	enemy_definition.faction = CharacterDefinition.Faction.ENEMY
+	enemy_definition.constitution = 25
+	var enemy = track(TacticalCharacterScript.new()) as TacticalCharacter
+	enemy.definition = enemy_definition
+	enemy._ready()
+	assert_true(enemy.is_present_on_map(), "living enemies should begin on the map")
+	enemy.apply_damage(enemy.current_health)
+	assert_false(enemy.is_present_on_map(), "defeated enemies should leave the map")
+	assert_false(enemy.visible, "defeated enemies should disappear immediately")
+	enemy.heal(enemy.get_max_health())
+	assert_true(enemy.is_present_on_map(), "a revived enemy should return to the map")
+	assert_true(enemy.visible, "a revived enemy should become visible again")
+
+
+func test_unit_name_label_uses_instance_name_and_visibility_api() -> void:
+	var unit_scene := load("res://scenes/enemies/goblin_warrior.tscn") as PackedScene
+	var unit := track(unit_scene.instantiate()) as TacticalCharacter
+	unit.name = "GoblinWarriorA"
+	unit._ready()
+	var label := unit.get_node("UnitNameLabel") as Label
+	assert_eq(label.text, "GoblinWarriorA", "the world label should use the scene instance name")
+	assert_true(label.visible, "unit names should begin visible")
+	unit.set_unit_name_visible(false)
+	assert_false(label.visible, "the presentation API should hide the authored label")
+	assert_false(unit.is_unit_name_visible(), "the unit should retain its requested presentation state")
+	unit.set_unit_name_visible(true)
+	assert_true(label.visible, "the presentation API should show the authored label again")
 
 
 func test_directional_character_artwork_and_facing() -> void:
@@ -190,6 +221,42 @@ func test_initiative_sorting_and_scene_order_ties() -> void:
 	friend_b.speed_override = 10
 	manager.start_combat(units)
 	assert_eq(manager.turn_order, [friend_a, friend_b, enemy], "initiative ties should retain the supplied scene order")
+
+
+func test_turn_manager_removes_units_before_their_nodes_are_freed() -> void:
+	var first := _make_unit(true, Vector2i(1, 1), 6.0, 12)
+	var active := _make_unit(false, Vector2i(4, 4), 5.0, 10)
+	var remaining := _make_unit(true, Vector2i(2, 2), 3.0, 8)
+	first.scenario_unit_id = "first"
+	active.scenario_unit_id = "active"
+	remaining.scenario_unit_id = "remaining"
+	var manager = track(TurnManagerScript.new())
+	var units: Array[TacticalCharacter] = [first, active, remaining]
+	manager.start_combat(units)
+	manager.end_current_turn()
+	var order_change_count := [0]
+	manager.turn_order_changed.connect(func(_order: Array[TacticalCharacter]): order_change_count[0] += 1)
+
+	manager.remove_unit(first)
+	assert_eq(manager.turn_order, [active, remaining], "removing another unit should update the owned turn order immediately")
+	assert_false(manager._scene_indices.has(first), "removing a unit should unregister its scene-order tie breaker")
+	assert_eq(manager.current_unit, active, "removing another unit should preserve the active unit")
+	assert_eq(manager.current_index, 0, "removing another unit should reindex the active unit")
+	assert_eq(order_change_count[0], 1, "removing another unit should emit one turn-order update")
+	first.free()
+	assert_eq(manager.get_rotating_order(), [active, remaining], "turn-order queries should remain safe after the removed node is freed")
+
+	manager.remove_unit(active)
+	assert_eq(manager.turn_order, [remaining], "removing the active unit should leave only registered units")
+	assert_eq(manager.current_unit, null, "removing the active unit should clear the obsolete turn")
+	assert_eq(manager.current_index, -1, "removing the active unit should clear its index")
+	assert_eq(order_change_count[0], 2, "removing the active unit should emit one additional turn-order update")
+	active.free()
+	assert_eq(manager.get_rotating_order(), [remaining], "turn-order queries should remain safe after the active node is freed")
+
+	var stale := _make_unit(false, Vector2i(3, 3), 1.0)
+	stale.free()
+	assert_false(manager._is_living(stale), "validity checks should reject a previously freed object without a typed-argument error")
 
 
 func test_individual_turn_sequence_and_movement_reset() -> void:
@@ -1528,6 +1595,20 @@ func test_enemy_planner_respects_blocked_corner() -> void:
 	assert_true(planner.choose_path(enemy, friendlies, units, pathfinder).is_empty(), "enemy should skip when units block every legal exit")
 
 
+func test_enemy_planner_ignores_removed_enemies_but_retains_defeated_friendlies() -> void:
+	var acting_enemy := _make_unit(false, Vector2i(0, 0), 5.0)
+	var removed_enemy := _make_unit(false, Vector2i(1, 0), 0.0)
+	var defeated_friendly := _make_unit(true, Vector2i(0, 1), 0.0)
+	removed_enemy.apply_damage(removed_enemy.current_health)
+	defeated_friendly.apply_damage(defeated_friendly.current_health)
+	var units: Array[TacticalCharacter] = [acting_enemy, removed_enemy, defeated_friendly]
+	var planner = EnemyMovementPlannerScript.new()
+	var blocked := planner._get_blocked_cells(acting_enemy, units)
+
+	assert_false(blocked.has(removed_enemy.grid_cell), "enemy planning should ignore a removed enemy's cell")
+	assert_true(blocked.has(defeated_friendly.grid_cell), "enemy planning should retain a defeated friendly's cell")
+
+
 func test_enemy_planner_returns_typed_empty_path_when_adjacent() -> void:
 	var enemy := _make_unit(false, Vector2i(1, 1), 5.0)
 	var friendly := _make_unit(true, Vector2i(2, 1), 6.0)
@@ -1714,7 +1795,11 @@ func _make_unit(friendly: bool, cell: Vector2i, movement: float, speed: int = 10
 	definition.movement_range = movement
 	var character = track(TacticalCharacterScript.new()) as TacticalCharacter
 	character.definition = definition
-	character.movement_range_override = movement - (float(speed) - 10.0) * 0.25
+	var stat_rules := UnitStat.get_scaling_rules()
+	character.movement_range_override = movement - (
+		(float(speed) - stat_rules.movement_speed_reference)
+		* stat_rules.movement_per_speed_point
+	)
 	character.speed_override = speed
 	character.starting_grid_cell = cell
 	character._ready()

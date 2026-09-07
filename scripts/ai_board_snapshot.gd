@@ -8,6 +8,7 @@ var units: Array[TacticalCharacter] = []
 var unit_cells: Dictionary = {}
 var unit_health: Dictionary = {}
 var unit_max_health: Dictionary = {}
+var unit_constitutions: Dictionary = {}
 var unit_movement_ranges: Dictionary = {}
 var unit_remaining_movement: Dictionary = {}
 var unit_opportunity_reactions: Dictionary = {}
@@ -32,6 +33,7 @@ static func from_battle(
 		snapshot.unit_cells[unit] = unit.grid_cell
 		snapshot.unit_health[unit] = unit.current_health
 		snapshot.unit_max_health[unit] = unit.get_max_health()
+		snapshot.unit_constitutions[unit] = unit.get_effective_stat(UnitStat.Type.CONSTITUTION)
 		snapshot.unit_movement_ranges[unit] = unit.get_movement_range()
 		snapshot.unit_remaining_movement[unit] = unit.remaining_movement
 		snapshot.unit_opportunity_reactions[unit] = unit.opportunity_reaction_available
@@ -58,6 +60,7 @@ func duplicate_state() -> AIBoardSnapshot:
 	result.unit_cells = unit_cells.duplicate()
 	result.unit_health = unit_health.duplicate()
 	result.unit_max_health = unit_max_health.duplicate()
+	result.unit_constitutions = unit_constitutions.duplicate()
 	result.unit_movement_ranges = unit_movement_ranges.duplicate()
 	result.unit_remaining_movement = unit_remaining_movement.duplicate()
 	result.unit_opportunity_reactions = unit_opportunity_reactions.duplicate()
@@ -235,7 +238,9 @@ func _apply_new_status_movement_modifiers(
 		* maxf(0.0, 1.0 + percent_add_total)
 		* percent_multiplier
 	)
-	unit_movement_ranges[unit] = clampf(adjusted, 0.0, 10.0)
+	unit_movement_ranges[unit] = (
+		UnitStat.get_scaling_rules().clamp_effective_movement_range(adjusted)
+	)
 	unit_remaining_movement[unit] = minf(
 		get_remaining_movement(unit),
 		get_movement_range(unit)
@@ -246,7 +251,12 @@ func _apply_new_status_constitution_modifiers(
 	unit: TacticalCharacter,
 	status_effect: StatusEffectDefinition
 ) -> void:
-	var constitution := float(get_max_health(unit)) / 4.0
+	var constitution := float(unit_constitutions.get(
+		unit,
+		unit.get_effective_stat(UnitStat.Type.CONSTITUTION)
+		if is_instance_valid(unit)
+		else 0.0
+	))
 	var flat_total := 0.0
 	var percent_add_total := 0.0
 	var percent_multiplier := 1.0
@@ -261,12 +271,13 @@ func _apply_new_status_constitution_modifiers(
 			StatModifierDefinition.Operation.PERCENT_MULTIPLY:
 				percent_multiplier *= maxf(0.0, 1.0 + modifier.value)
 	var adjusted := maxf(
-		1.0,
+		0.0,
 		(constitution + flat_total)
 		* maxf(0.0, 1.0 + percent_add_total)
 		* percent_multiplier
 	)
-	unit_max_health[unit] = roundi(adjusted * 4.0)
+	unit_constitutions[unit] = adjusted
+	unit_max_health[unit] = UnitStat.get_scaling_rules().calculate_max_health(adjusted)
 
 
 func get_terrain(cell: Vector2i) -> TileDefinition:
@@ -283,8 +294,12 @@ func get_living_unit_at(cell: Vector2i) -> TacticalCharacter:
 func get_blocked_cells(except_unit: TacticalCharacter = null) -> Dictionary:
 	var blocked := wall_cells.duplicate()
 	for unit in units:
-		# Defeated units intentionally remain blockers until death removal exists.
-		if is_instance_valid(unit) and unit != except_unit:
+		# Defeated enemies are tactically absent; defeated friendlies retain their cells.
+		if (
+			is_instance_valid(unit)
+			and unit != except_unit
+			and (unit.is_friendly() or is_living(unit))
+		):
 			blocked[get_cell(unit)] = true
 	return blocked
 

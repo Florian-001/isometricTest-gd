@@ -6,11 +6,17 @@
 [ext_resource type="Resource" path="res://resources/maps/goblin_skirmish.tres" id="4_goblin_skirmish"]
 [ext_resource type="PackedScene" path="res://scenes/battle.tscn" id="5_battle"]
 [ext_resource type="PackedScene" path="res://scenes/run_map_screen.tscn" id="6_run_map"]
+[ext_resource type="Script" path="res://scripts/run_controller.gd" id="run_controller"]
+[ext_resource type="Resource" path="res://resources/run/default_run.tres" id="run_config"]
 
 [node name="Main" type="Node" unique_id=1967285414]
 script = ExtResource("1_manager")
 levels = Array[ExtResource("2_definition_type")]([ExtResource("3_terrain_showcase"), ExtResource("4_goblin_skirmish")])
 battle_scene = ExtResource("5_battle")
+
+[node name="RunController" type="Node" parent="."]
+script = ExtResource("run_controller")
+config = ExtResource("run_config")
 
 [node name="LevelSelect" type="CanvasLayer" parent="." unique_id=724740332]
 layer = 20
@@ -76,9 +82,25 @@ theme_override_constants/separation = 12
 [node name="ShowMapButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
 custom_minimum_size = Vector2(520, 58)
 layout_mode = 2
-tooltip_text = "Open the branching road map"
+tooltip_text = "Begin a new journey toward the summit"
 theme_override_font_sizes/font_size = 17
-text = "Show Map"
+text = "New Run"
+
+[node name="ContinueRunButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
+visible = false
+custom_minimum_size = Vector2(520, 48)
+layout_mode = 2
+text = "Continue Run"
+
+[node name="RunMessage" type="Label" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
+layout_mode = 2
+autowrap_mode = 2
+theme_override_font_sizes/font_size = 13
+
+[node name="ReplaceRunDialog" type="ConfirmationDialog" parent="LevelSelect"]
+title = "Start a new run?"
+dialog_text = "Starting a new run replaces your saved journey. Continue?"
+ok_button_text = "Start new run"
 
 [node name="EmptyState" type="Label" parent="LevelSelect/Root/Center/Panel/Margin/VBox" unique_id=1151119057]
 visible = false

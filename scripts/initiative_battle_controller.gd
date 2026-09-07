@@ -5,14 +5,38 @@ const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_
 const BattleMapDefinitionScript = preload("res://scripts/battle_map_definition.gd")
 const BattleMapScript = preload("res://scripts/battle_map.gd")
 const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
+const DEV_AI_RESTORE_CONTEXT := "_dev_ai_history_restore"
+const ABILITY_SHORTCUT_ACTIONS := [
+	&"battle_ability_1",
+	&"battle_ability_2",
+	&"battle_ability_3",
+	&"battle_ability_4",
+	&"battle_ability_5",
+	&"battle_ability_6",
+	&"battle_ability_7",
+	&"battle_ability_8",
+	&"battle_ability_9",
+]
 
 signal return_to_level_select_requested
+signal battle_reload_requested(payload: Dictionary)
+signal unit_name_visibility_changed(visible: bool)
+signal battle_finished(victory: bool, party_results: Array[Dictionary], inventory: Array[String])
+
+## Optional run entry state. Assigned before this battle enters the scene tree.
+var run_party_input: Array[Dictionary] = []
+var run_inventory_input: Array[String] = []
+var run_encounter: RunEncounterDefinition
+var _run_result_emitted := false
 
 @export_category("Battle Map")
 @export var map_definition: BattleMapDefinitionScript
 @export var center_camera_on_start := true
+@export_category("Battle Presentation")
+@export var unit_names_visible := true
 @export_category("Developer Tools")
 @export var enable_dev_tools := true
+@export var dev_tool_catalog: DevToolCatalog
 @export_range(1, 10, 1) var ai_debug_candidate_count := 5
 @export_range(1, 100, 1) var ai_debug_history_limit := 30
 
@@ -22,14 +46,16 @@ signal return_to_level_select_requested
 @onready var turn_order_bar: TurnOrderBar = $HUD/TurnOrderBar
 @onready var ability_bar: AbilityBar = $HUD/AbilityBar
 @onready var general_inventory: GeneralInventory = $GeneralInventory
+@onready var names_button: Button = $HUD/TopRightActions/NamesButton
 @onready var inventory_button: Button = $HUD/TopRightActions/InventoryButton
+@onready var restart_button: Button = $HUD/TopRightActions/RestartButton
 @onready var levels_button: Button = $HUD/TopRightActions/LevelsButton
 @onready var inventory_screen: InventoryScreen = $HUD/InventoryScreen
 @onready var return_to_levels_dialog: ConfirmationDialog = $HUD/ReturnToLevelsDialog
 @onready var end_turn_button: Button = $HUD/EndTurnButton
 @onready var dev_button: Button = $HUD/TopRightActions/DevButton
-@onready var dev_history_panel: PanelContainer = $HUD/DevHistoryPanel
-@onready var ai_debug_label: Label = $HUD/DevHistoryPanel/Margin/VBox/HistoryScroll/DebugText
+@onready var dev_mode_panel: DevModePanel = $HUD/DevModePanel
+@onready var dev_terrain_editor: DevTerrainEditor = $DevTerrainEditor
 
 var _pathfinder: GridPathfinder
 var _enemy_ai_planner: EnemyAIPlanner
@@ -53,15 +79,35 @@ var _movement_locked := true
 var _last_mouse_screen_position := Vector2.ZERO
 var _has_mouse_screen_position := false
 var _ai_debug_history: Array[String] = []
+var _ai_debug_checkpoints: Array[Dictionary] = []
 var _combat_over := false
 var _combat_result_text := ""
 var _return_dialog_paused_battle := false
+var pending_restore_payload: Dictionary = {}
+var _dev_open := false
+var _dev_dirty := false
+var _dev_open_pending := false
+var _dev_drag_unit: TacticalCharacter
+var _dev_drag_origin := Vector2i.ZERO
+var _dev_drag_start_screen := Vector2.ZERO
+var _dev_dragging := false
+var _dev_palette_scene: PackedScene
+var _restored_ai_turn_pending := false
+var _pending_ai_history_cutoff := -1
+var _pending_ai_history_scroll_position := -1
+var initialization_succeeded := false
 
 
 func _ready() -> void:
+	var ai_restore_context: Dictionary = {}
+	var raw_ai_restore_context: Variant = pending_restore_payload.get(DEV_AI_RESTORE_CONTEXT, {})
+	if raw_ai_restore_context is Dictionary:
+		ai_restore_context = raw_ai_restore_context
+	restart_button.pressed.connect(_on_restart_button_pressed)
 	levels_button.pressed.connect(_on_levels_button_pressed)
 	return_to_levels_dialog.confirmed.connect(_on_return_to_levels_confirmed)
 	return_to_levels_dialog.canceled.connect(_on_return_to_levels_canceled)
+	names_button.toggled.connect(_on_names_button_toggled)
 	if not _instantiate_battle_map():
 		_combat_over = true
 		_combat_result_text = "Invalid Level"
@@ -69,10 +115,23 @@ func _ready() -> void:
 		_refresh_ability_bar()
 		_update_turn_hud()
 		return
+	var authored_environment := _capture_environment_setup()
+	if run_encounter != null:
+		enable_dev_tools = false
+		if not _prepare_run_characters():
+			return
+		restart_button.hide()
+		levels_button.text = "Save & Exit"
+		return_to_levels_dialog.dialog_text = "Return to the menu? This encounter will restart from its entry checkpoint when you continue."
+	if not pending_restore_payload.is_empty():
+		var pending_setup: Dictionary = pending_restore_payload.get("setup", {})
+		_replace_units_from_setup(pending_setup.get("units", []))
+		_replace_environment_from_setup(pending_setup)
 	_pathfinder = GridPathfinder.new(grid.grid_size)
 	_enemy_ai_planner = EnemyAIPlanner.new()
 	_ability_targeting = AbilityTargeting.new(grid.grid_size)
 	_ability_executor = AbilityExecutor.new()
+	_ability_executor.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(_ability_executor)
 	turn_manager.turn_starting.connect(_on_turn_starting)
 	turn_manager.turn_started.connect(_on_turn_started)
@@ -84,46 +143,85 @@ func _ready() -> void:
 	inventory_button.toggled.connect(_on_inventory_button_toggled)
 	inventory_screen.closed.connect(_on_inventory_screen_closed)
 	dev_button.pressed.connect(_on_dev_button_pressed)
+	dev_mode_panel.play_requested.connect(_on_dev_play_requested)
+	dev_mode_panel.save_requested.connect(_on_dev_save_requested)
+	dev_mode_panel.load_payload_requested.connect(_on_dev_load_payload_requested)
+	dev_mode_panel.ai_history_restore_requested.connect(_on_ai_history_restore_requested)
+	dev_mode_panel.selected_unit_deleted.connect(_on_dev_delete_selected)
+	dev_mode_panel.selected_unit_heal_requested.connect(_on_dev_heal_selected)
+	dev_mode_panel.unit_setup_changed.connect(_on_dev_setup_changed)
+	dev_mode_panel.unit_palette_drag_started.connect(_on_dev_palette_drag_started)
+	dev_mode_panel.terrain_brush_changed.connect(_on_dev_terrain_brush_changed)
+	dev_mode_panel.terrain_undo_requested.connect(dev_terrain_editor.undo)
+	dev_mode_panel.terrain_redo_requested.connect(dev_terrain_editor.redo)
+	dev_mode_panel.terrain_reset_requested.connect(dev_terrain_editor.reset_to_map)
+	dev_mode_panel.active_tab_changed.connect(_on_dev_active_tab_changed)
+	dev_terrain_editor.environment_refresh_requested.connect(_refresh_environment_after_edit)
+	dev_terrain_editor.environment_changed.connect(_on_dev_setup_changed)
+	dev_terrain_editor.history_changed.connect(dev_mode_panel.set_terrain_history_state)
+	dev_terrain_editor.message_requested.connect(dev_mode_panel.show_message)
 	terrain.terrain_changed.connect(_on_terrain_changed)
 
-	for child in characters_container.get_children():
-		if child is TacticalCharacter:
-			var character := child as TacticalCharacter
-			_characters.append(character)
-			character.initialize(grid)
-			character.movement_remaining_changed.connect(
-				_on_unit_movement_changed.bind(character)
-			)
-			character.ability_availability_changed.connect(
-				_on_unit_ability_availability_changed.bind(character)
-			)
-			character.statuses_changed.connect(
-				_on_character_statuses_changed.bind(character)
-			)
-			character.cell_entered.connect(_on_character_cell_entered)
-			character.defeated.connect(_on_character_defeated)
-			character.equipment_changed.connect(
-				_on_character_equipment_changed.bind(character)
-			)
-	inventory_screen.setup(general_inventory, _get_living_friendlies())
+	_collect_and_initialize_characters()
+	if run_encounter != null:
+		_restore_run_party()
+	_apply_unit_name_visibility()
 	_initialize_walls()
 	terrain.initialize(grid, _get_wall_cells())
+	dev_terrain_editor.setup(
+		grid,
+		terrain,
+		walls_container,
+		_characters,
+		authored_environment
+	)
 
 	if center_camera_on_start:
 		tactical_camera.position = grid.position + grid.get_local_bounds().get_center()
 	dev_button.visible = enable_dev_tools
-	dev_history_panel.visible = false
+	dev_mode_panel.setup(dev_tool_catalog, terrain.palette)
+	dev_mode_panel.close_panel()
+	_restore_ai_history_context(ai_restore_context)
 	_refresh_ai_debug_history()
-	if not _check_combat_end():
+	var runtime_restored := true
+	if not pending_restore_payload.is_empty() and not bool(
+		pending_restore_payload.get("runtime", {}).get("fresh_start", false)
+	):
+		runtime_restored = _restore_runtime_state(pending_restore_payload.get("runtime", {}))
+	elif not _check_combat_end():
 		turn_manager.start_combat(_characters)
+	if not runtime_restored:
+		return
+	inventory_screen.setup(general_inventory, _get_living_friendlies())
 	_update_turn_hud()
+	initialization_succeeded = true
+	if not ai_restore_context.is_empty():
+		_restored_ai_turn_pending = (
+			not _combat_over
+			and is_instance_valid(turn_manager.current_unit)
+			and not turn_manager.current_unit.is_friendly()
+		)
+		_open_restored_ai_checkpoint.call_deferred()
 
 
 func _exit_tree() -> void:
+	dev_terrain_editor.cancel_stroke()
+	if grid != null:
+		grid.clear_dev_brush_preview()
+	if _dev_open and get_tree() != null:
+		tactical_camera.set_dev_mode_pan_enabled(false)
+		get_tree().paused = false
 	_resume_after_return_dialog()
 
 
 func shutdown_battle() -> void:
+	if _dev_open and get_tree() != null:
+		tactical_camera.set_dev_mode_pan_enabled(false)
+		get_tree().paused = false
+	_dev_open = false
+	dev_terrain_editor.cancel_stroke()
+	if grid != null:
+		grid.clear_dev_brush_preview()
 	_resume_after_return_dialog()
 	if _combat_over and turn_manager.current_unit == null:
 		return
@@ -158,7 +256,376 @@ func _instantiate_battle_map() -> bool:
 	return true
 
 
+func _replace_units_from_setup(raw_units) -> void:
+	if not raw_units is Array:
+		return
+	for child in characters_container.get_children():
+		if child is TacticalCharacter:
+			characters_container.remove_child(child)
+			child.free()
+	for raw_state in raw_units:
+		if not raw_state is Dictionary:
+			continue
+		var state: Dictionary = raw_state
+		var scene_path := str(state.get("scene", ""))
+		var unit_scene := load(scene_path) as PackedScene
+		if unit_scene == null:
+			continue
+		var instance := unit_scene.instantiate()
+		if not instance is TacticalCharacter:
+			instance.free()
+			continue
+		var character := instance as TacticalCharacter
+		character.name = str(state.get("name", "Unit"))
+		character.apply_setup_state(state)
+		characters_container.add_child(character)
+
+
+func _collect_and_initialize_characters() -> void:
+	_characters.clear()
+	var used_ids := {}
+	for child in characters_container.get_children():
+		if not child is TacticalCharacter:
+			continue
+		var character := child as TacticalCharacter
+		character.scenario_unit_id = _make_unique_unit_id(character, used_ids)
+		used_ids[character.scenario_unit_id] = true
+		_characters.append(character)
+		character.initialize(grid)
+		character.set_unit_name_visible(unit_names_visible)
+		_connect_character(character)
+
+
+func _connect_character(character: TacticalCharacter) -> void:
+	character.movement_remaining_changed.connect(
+		_on_unit_movement_changed.bind(character)
+	)
+	character.ability_availability_changed.connect(
+		_on_unit_ability_availability_changed.bind(character)
+	)
+	character.statuses_changed.connect(
+		_on_character_statuses_changed.bind(character)
+	)
+	character.cell_entered.connect(_on_character_cell_entered)
+	character.defeated.connect(_on_character_defeated)
+	character.equipment_changed.connect(
+		_on_character_equipment_changed.bind(character)
+	)
+
+
+func _make_unique_unit_id(character: TacticalCharacter, used_ids: Dictionary) -> String:
+	var base := character.scenario_unit_id.strip_edges()
+	if base.is_empty():
+		base = str(character.name).to_snake_case()
+	if base.is_empty():
+		base = "unit"
+	var candidate := base
+	var suffix := 2
+	while used_ids.has(candidate):
+		candidate = "%s_%d" % [base, suffix]
+		suffix += 1
+	return candidate
+
+
+func capture_save_payload(fresh_start := false) -> Dictionary:
+	var setup_units: Array[Dictionary] = []
+	var runtime_units: Array[Dictionary] = []
+	for character in _characters:
+		if not is_instance_valid(character):
+			continue
+		setup_units.append(character.capture_setup_state())
+		if not fresh_start:
+			runtime_units.append(character.capture_runtime_state())
+	var wall_cells: Array[Array] = []
+	for cell: Vector2i in _get_wall_cells().keys():
+		wall_cells.append([cell.x, cell.y])
+	wall_cells.sort_custom(func(a: Array, b: Array) -> bool:
+		return int(a[1]) < int(b[1]) or (int(a[1]) == int(b[1]) and int(a[0]) < int(b[0]))
+	)
+	var environment := _capture_environment_setup()
+	var runtime := {"fresh_start": true} if fresh_start else {
+		"fresh_start": false,
+		"units": runtime_units,
+		"inventory": general_inventory.capture_state(),
+		"turn": turn_manager.capture_state(_characters, _is_dev_stable()),
+		"combat_over": _combat_over,
+		"combat_result": _combat_result_text,
+		"movement_locked": _movement_locked,
+	}
+	return {
+		"schema_version": ScenarioSaveStore.SCHEMA_VERSION,
+		"map_definition": map_definition.resource_path if map_definition != null else "",
+		"metadata": {
+			"name": "",
+			"map_name": map_definition.display_name if map_definition != null else "Unknown Map",
+			"round": 1 if fresh_start else turn_manager.round_number,
+			"saved_at": "",
+		},
+		"setup": {
+			"grid_size": [grid.grid_size.x, grid.grid_size.y],
+			"wall_cells": wall_cells,
+			"terrain": environment.terrain,
+			"walls": environment.walls,
+			"units": setup_units,
+		},
+		"runtime": runtime,
+	}
+
+
+func _restore_runtime_state(runtime: Dictionary) -> bool:
+	var units_by_id := {}
+	for character in _characters:
+		units_by_id[character.scenario_unit_id] = character
+	for raw_state in runtime.get("units", []):
+		if not raw_state is Dictionary:
+			continue
+		var state: Dictionary = raw_state
+		var character := units_by_id.get(str(state.get("id", ""))) as TacticalCharacter
+		if character != null:
+			character.restore_runtime_state(state, units_by_id)
+	general_inventory.restore_state(runtime.get("inventory", []))
+	_combat_over = bool(runtime.get("combat_over", false))
+	_combat_result_text = str(runtime.get("combat_result", ""))
+	_movement_locked = bool(runtime.get("movement_locked", _combat_over))
+	if not turn_manager.restore_state(runtime.get("turn", {}), units_by_id):
+		push_error("Could not restore the saved turn order.")
+		_combat_over = true
+		_movement_locked = true
+		return false
+	if not _combat_over and turn_manager.is_player_turn():
+		_selected_character = turn_manager.current_unit
+		_refresh_reachable_cells()
+	else:
+		clear_selection()
+	_refresh_ability_bar()
+	_update_turn_hud()
+	return true
+
+
+func _input(event: InputEvent) -> void:
+	if _handle_battle_shortcut(event):
+		get_viewport().set_input_as_handled()
+		return
+	if not _dev_open:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if dev_mode_panel.blocks_board_shortcuts():
+			return
+		if event.keycode == KEY_DELETE and dev_mode_panel.can_delete_selected_with_shortcut():
+			_on_dev_delete_selected()
+		elif event.keycode == KEY_ESCAPE:
+			_on_dev_play_requested()
+		return
+	if not event is InputEventMouse:
+		return
+	if dev_mode_panel.has_open_dialog():
+		return
+	var mouse_event := event as InputEventMouse
+	if dev_mode_panel.is_terrain_tab_active():
+		_handle_dev_terrain_input(event)
+		return
+	if not dev_mode_panel.is_unit_tab_active():
+		return
+	if _dev_palette_scene != null:
+		if event is InputEventMouseMotion:
+			_preview_dev_drop(mouse_event.position, null)
+		elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+			_finish_palette_drop(mouse_event.position)
+		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_begin_unit_drag(mouse_event.position)
+		else:
+			_finish_unit_drag(mouse_event.position)
+	elif event is InputEventMouseMotion and is_instance_valid(_dev_drag_unit):
+		if mouse_event.position.distance_to(_dev_drag_start_screen) >= 6.0:
+			_dev_dragging = true
+			_preview_dev_drop(mouse_event.position, _dev_drag_unit)
+
+
+func _handle_battle_shortcut(event: InputEvent) -> bool:
+	var ends_turn := event.is_action_pressed(&"battle_end_turn")
+	var requested_slot := -1
+	if not ends_turn:
+		for slot_index in range(ABILITY_SHORTCUT_ACTIONS.size()):
+			if event.is_action_pressed(ABILITY_SHORTCUT_ACTIONS[slot_index]):
+				requested_slot = slot_index
+				break
+	if not ends_turn and requested_slot < 0:
+		return false
+
+	# Battle keys stay consumed while an overlay blocks their gameplay action so
+	# keyboard focus cannot pass Space through to Restart, Levels, or another HUD button.
+	if (
+		_dev_open
+		or get_tree() == null
+		or get_tree().paused
+		or inventory_screen.visible
+		or return_to_levels_dialog.visible
+	):
+		return true
+	var is_echo := event is InputEventKey and (event as InputEventKey).echo
+	if ends_turn:
+		if not is_echo:
+			_on_end_turn_pressed()
+		return true
+	if not is_echo:
+		ability_bar.activate_slot(requested_slot)
+	return true
+
+
+func _handle_dev_terrain_input(event: InputEventMouse) -> void:
+	var screen_position := event.position
+	if event is InputEventMouseMotion:
+		if dev_mode_panel.is_pointer_over_drawer(screen_position):
+			grid.clear_dev_brush_preview()
+			return
+		var motion := event as InputEventMouseMotion
+		var cell := grid.global_to_grid(_screen_to_world(screen_position))
+		var force_erase := bool(motion.button_mask & MOUSE_BUTTON_MASK_RIGHT)
+		var preview := dev_terrain_editor.get_brush_preview(cell, force_erase)
+		grid.show_dev_brush_preview(cell, preview.color, preview.valid)
+		if motion.button_mask & (MOUSE_BUTTON_MASK_LEFT | MOUSE_BUTTON_MASK_RIGHT):
+			dev_terrain_editor.update_stroke(cell, force_erase)
+		return
+	if not event is InputEventMouseButton:
+		return
+	var button := event as InputEventMouseButton
+	if button.button_index != MOUSE_BUTTON_LEFT and button.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	var force_erase := button.button_index == MOUSE_BUTTON_RIGHT
+	if button.pressed:
+		if dev_mode_panel.is_pointer_over_drawer(screen_position):
+			return
+		var cell := grid.global_to_grid(_screen_to_world(screen_position))
+		dev_terrain_editor.begin_stroke(cell, force_erase)
+		var preview := dev_terrain_editor.get_brush_preview(cell, force_erase)
+		grid.show_dev_brush_preview(cell, preview.color, preview.valid)
+	else:
+		dev_terrain_editor.end_stroke()
+
+
+func _begin_unit_drag(screen_position: Vector2) -> void:
+	if dev_mode_panel.is_pointer_over_drawer(screen_position):
+		return
+	var character := _get_character_at_global_point(_screen_to_world(screen_position))
+	if character == null:
+		dev_mode_panel.clear_unit_selection()
+		grid.clear_overlays()
+		return
+	_dev_drag_unit = character
+	_dev_drag_origin = character.grid_cell
+	_dev_drag_start_screen = screen_position
+	_dev_dragging = false
+	dev_mode_panel.select_unit(character)
+	grid.show_reachable(character.grid_cell, {})
+
+
+func _finish_unit_drag(screen_position: Vector2) -> void:
+	if not is_instance_valid(_dev_drag_unit):
+		return
+	var character := _dev_drag_unit
+	_dev_drag_unit = null
+	if not _dev_dragging:
+		grid.show_reachable(character.grid_cell, {})
+		return
+	var cell := grid.global_to_grid(_screen_to_world(screen_position))
+	if dev_mode_panel.is_pointer_over_drawer(screen_position) or not _is_valid_dev_cell(cell, character):
+		dev_mode_panel.show_message("That cell is blocked or occupied.", true)
+	else:
+		character.set_grid_cell_immediate(cell)
+		_on_dev_setup_changed()
+		dev_mode_panel.show_message("Moved %s." % _character_display_name(character))
+	grid.clear_overlays()
+	grid.show_reachable(character.grid_cell, {})
+
+
+func _preview_dev_drop(screen_position: Vector2, except_character: TacticalCharacter) -> void:
+	if dev_mode_panel.is_pointer_over_drawer(screen_position):
+		grid.clear_overlays()
+		return
+	var cell := grid.global_to_grid(_screen_to_world(screen_position))
+	var origin := except_character.grid_cell if is_instance_valid(except_character) else cell
+	grid.show_ability_targets(origin, {}, {})
+	grid.show_ability_preview(cell, [], [], _is_valid_dev_cell(cell, except_character))
+
+
+func _finish_palette_drop(screen_position: Vector2) -> void:
+	var unit_scene := _dev_palette_scene
+	_dev_palette_scene = null
+	grid.clear_overlays()
+	if dev_mode_panel.is_pointer_over_drawer(screen_position):
+		dev_mode_panel.show_message("Drag a unit onto the board.", true)
+		return
+	var cell := grid.global_to_grid(_screen_to_world(screen_position))
+	if not _is_valid_dev_cell(cell):
+		dev_mode_panel.show_message("That cell is blocked or occupied.", true)
+		return
+	_add_dev_unit(unit_scene, cell)
+
+
+func _add_dev_unit(unit_scene: PackedScene, cell: Vector2i) -> void:
+	if unit_scene == null:
+		return
+	var instance := unit_scene.instantiate()
+	if not instance is TacticalCharacter:
+		instance.free()
+		dev_mode_panel.show_message("The selected scene is not a tactical unit.", true)
+		return
+	var character := instance as TacticalCharacter
+	character.starting_grid_cell = cell
+	character.scenario_unit_id = _new_dev_unit_id(unit_scene)
+	characters_container.add_child(character, true)
+	character.initialize(grid)
+	character.set_unit_name_visible(unit_names_visible)
+	_connect_character(character)
+	_characters.append(character)
+	dev_terrain_editor.set_characters(_characters)
+	dev_mode_panel.select_unit(character)
+	_on_dev_setup_changed()
+	dev_mode_panel.show_message("Added %s." % _character_display_name(character))
+
+
+func _new_dev_unit_id(unit_scene: PackedScene) -> String:
+	var base := "%s_%d" % [
+		unit_scene.resource_path.get_file().get_basename().to_snake_case(),
+		Time.get_ticks_msec(),
+	]
+	var candidate := base
+	var suffix := 2
+	while _has_scenario_unit_id(candidate):
+		candidate = "%s_%d" % [base, suffix]
+		suffix += 1
+	return candidate
+
+
+func _has_scenario_unit_id(candidate: String) -> bool:
+	for character in _characters:
+		if is_instance_valid(character) and character.scenario_unit_id == candidate:
+			return true
+	return false
+
+
+func _is_valid_dev_cell(cell: Vector2i, except_character: TacticalCharacter = null) -> bool:
+	if not grid.is_in_bounds(cell) or _get_wall_cells().has(cell):
+		return false
+	for character in _characters:
+		if is_instance_valid(character) and character != except_character and character.grid_cell == cell:
+			return false
+	return true
+
+
+func _character_display_name(character: TacticalCharacter) -> String:
+	return (
+		character.definition.display_name
+		if character.definition != null
+		else str(character.name)
+	)
+
+
 func _process(_delta: float) -> void:
+	if _dev_open or get_tree().paused:
+		return
 	if not _movement_locked and turn_manager.is_player_turn() and _has_mouse_screen_position:
 		if _selected_ability != null:
 			_update_ability_hover(_screen_to_world(_last_mouse_screen_position))
@@ -167,6 +634,8 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _dev_open or get_tree().paused:
+		return
 	if inventory_screen.visible:
 		if event.is_action_pressed("ui_cancel"):
 			inventory_screen.close_screen()
@@ -689,16 +1158,353 @@ func _update_ai_debug(
 	var count := mini(ai_debug_candidate_count, _enemy_ai_planner.ranked_candidates.size())
 	for index in range(count):
 		lines.append("%d. %s" % [index + 1, _enemy_ai_planner.ranked_candidates[index].get_debug_summary()])
+	while _ai_debug_checkpoints.size() < _ai_debug_history.size():
+		_ai_debug_checkpoints.append({})
 	_ai_debug_history.append("\n".join(lines))
+	_ai_debug_checkpoints.append(_capture_ai_debug_checkpoint())
 	while _ai_debug_history.size() > ai_debug_history_limit:
 		_ai_debug_history.remove_at(0)
+		if not _ai_debug_checkpoints.is_empty():
+			_ai_debug_checkpoints.remove_at(0)
 	_refresh_ai_debug_history()
+
+
+func _capture_ai_debug_checkpoint() -> Dictionary:
+	var checkpoint := capture_save_payload(false)
+	var runtime: Dictionary = checkpoint.get("runtime", {})
+	var turn: Dictionary = runtime.get("turn", {})
+	# AI planning has completed, but no movement or ability has started yet. Mark
+	# this self-consistent instant as restorable even though it is an enemy turn.
+	turn["action_boundary"] = true
+	runtime["turn"] = turn
+	checkpoint["runtime"] = runtime
+	return checkpoint
 
 
 func _on_dev_button_pressed() -> void:
 	if not enable_dev_tools:
 		return
-	dev_history_panel.visible = not dev_history_panel.visible
+	if _dev_open:
+		return
+	if not _is_dev_stable():
+		_dev_open_pending = true
+		dev_button.text = "Dev…"
+		dev_button.tooltip_text = "Dev mode will open after the current action"
+		return
+	_open_dev_mode()
+
+
+func _is_dev_stable() -> bool:
+	for character in _characters:
+		if is_instance_valid(character) and character.is_moving:
+			return false
+	if _combat_over:
+		return true
+	return not _movement_locked and turn_manager.is_player_turn()
+
+
+func report_reload_failed(message: String) -> void:
+	if not is_inside_tree():
+		return
+	_dev_open = true
+	_set_dev_blocked_actions_disabled(true)
+	tactical_camera.set_dev_mode_pan_enabled(true)
+	dev_mode_panel.open_panel()
+	dev_mode_panel.show_message(message, true)
+	get_tree().paused = true
+
+
+func _open_dev_mode(initial_tab := DevModePanel.UNIT_TAB) -> void:
+	_dev_open_pending = false
+	dev_button.text = "Dev"
+	dev_button.tooltip_text = "Pause and edit the current scenario"
+	_dev_open = true
+	_set_dev_blocked_actions_disabled(true)
+	_dev_dirty = false
+	_dev_drag_unit = null
+	_dev_palette_scene = null
+	dev_terrain_editor.clear_history()
+	_selected_ability = null
+	ability_bar.set_selected(null)
+	if inventory_screen.visible:
+		inventory_button.set_pressed_no_signal(false)
+		inventory_screen.close_screen()
+	grid.clear_overlays()
+	grid.clear_dev_brush_preview()
+	dev_mode_panel.set_dirty(false)
+	dev_mode_panel.select_unit(
+		turn_manager.current_unit if is_instance_valid(turn_manager.current_unit) else null
+	)
+	dev_mode_panel.open_panel(initial_tab)
+	tactical_camera.set_dev_mode_pan_enabled(true)
+	get_tree().paused = true
+
+
+func _on_dev_play_requested() -> void:
+	if not _dev_open:
+		return
+	dev_terrain_editor.end_stroke()
+	if _dev_dirty:
+		_restored_ai_turn_pending = false
+		_pending_ai_history_cutoff = -1
+		_pending_ai_history_scroll_position = -1
+		var fresh_payload := capture_save_payload(true)
+		var validation := ScenarioSaveStore.validate_payload(fresh_payload)
+		if not validation.ok:
+			dev_mode_panel.show_message("Cannot start: %s" % " ".join(validation.errors), true)
+			return
+		tactical_camera.set_dev_mode_pan_enabled(false)
+		dev_mode_panel.close_panel()
+		_dev_open = false
+		_set_dev_blocked_actions_disabled(false)
+		battle_reload_requested.emit(validation.payload)
+		if is_inside_tree() and not _dev_open:
+			get_tree().paused = false
+		return
+	var resume_restored_enemy := _restored_ai_turn_pending
+	_commit_pending_ai_history_branch()
+	_restored_ai_turn_pending = false
+	var restored_enemy := turn_manager.current_unit
+	tactical_camera.set_dev_mode_pan_enabled(false)
+	dev_terrain_editor.cancel_stroke()
+	grid.clear_dev_brush_preview()
+	dev_mode_panel.close_panel()
+	_dev_open = false
+	_set_dev_blocked_actions_disabled(false)
+	get_tree().paused = false
+	if (
+		resume_restored_enemy
+		and not _combat_over
+		and is_instance_valid(restored_enemy)
+		and restored_enemy == turn_manager.current_unit
+		and not restored_enemy.is_friendly()
+	):
+		_set_movement_locked(true)
+		call_deferred("_run_enemy_unit_turn", restored_enemy)
+	elif not _combat_over and turn_manager.is_player_turn():
+		_select_character(turn_manager.current_unit)
+
+
+func _on_dev_save_requested(replace_path: String) -> void:
+	if not _dev_open:
+		return
+	dev_terrain_editor.end_stroke()
+	var payload := capture_save_payload(_dev_dirty)
+	var validation := ScenarioSaveStore.validate_payload(payload)
+	if not validation.ok:
+		dev_mode_panel.show_message("Cannot save: %s" % " ".join(validation.errors), true)
+		return
+	dev_mode_panel.persist_payload(validation.payload, replace_path)
+
+
+func _on_dev_load_payload_requested(payload: Dictionary) -> void:
+	if not _dev_open:
+		return
+	dev_terrain_editor.cancel_stroke()
+	grid.clear_dev_brush_preview()
+	tactical_camera.set_dev_mode_pan_enabled(false)
+	dev_mode_panel.close_panel()
+	_dev_open = false
+	_set_dev_blocked_actions_disabled(false)
+	battle_reload_requested.emit(payload)
+	if is_inside_tree() and not _dev_open:
+		get_tree().paused = false
+
+
+func _on_ai_history_restore_requested(history_index: int) -> void:
+	if not _dev_open:
+		return
+	if (
+		history_index < 0
+		or history_index >= _ai_debug_history.size()
+		or history_index >= _ai_debug_checkpoints.size()
+		or _ai_debug_checkpoints[history_index].is_empty()
+	):
+		dev_mode_panel.show_message("This AI log does not have a restorable checkpoint.", true)
+		_refresh_ai_debug_history()
+		return
+	var validation := ScenarioSaveStore.validate_payload(
+		_ai_debug_checkpoints[history_index].duplicate(true)
+	)
+	if not validation.ok:
+		dev_mode_panel.show_message(
+			"Checkpoint restore failed: %s" % " ".join(validation.errors),
+			true
+		)
+		_refresh_ai_debug_history()
+		return
+	var payload: Dictionary = validation.payload
+	_pending_ai_history_scroll_position = dev_mode_panel.get_ai_history_scroll_position()
+	payload[DEV_AI_RESTORE_CONTEXT] = {
+		"entries": _ai_debug_history.duplicate(),
+		"checkpoints": _ai_debug_checkpoints.duplicate(true),
+		"selected_history_index": history_index,
+		"scroll_vertical": _pending_ai_history_scroll_position,
+	}
+	dev_terrain_editor.cancel_stroke()
+	grid.clear_dev_brush_preview()
+	tactical_camera.set_dev_mode_pan_enabled(false)
+	dev_mode_panel.close_panel()
+	_dev_open = false
+	_set_dev_blocked_actions_disabled(false)
+	battle_reload_requested.emit(payload)
+	if not is_inside_tree():
+		return
+	if _dev_open:
+		dev_mode_panel.tabs.current_tab = DevModePanel.AI_LOG_TAB
+		dev_mode_panel.restore_ai_history_scroll_position(
+			_pending_ai_history_scroll_position
+		)
+	else:
+		get_tree().paused = false
+
+
+func _restore_ai_history_context(context: Dictionary) -> void:
+	if context.is_empty():
+		return
+	var raw_entries: Array = context.get("entries", [])
+	var raw_checkpoints: Array = context.get("checkpoints", [])
+	var retained_count := mini(raw_entries.size(), raw_checkpoints.size())
+	for index in range(retained_count):
+		if not raw_checkpoints[index] is Dictionary:
+			continue
+		_ai_debug_history.append(str(raw_entries[index]))
+		_ai_debug_checkpoints.append((raw_checkpoints[index] as Dictionary).duplicate(true))
+	var selected_history_index := int(context.get("selected_history_index", -1))
+	_pending_ai_history_cutoff = (
+		selected_history_index
+		if selected_history_index >= 0 and selected_history_index < _ai_debug_history.size()
+		else -1
+	)
+	_pending_ai_history_scroll_position = maxi(int(context.get("scroll_vertical", 0)), 0)
+
+
+func _commit_pending_ai_history_branch() -> void:
+	if _pending_ai_history_cutoff < 0:
+		return
+	var retained_count := _pending_ai_history_cutoff + 1
+	while _ai_debug_history.size() > retained_count:
+		_ai_debug_history.pop_back()
+	while _ai_debug_checkpoints.size() > retained_count:
+		_ai_debug_checkpoints.pop_back()
+	_pending_ai_history_cutoff = -1
+	_pending_ai_history_scroll_position = -1
+	_refresh_ai_debug_history()
+
+
+func _open_restored_ai_checkpoint() -> void:
+	if not is_inside_tree() or not initialization_succeeded:
+		return
+	_open_dev_mode(DevModePanel.AI_LOG_TAB)
+	dev_mode_panel.restore_ai_history_scroll_position(
+		_pending_ai_history_scroll_position
+	)
+	dev_mode_panel.show_message(
+		"Restored to before the selected AI decision. All logs remain available until Resume."
+	)
+
+
+func _on_dev_setup_changed() -> void:
+	_dev_dirty = true
+	dev_mode_panel.set_dirty(true)
+
+
+func _on_dev_delete_selected() -> void:
+	if not _dev_open:
+		return
+	var character := dev_mode_panel.get_selected_unit()
+	if not is_instance_valid(character):
+		return
+	if _selected_character == character:
+		clear_selection()
+	if _dev_drag_unit == character:
+		_dev_drag_unit = null
+		_dev_dragging = false
+	turn_manager.remove_unit(character)
+	_characters.erase(character)
+	dev_terrain_editor.set_characters(_characters)
+	characters_container.remove_child(character)
+	character.queue_free()
+	dev_mode_panel.clear_unit_selection()
+	grid.clear_overlays()
+	_on_dev_setup_changed()
+	_update_turn_hud()
+	dev_mode_panel.show_message("Unit deleted. Restart is required.")
+
+
+func _on_dev_heal_selected() -> void:
+	if not _dev_open:
+		return
+	var character := dev_mode_panel.get_selected_unit()
+	if not is_instance_valid(character):
+		return
+	var maximum_health := character.get_max_health()
+	if character.current_health <= 0 or character.current_health >= maximum_health:
+		dev_mode_panel.select_unit(character)
+		return
+	character.heal(maximum_health - character.current_health)
+	dev_mode_panel.select_unit(character)
+	dev_mode_panel.show_message("Selected unit restored to full health.")
+
+
+func _on_dev_palette_drag_started(unit_scene: PackedScene) -> void:
+	if not _dev_open or not dev_mode_panel.is_unit_tab_active():
+		return
+	_dev_palette_scene = unit_scene
+
+
+func _on_dev_terrain_brush_changed(kind: int, brush_resource: Resource) -> void:
+	dev_terrain_editor.set_brush(kind, brush_resource)
+
+
+func _on_dev_active_tab_changed(_tab_index: int) -> void:
+	dev_terrain_editor.end_stroke()
+	_dev_drag_unit = null
+	_dev_palette_scene = null
+	grid.clear_overlays()
+	grid.clear_dev_brush_preview()
+
+
+func set_unit_names_visible(value: bool) -> void:
+	unit_names_visible = value
+	_apply_unit_name_visibility()
+
+
+func _apply_unit_name_visibility() -> void:
+	if is_instance_valid(names_button):
+		names_button.set_pressed_no_signal(unit_names_visible)
+		names_button.text = "Names: On" if unit_names_visible else "Names: Off"
+		names_button.tooltip_text = (
+			"Hide unit names below units"
+			if unit_names_visible
+			else "Show unit names below units"
+		)
+	for character in _characters:
+		if is_instance_valid(character):
+			character.set_unit_name_visible(unit_names_visible)
+
+
+func _on_names_button_toggled(value: bool) -> void:
+	set_unit_names_visible(value)
+	unit_name_visibility_changed.emit(value)
+
+
+func _set_dev_blocked_actions_disabled(disabled: bool) -> void:
+	dev_button.disabled = disabled
+	inventory_button.disabled = disabled
+	restart_button.disabled = disabled
+	levels_button.disabled = disabled
+
+
+func _on_restart_button_pressed() -> void:
+	if run_encounter != null:
+		return
+	var fresh_payload := capture_save_payload(true)
+	var validation := ScenarioSaveStore.validate_payload(fresh_payload)
+	if not validation.ok:
+		report_reload_failed("Restart failed: %s" % " ".join(validation.errors))
+		return
+	battle_reload_requested.emit(validation.payload)
 
 
 func _on_levels_button_pressed() -> void:
@@ -764,15 +1570,9 @@ func _on_character_equipment_changed(
 
 
 func _refresh_ai_debug_history() -> void:
-	if ai_debug_label == null:
+	if dev_mode_panel == null:
 		return
-	if _ai_debug_history.is_empty():
-		ai_debug_label.text = "No AI decisions recorded yet.\nEnd a friendly turn to let an enemy act."
-		return
-	var newest_first: Array[String] = []
-	for index in range(_ai_debug_history.size() - 1, -1, -1):
-		newest_first.append(_ai_debug_history[index])
-	ai_debug_label.text = "\n\n────────────────────────────────────────\n\n".join(newest_first)
+	dev_mode_panel.set_ai_history(_ai_debug_history, _pending_ai_history_cutoff)
 
 
 func _on_turn_starting(unit: TacticalCharacter) -> void:
@@ -874,6 +1674,8 @@ func _set_movement_locked(value: bool) -> void:
 	_movement_locked = true if _combat_over else value
 	_refresh_ability_bar()
 	_update_turn_hud()
+	if _dev_open_pending and _is_dev_stable():
+		_open_dev_mode.call_deferred()
 
 
 func _refresh_ability_bar() -> void:
@@ -904,7 +1706,7 @@ func _update_turn_hud() -> void:
 		return
 
 	if unit.is_friendly():
-		end_turn_button.text = "End Turn"
+		end_turn_button.text = "End Turn [Space]"
 		end_turn_button.disabled = _movement_locked
 	else:
 		end_turn_button.text = "Enemy Turn..."
@@ -937,7 +1739,90 @@ func _check_combat_end() -> bool:
 	turn_manager.stop_combat()
 	clear_selection()
 	_refresh_ability_bar()
+	if _dev_open_pending:
+		_open_dev_mode.call_deferred()
+	if run_encounter != null and not _run_result_emitted:
+		_run_result_emitted = true
+		_emit_run_result.call_deferred(has_living_friendlies)
 	return true
+
+
+func _prepare_run_characters() -> bool:
+	var spawns := battle_map.get_node_or_null("PartySpawns")
+	if spawns == null or spawns.get_child_count() < run_party_input.size():
+		push_error("Run encounter needs an authored spawn for every original party member.")
+		return false
+	for child in characters_container.get_children():
+		if not child is TacticalCharacter:
+			continue
+		var character := child as TacticalCharacter
+		if character.is_friendly():
+			characters_container.remove_child(character)
+			character.free()
+			continue
+		if not run_encounter.chief_node_name.is_empty() and str(character.name) != run_encounter.chief_node_name:
+			continue
+		for stat in ["constitution", "strength", "dexterity", "intelligence"]:
+			var override_value := int(character.get(stat + "_override"))
+			var base := override_value if override_value >= 0 else int(character.definition.get(stat))
+			character.set(stat + "_override", ceili(base * run_encounter.enemy_multiplier))
+		if not run_encounter.chief_node_name.is_empty():
+			character.name = run_encounter.chief_display_name
+	for index in range(run_party_input.size()):
+		var member: Dictionary = run_party_input[index]
+		if bool(member.get("lost", false)):
+			continue
+		var setup: Dictionary = member.setup.duplicate(true)
+		var scene := load(str(setup.scene)) as PackedScene
+		var character := scene.instantiate() as TacticalCharacter
+		var spawn := spawns.get_child(index) as RunSpawnPoint
+		if character == null or spawn == null:
+			push_error("Run party scene or spawn is invalid.")
+			return false
+		setup.cell = [spawn.grid_cell.x, spawn.grid_cell.y]
+		setup.complete_equipment = true
+		setup.equipment = member.equipment
+		character.apply_setup_state(setup)
+		character.permanent_defeat = true
+		character.name = str(member.name)
+		characters_container.add_child(character)
+	return true
+
+
+func _restore_run_party() -> void:
+	general_inventory.restore_state(run_inventory_input)
+	for character in _characters:
+		if not character.is_friendly():
+			character.heal(character.get_max_health())
+			continue
+		for member in run_party_input:
+			if str(member.id) == character.scenario_unit_id:
+				var runtime := character.capture_runtime_state()
+				runtime.current_health = int(member.health)
+				runtime.statuses = []
+				character.restore_runtime_state(runtime, {})
+				break
+
+
+func capture_run_party() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for character in _characters:
+		if not is_instance_valid(character) or not character.is_friendly():
+			continue
+		var equipment: Array[String] = []
+		if character.current_health > 0:
+			for item in character.get_equipped_items():
+				equipment.append(item.resource_path)
+		var persistent_max := character.get_max_health_without_statuses()
+		result.append({"id": character.scenario_unit_id, "health": mini(character.current_health, persistent_max),
+			"max_health": persistent_max, "equipment": equipment})
+	return result
+
+
+func _emit_run_result(_victory: bool) -> void:
+	# A multi-target effect may also defeat the last friendly after combat ends.
+	var victory := not _get_living_friendlies().is_empty()
+	battle_finished.emit(victory, capture_run_party(), general_inventory.capture_state())
 
 
 func _get_living_friendlies() -> Array[TacticalCharacter]:
@@ -950,14 +1835,22 @@ func _get_living_friendlies() -> Array[TacticalCharacter]:
 
 func _get_character_at(cell: Vector2i) -> TacticalCharacter:
 	for character in _characters:
-		if is_instance_valid(character) and character.grid_cell == cell:
+		if (
+			is_instance_valid(character)
+			and character.is_present_on_map()
+			and character.grid_cell == cell
+		):
 			return character
 	return null
 
 
 func _get_character_at_global_point(point: Vector2) -> TacticalCharacter:
 	for character in _characters:
-		if is_instance_valid(character) and character.contains_global_point(point):
+		if (
+			is_instance_valid(character)
+			and character.is_present_on_map()
+			and character.contains_global_point(point)
+		):
 			return character
 	return null
 
@@ -972,7 +1865,11 @@ func _get_ability_cell_at_global_point(point: Vector2) -> Vector2i:
 func _get_blocked_cells(except_character: TacticalCharacter = null) -> Dictionary:
 	var blocked: Dictionary = _get_wall_cells()
 	for character in _characters:
-		if is_instance_valid(character) and character != except_character:
+		if (
+			is_instance_valid(character)
+			and character != except_character
+			and character.is_present_on_map()
+		):
 			blocked[character.grid_cell] = true
 	return blocked
 
@@ -1009,6 +1906,60 @@ func _initialize_walls() -> void:
 			push_warning("Ignoring duplicate wall %s at cell %s." % [wall.name, wall.grid_cell])
 		else:
 			accepted_cells[wall.grid_cell] = true
+
+
+func _refresh_environment_after_edit() -> void:
+	_initialize_walls()
+	terrain.initialize(grid, _get_wall_cells(), false)
+
+
+func _capture_environment_setup() -> Dictionary:
+	var terrain_entries: Array[Dictionary] = []
+	if terrain != null:
+		for child in terrain.get_children():
+			if not child is TacticalTile:
+				continue
+			var tile := child as TacticalTile
+			if tile.definition == null or tile.definition.resource_path.is_empty():
+				continue
+			terrain_entries.append({
+				"cell": [tile.grid_cell.x, tile.grid_cell.y],
+				"definition": tile.definition.resource_path,
+			})
+	var wall_entries: Array[Dictionary] = []
+	if walls_container != null:
+		for child in walls_container.get_children():
+			if child is TacticalWall:
+				wall_entries.append((child as TacticalWall).capture_setup_state())
+	terrain_entries.sort_custom(_setup_entry_cell_less)
+	wall_entries.sort_custom(_setup_entry_cell_less)
+	return {"terrain": terrain_entries, "walls": wall_entries}
+
+
+func _replace_environment_from_setup(setup: Dictionary) -> void:
+	if setup.has("terrain"):
+		terrain.replace_setup_state(setup.get("terrain", []), false)
+	if not setup.has("walls"):
+		return
+	for child in walls_container.get_children():
+		if child is TacticalWall:
+			walls_container.remove_child(child)
+			child.queue_free()
+	for raw_entry in setup.get("walls", []):
+		if not raw_entry is Dictionary:
+			continue
+		var wall := TacticalWall.new()
+		wall.apply_setup_state(raw_entry)
+		wall.name = "Wall_%d_%d" % [wall.grid_cell.x, wall.grid_cell.y]
+		walls_container.add_child(wall)
+
+
+func _setup_entry_cell_less(a: Dictionary, b: Dictionary) -> bool:
+	var a_cell: Array = a.get("cell", [0, 0])
+	var b_cell: Array = b.get("cell", [0, 0])
+	return int(a_cell[1]) < int(b_cell[1]) or (
+		int(a_cell[1]) == int(b_cell[1]) and int(a_cell[0]) < int(b_cell[0])
+	)
 
 
 func _get_wall_cells() -> Dictionary:

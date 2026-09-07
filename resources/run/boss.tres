@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="RunEncounterDefinition" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/run_encounter_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/run/goblin_skirmish_map.tres" id="2"]
+[resource]
+script = ExtResource("1")
+display_name = "The Goblin Chief"
+battle_map = ExtResource("2")
+enemy_multiplier = 2.0
+chief_node_name = "GoblinWarriorA"
+chief_display_name = "Goblin Chief"

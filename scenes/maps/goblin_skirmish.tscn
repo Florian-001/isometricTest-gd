@@ -6,6 +6,7 @@
 [ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="4_palette"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="5_friend_a"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="6_friend_b"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="6_rpcxd"]
 [ext_resource type="PackedScene" uid="uid://3ue0j7my7j3p" path="res://scenes/enemies/goblin_warrior.tscn" id="7_warrior"]
 
 [node name="GoblinSkirmish" type="Node2D" unique_id=1047695173]
@@ -25,6 +26,7 @@ palette = ExtResource("4_palette")
 
 [node name="FriendA" parent="Characters" unique_id=202289012 instance=ExtResource("5_friend_a")]
 z_index = 113
+starting_equipment_overrides = Array[ExtResource("6_rpcxd")]([])
 starting_grid_cell = Vector2i(4, 9)
 
 [node name="FriendB" parent="Characters" unique_id=819615493 instance=ExtResource("6_friend_b")]

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BattleMapDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/battle_map_definition.gd" id="1_definition"]
+[ext_resource type="PackedScene" path="res://scenes/maps/terrain_showcase.tscn" id="2_map"]
+
+[resource]
+script = ExtResource("1_definition")
+display_name = "Terrain Showcase"
+description = "Mixed terrain, walls, and enemy types."
+map_scene = ExtResource("2_map")

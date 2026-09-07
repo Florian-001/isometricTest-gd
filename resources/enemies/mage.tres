@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=10 format=3 uid="uid://c0t2w2qspkm6n"]
+
+[ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="4_ai"]
+[ext_resource type="Resource" uid="uid://rhaedcm7xel0" path="res://resources/abilities/fireball.tres" id="5_fireball"]
+[ext_resource type="Resource" uid="uid://fbimwcq8pc21" path="res://resources/abilities/ice_shard.tres" id="6_ice_shard"]
+[ext_resource type="Resource" uid="uid://7wlmmxsy6gcc" path="res://resources/abilities/heal.tres" id="7_heal"]
+[ext_resource type="Resource" uid="uid://opj3rm2mkqq2" path="res://resources/abilities/slow.tres" id="8_slow"]
+[ext_resource type="Resource" uid="uid://rp1xdm4agyqo" path="res://resources/items/mage_staff.tres" id="9_staff"]
+
+[resource]
+script = ExtResource("1_enemy")
+display_name = "Mage"
+faction = 1
+constitution = 18
+movement_range = 5.0
+strength = 5
+dexterity = 8
+intelligence = 15
+speed = 9
+starting_equipment = Array[ExtResource("3_item_type")]([ExtResource("9_staff")])
+body_color = Color(0.53, 0.36, 0.85, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)
+abilities = Array[ExtResource("2_ability_type")]([ExtResource("5_fireball"), ExtResource("6_ice_shard"), ExtResource("7_heal"), ExtResource("8_slow")])
+ai_profile = ExtResource("4_ai")

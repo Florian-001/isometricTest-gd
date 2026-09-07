@@ -2,17 +2,14 @@
 
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="1_ability"]
 [ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
-[ext_resource type="Script" uid="uid://bls6rr82d0qi5" path="res://scripts/heal_effect_definition.gd" id="3_heal"]
-
-[sub_resource type="Resource" id="Heal_target"]
-script = ExtResource("3_heal")
-amount = 25
-scaling_stat = 3
-display_name = "Heal"
 
 [resource]
 script = ExtResource("1_ability")
 display_name = "Heal"
-target_flags = 1
-effects = Array[ExtResource("2_effect")]([SubResource("Heal_target")])
+ability_type = 2
+effect = 2
+effect_amount = 25
+scaling_stat = 3
+scaling_amount = 100.0
+target_flags = 5
 placeholder_color = Color(0.18, 0.88, 0.42, 1)

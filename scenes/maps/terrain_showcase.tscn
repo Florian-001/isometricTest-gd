@@ -1,0 +1,89 @@
+[gd_scene format=3 uid="uid://cj8a55nd5my2b"]
+
+[ext_resource type="Script" uid="uid://b5nmj1epdq2br" path="res://scripts/battle_map.gd" id="1_map"]
+[ext_resource type="Script" uid="uid://db3xtp2lso38p" path="res://scripts/isometric_grid.gd" id="2_grid"]
+[ext_resource type="Script" uid="uid://cw40etoqakmre" path="res://scripts/tactical_terrain.gd" id="3_terrain"]
+[ext_resource type="Script" uid="uid://cy77b7iubppb4" path="res://scripts/tactical_tile.gd" id="4_tile"]
+[ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="5_palette"]
+[ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="6_mud"]
+[ext_resource type="Resource" uid="uid://bvb1c027wvf5u" path="res://resources/tiles/fire.tres" id="7_fire"]
+[ext_resource type="Resource" uid="uid://bj3yc0xg083b1" path="res://resources/tiles/ice.tres" id="8_ice"]
+[ext_resource type="Script" uid="uid://bax5bwopqqbc1" path="res://scripts/tactical_wall.gd" id="9_wall"]
+[ext_resource type="Resource" path="res://resources/walls/low_earthen_wall.tres" id="10_low_wall"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="11_friend_b"]
+[ext_resource type="PackedScene" uid="uid://3ue0j7my7j3p" path="res://scenes/enemies/goblin_warrior.tscn" id="12_warrior"]
+
+[node name="TerrainShowcase" type="Node2D" unique_id=181142510]
+script = ExtResource("1_map")
+
+[node name="Grid" type="Node2D" parent="." unique_id=1255047888]
+position = Vector2(640, 96)
+script = ExtResource("2_grid")
+
+[node name="Terrain" type="Node" parent="." unique_id=1834500485]
+script = ExtResource("3_terrain")
+palette = ExtResource("5_palette")
+
+[node name="Mud_3_4" type="Node" parent="Terrain" unique_id=643728736]
+script = ExtResource("4_tile")
+definition = ExtResource("6_mud")
+grid_cell = Vector2i(3, 4)
+
+[node name="Mud_4_4" type="Node" parent="Terrain" unique_id=880905382]
+script = ExtResource("4_tile")
+definition = ExtResource("6_mud")
+grid_cell = Vector2i(4, 4)
+
+[node name="Fire_6_4" type="Node" parent="Terrain" unique_id=1584989072]
+script = ExtResource("4_tile")
+definition = ExtResource("7_fire")
+grid_cell = Vector2i(6, 4)
+
+[node name="Fire_7_4" type="Node" parent="Terrain" unique_id=1809386393]
+script = ExtResource("4_tile")
+definition = ExtResource("7_fire")
+grid_cell = Vector2i(7, 4)
+
+[node name="Ice_8_4" type="Node" parent="Terrain" unique_id=1926840877]
+script = ExtResource("4_tile")
+definition = ExtResource("8_ice")
+grid_cell = Vector2i(8, 4)
+
+[node name="Ice_9_4" type="Node" parent="Terrain" unique_id=1051603201]
+script = ExtResource("4_tile")
+definition = ExtResource("8_ice")
+grid_cell = Vector2i(9, 4)
+
+[node name="Walls" type="Node2D" parent="." unique_id=748363050]
+
+[node name="Wall_5_4" type="Node2D" parent="Walls" unique_id=748703643]
+z_index = 109
+position = Vector2(688, 312)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 4)
+definition = ExtResource("10_low_wall")
+
+[node name="Wall_5_5" type="Node2D" parent="Walls" unique_id=1634769499]
+z_index = 110
+position = Vector2(640, 336)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 5)
+definition = ExtResource("10_low_wall")
+
+[node name="Wall_5_6" type="Node2D" parent="Walls" unique_id=1660311759]
+z_index = 111
+position = Vector2(592, 360)
+script = ExtResource("9_wall")
+grid_cell = Vector2i(5, 6)
+definition = ExtResource("10_low_wall")
+
+[node name="Characters" type="Node2D" parent="." unique_id=1367112767]
+
+[node name="MeleeEnemy" parent="Characters" unique_id=505849029 instance=ExtResource("12_warrior")]
+z_index = 109
+movement_range_override = 2.0
+starting_grid_cell = Vector2i(6, 3)
+
+[node name="FriendB" parent="Characters" unique_id=344447578 instance=ExtResource("11_friend_b")]
+z_index = 117
+starting_grid_cell = Vector2i(8, 9)

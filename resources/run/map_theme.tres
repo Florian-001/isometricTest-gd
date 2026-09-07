@@ -1,0 +1,78 @@
+[gd_resource type="Theme" load_steps=8 format=3]
+[sub_resource type="SystemFont" id="serif"]
+font_names = PackedStringArray("Georgia", "Noto Serif", "serif")
+[sub_resource type="StyleBoxFlat" id="normal"]
+bg_color = Color(0.8, 0.70, 0.51, 0.35)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.31, 0.2, 0.55)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_left = 4
+corner_radius_bottom_right = 4
+content_margin_left = 14.0
+content_margin_right = 14.0
+content_margin_top = 9.0
+content_margin_bottom = 9.0
+[sub_resource type="StyleBoxFlat" id="hover"]
+bg_color = Color(0.82, 0.63, 0.31, 0.5)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.46, 0.31, 0.12, 1)
+content_margin_left = 14.0
+content_margin_right = 14.0
+content_margin_top = 9.0
+content_margin_bottom = 9.0
+[sub_resource type="StyleBoxFlat" id="focus"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.52, 0.3, 0.08, 1)
+[sub_resource type="StyleBoxFlat" id="panel"]
+bg_color = Color(0.88, 0.79, 0.61, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.45, 0.34, 0.21, 0.55)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_left = 5
+corner_radius_bottom_right = 5
+[sub_resource type="StyleBoxFlat" id="scroll"]
+bg_color = Color(0.35, 0.26, 0.15, 0.12)
+content_margin_left = 4.0
+content_margin_right = 4.0
+[sub_resource type="StyleBoxFlat" id="grabber"]
+bg_color = Color(0.43, 0.33, 0.21, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_left = 4
+corner_radius_bottom_right = 4
+[resource]
+default_font_size = 16
+Label/colors/font_color = Color(0.24, 0.18, 0.12, 1)
+Button/colors/font_color = Color(0.24, 0.18, 0.12, 1)
+Button/colors/font_focus_color = Color(0.24, 0.18, 0.12, 1)
+Button/colors/font_hover_color = Color(0.19, 0.12, 0.06, 1)
+Button/colors/font_pressed_color = Color(0.19, 0.12, 0.06, 1)
+Button/colors/font_disabled_color = Color(0.42, 0.36, 0.27, 0.5)
+Button/styles/normal = SubResource("normal")
+Button/styles/hover = SubResource("hover")
+Button/styles/pressed = SubResource("hover")
+Button/styles/disabled = SubResource("normal")
+Button/styles/focus = SubResource("focus")
+PanelContainer/styles/panel = SubResource("panel")
+VScrollBar/styles/scroll = SubResource("scroll")
+VScrollBar/styles/grabber = SubResource("grabber")
+VScrollBar/styles/grabber_highlight = SubResource("grabber")
+VScrollBar/styles/grabber_pressed = SubResource("grabber")
+RunTitle/base_type = &"Label"
+RunTitle/fonts/font = SubResource("serif")
+RunTitle/font_sizes/font_size = 34

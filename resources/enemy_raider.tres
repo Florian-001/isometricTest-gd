@@ -4,12 +4,16 @@
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
 [ext_resource type="Resource" uid="uid://ctr35lcl31o04" path="res://resources/abilities/enemy_slash.tres" id="3_slash"]
 [ext_resource type="Resource" uid="uid://b0ygs6jbuindl" path="res://resources/abilities/enemy_shot.tres" id="4_shot"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="5_item_type"]
+[ext_resource type="Resource" path="res://resources/items/raider_weapon.tres" id="6_weapon"]
 
 [resource]
 script = ExtResource("1_definition")
 display_name = "Enemy Raider"
 faction = 1
+constitution = 25
 movement_range = 5.0
+starting_equipment = Array[ExtResource("5_item_type")]([ExtResource("6_weapon")])
 body_color = Color(0.95, 0.24, 0.29, 1)
 health_bar_color = Color(0.96, 0.62, 0.18, 1)
 abilities = Array[ExtResource("2_ability_type")]([ExtResource("3_slash"), ExtResource("4_shot")])

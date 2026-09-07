@@ -1,23 +1,15 @@
-[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3 uid="uid://ypvhtrfkl6un"]
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3 uid="uid://ypvhtrfkl6un"]
 
+[ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="1_8tbmd"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="1_ability"]
-[ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
-[ext_resource type="Script" uid="uid://c4xa2b7als0dv" path="res://scripts/damage_effect_definition.gd" id="3_damage"]
-[ext_resource type="Texture2D" path="res://art/icons/items/iron_sword.png" id="4_icon"]
-
-[sub_resource type="Resource" id="Damage_strike"]
-script = ExtResource("3_damage")
-amount = 30
-scaling_stat = 1
-display_name = "Damage"
 
 [resource]
 script = ExtResource("1_ability")
 display_name = "Strike"
-image = ExtResource("4_icon")
+ability_type = 0
+effect = 1
 range = 1.414
 delivery_type = 2
 target_flags = 10
-effects = Array[ExtResource("2_effect")]([SubResource("Damage_strike")])
 placeholder_color = Color(0.9, 0.68, 0.2, 1)
 melee_slash_color = Color(1, 0.94, 0.56, 1)

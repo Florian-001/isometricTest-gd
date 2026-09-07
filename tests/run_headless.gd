@@ -7,7 +7,8 @@ func _init() -> void:
 		"res://tests/test_enemy_ai.gd",
 		"res://tests/test_stats_system.gd",
 		"res://tests/test_terrain_system.gd",
-		"res://tests/test_inventory_system.gd",
+		"res://tests/test_run_map_generation.gd",
+		"res://tests/test_dev_mode.gd",
 	]
 	for suite_path in suite_paths:
 		var suite_script: Script = load(suite_path)

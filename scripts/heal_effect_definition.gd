@@ -19,7 +19,11 @@ func calculate_amount(caster: TacticalCharacter) -> int:
 	return maxi(0, amount + roundi(stat_bonus))
 
 
-func apply(caster: TacticalCharacter, target: TacticalCharacter) -> void:
+func apply(
+	caster: TacticalCharacter,
+	target: TacticalCharacter,
+	_source: Object = null
+) -> void:
 	if is_instance_valid(target) and target.current_health > 0:
 		target.heal(calculate_amount(caster))
 

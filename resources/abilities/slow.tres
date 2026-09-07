@@ -1,20 +1,13 @@
-[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3 uid="uid://opj3rm2mkqq2"]
 
-[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_ability"]
-[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect_base"]
-[ext_resource type="Script" path="res://scripts/apply_status_effect_definition.gd" id="3_apply_status"]
-[ext_resource type="Resource" path="res://resources/statuses/slow.tres" id="4_slow"]
-
-[sub_resource type="Resource" id="ApplySlow"]
-script = ExtResource("3_apply_status")
-status_effect = ExtResource("4_slow")
-ai_utility_hint = 8.0
-display_name = "Apply Status"
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="1_ability"]
+[ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="2_effect_base"]
+[ext_resource type="Resource" uid="uid://ch54y87fxss31" path="res://resources/statuses/slow.tres" id="2_slow"]
 
 [resource]
 script = ExtResource("1_ability")
 display_name = "Slow"
-range = 5.0
-target_flags = 2
-effects = Array[ExtResource("2_effect_base")]([SubResource("ApplySlow")])
+ability_type = 2
+effect = 3
+status_effect = ExtResource("2_slow")
 placeholder_color = Color(0.3, 0.62, 1, 1)

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3 uid="uid://cgq7lrwo26syh"]
+
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="1_item"]
+
+
+[ext_resource type="Texture2D" path="res://assets/item_icons/ranger_bow.svg" id="inventory_icon"]
+
+[resource]
+script = ExtResource("1_item")
+icon = ExtResource("inventory_icon")
+display_name = "Ranger Bow"
+weapon_type = 1
+weapon_damage = 10

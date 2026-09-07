@@ -10,7 +10,11 @@ extends Resource
 @export_range(-10000.0, 10000.0, 0.5) var ai_utility_hint: float = 0.0
 
 
-func apply(_caster: TacticalCharacter, _target: TacticalCharacter) -> void:
+func apply(
+	_caster: TacticalCharacter,
+	_target: TacticalCharacter,
+	_source: Object = null
+) -> void:
 	pass
 
 

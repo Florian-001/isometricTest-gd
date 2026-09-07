@@ -1,303 +1,115 @@
 [gd_scene format=3 uid="uid://b7qoms1hnb7vl"]
 
-[ext_resource type="Script" uid="uid://det1gksfltrcu" path="res://scripts/initiative_battle_controller.gd" id="1_controller"]
-[ext_resource type="Script" uid="uid://db3xtp2lso38p" path="res://scripts/isometric_grid.gd" id="2_grid"]
-[ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="3_character"]
-[ext_resource type="Script" uid="uid://dcabtm22e14rm" path="res://scripts/tactical_camera_controller.gd" id="4_camera"]
-[ext_resource type="Resource" uid="uid://clbeyhlog2wbi" path="res://resources/friendly_spellcaster.tres" id="5_friendly"]
-[ext_resource type="Resource" uid="uid://n6ywov3dxmd4" path="res://resources/enemy_raider.tres" id="6_enemy"]
-[ext_resource type="Script" uid="uid://br4bfrnpefm6b" path="res://scripts/initiative_turn_manager.gd" id="7_turn_manager"]
-[ext_resource type="PackedScene" path="res://scenes/turn_order_bar.tscn" id="8_order_bar"]
-[ext_resource type="PackedScene" path="res://scenes/ability_bar.tscn" id="9_ability_bar"]
-[ext_resource type="Script" uid="uid://bax5bwopqqbc1" path="res://scripts/tactical_wall.gd" id="10_wall"]
-[ext_resource type="Resource" uid="uid://be3ci0o703acb" path="res://resources/ai/melee_ai.tres" id="11_melee_ai"]
-[ext_resource type="Resource" uid="uid://cjf8v1k07fmgg" path="res://resources/ai/ranged_ai.tres" id="12_ranged_ai"]
-[ext_resource type="Script" uid="uid://cw40etoqakmre" path="res://scripts/tactical_terrain.gd" id="13_terrain"]
-[ext_resource type="Script" uid="uid://cy77b7iubppb4" path="res://scripts/tactical_tile.gd" id="14_tile"]
-[ext_resource type="Resource" path="res://resources/tiles/default_palette.tres" id="15_palette"]
-[ext_resource type="Resource" path="res://resources/tiles/mud.tres" id="16_mud"]
-[ext_resource type="Resource" uid="uid://bvb1c027wvf5u" path="res://resources/tiles/fire.tres" id="17_fire"]
-[ext_resource type="Script" path="res://scripts/party_inventory.gd" id="18_inventory"]
-[ext_resource type="PackedScene" path="res://scenes/inventory_panel.tscn" id="19_inventory_panel"]
+[ext_resource type="Script" uid="uid://mu34vmtma2i6" path="res://scripts/map_manager.gd" id="1_manager"]
+[ext_resource type="Script" uid="uid://c0q7hhe6nhxlu" path="res://scripts/battle_map_definition.gd" id="2_definition_type"]
+[ext_resource type="Resource" path="res://resources/maps/terrain_showcase.tres" id="3_terrain_showcase"]
+[ext_resource type="Resource" path="res://resources/maps/goblin_skirmish.tres" id="4_goblin_skirmish"]
+[ext_resource type="PackedScene" path="res://scenes/battle.tscn" id="5_battle"]
+[ext_resource type="PackedScene" path="res://scenes/run_map_screen.tscn" id="6_run_map"]
+[ext_resource type="Script" path="res://scripts/run_controller.gd" id="run_controller"]
+[ext_resource type="Resource" path="res://resources/run/default_run.tres" id="run_config"]
 
-[node name="Main" type="Node2D" unique_id=750848398]
-script = ExtResource("1_controller")
+[node name="Main" type="Node" unique_id=1967285414]
+script = ExtResource("1_manager")
+levels = Array[ExtResource("2_definition_type")]([ExtResource("3_terrain_showcase"), ExtResource("4_goblin_skirmish")])
+battle_scene = ExtResource("5_battle")
 
-[node name="PartyInventory" type="Node" parent="."]
-script = ExtResource("18_inventory")
+[node name="RunController" type="Node" parent="."]
+script = ExtResource("run_controller")
+config = ExtResource("run_config")
 
-[node name="Grid" type="Node2D" parent="." unique_id=190021511]
-position = Vector2(640, 96)
-script = ExtResource("2_grid")
-cell_color = Color(0.3254902, 0.65882355, 0.33333334, 1)
-alternate_cell_color = Color(0.30980393, 0.65882355, 0.3647059, 0.9372549)
-grid_line_color = Color(0.3254902, 0.65882355, 0.33333334, 1)
-grid_line_width = 0.0
+[node name="LevelSelect" type="CanvasLayer" parent="." unique_id=724740332]
+layer = 20
 
-[node name="Terrain" type="Node" parent="." unique_id=2116037386]
-script = ExtResource("13_terrain")
-palette = ExtResource("15_palette")
-
-[node name="Mud_3_4" type="Node" parent="Terrain" unique_id=1747580699]
-script = ExtResource("14_tile")
-definition = ExtResource("16_mud")
-grid_cell = Vector2i(3, 4)
-
-[node name="Mud_4_4" type="Node" parent="Terrain" unique_id=252013993]
-script = ExtResource("14_tile")
-definition = ExtResource("16_mud")
-grid_cell = Vector2i(4, 4)
-
-[node name="Fire_6_4" type="Node" parent="Terrain" unique_id=875009526]
-script = ExtResource("14_tile")
-definition = ExtResource("17_fire")
-grid_cell = Vector2i(6, 4)
-
-[node name="Fire_7_4" type="Node" parent="Terrain" unique_id=530649968]
-script = ExtResource("14_tile")
-definition = ExtResource("17_fire")
-grid_cell = Vector2i(7, 4)
-
-[node name="Walls" type="Node2D" parent="." unique_id=1102300341]
-
-[node name="Wall_5_4" type="Node2D" parent="Walls" unique_id=413103437]
-z_index = 109
-position = Vector2(688, 312)
-script = ExtResource("10_wall")
-grid_cell = Vector2i(5, 4)
-wall_height = 20.0
-
-[node name="Wall_5_5" type="Node2D" parent="Walls" unique_id=775990625]
-z_index = 110
-position = Vector2(640, 336)
-script = ExtResource("10_wall")
-grid_cell = Vector2i(5, 5)
-wall_height = 20.0
-
-[node name="Wall_5_6" type="Node2D" parent="Walls" unique_id=1348064369]
-z_index = 111
-position = Vector2(592, 360)
-script = ExtResource("10_wall")
-grid_cell = Vector2i(5, 6)
-wall_height = 20.0
-
-[node name="Characters" type="Node2D" parent="." unique_id=557259408]
-
-[node name="FriendA" type="Node2D" parent="Characters" unique_id=1740941279]
-z_index = 110
-position = Vector2(256, 336)
-script = ExtResource("3_character")
-definition = ExtResource("5_friendly")
-max_health_override = 100
-movement_range = 6.0
-strength_override = 1
-speed_override = 12
-starting_grid_cell = Vector2i(1, 9)
-
-[node name="FriendB" type="Node2D" parent="Characters" unique_id=2129219972]
-z_index = 111
-position = Vector2(208, 360)
-script = ExtResource("3_character")
-definition = ExtResource("5_friendly")
-max_health_override = 100
-speed_override = 8
-starting_grid_cell = Vector2i(1, 10)
-
-[node name="MeleeEnemy" type="Node2D" parent="Characters" unique_id=921107907]
-z_index = 112
-position = Vector2(1120, 384)
-script = ExtResource("3_character")
-definition = ExtResource("6_enemy")
-enemy_ai_profile = ExtResource("11_melee_ai")
-max_health_override = 99
-movement_range = 5.0
-speed_override = 10
-starting_grid_cell = Vector2i(11, 1)
-
-[node name="RangedEnemy" type="Node2D" parent="Characters" unique_id=1457671969]
-z_index = 109
-position = Vector2(496, 312)
-script = ExtResource("3_character")
-definition = ExtResource("6_enemy")
-enemy_ai_profile = ExtResource("12_ranged_ai")
-max_health_override = 100
-movement_range = 5.0
-speed_override = 9
-starting_grid_cell = Vector2i(3, 6)
-
-[node name="TurnManager" type="Node" parent="." unique_id=226977299]
-script = ExtResource("7_turn_manager")
-
-[node name="TacticalCamera" type="Camera2D" parent="." unique_id=513919283]
-position = Vector2(640, 360)
-script = ExtResource("4_camera")
-
-[node name="HUD" type="CanvasLayer" parent="." unique_id=122831205]
-layer = 10
-
-[node name="TurnOrderBar" parent="HUD" unique_id=209647319 instance=ExtResource("8_order_bar")]
-anchors_preset = 1
-anchor_left = 1.0
+[node name="Root" type="Control" parent="LevelSelect" unique_id=1460338614]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
-offset_left = -284.0
-offset_top = 16.0
-offset_right = -16.0
-offset_bottom = 106.0
-grow_horizontal = 0
-
-[node name="AbilityBar" parent="HUD" unique_id=761141443 instance=ExtResource("9_ability_bar")]
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -242.0
-offset_top = -98.0
-offset_right = 242.0
-offset_bottom = -16.0
 grow_horizontal = 2
-grow_vertical = 0
+grow_vertical = 2
 
-[node name="HelpBackground" type="ColorRect" parent="HUD" unique_id=741462883]
-offset_left = 16.0
-offset_top = 16.0
-offset_right = 420.0
-offset_bottom = 78.0
-mouse_filter = 2
-color = Color(0.025, 0.047, 0.075, 0.9)
-
-[node name="TurnPanel" type="PanelContainer" parent="HUD" unique_id=2025685219]
-anchors_preset = 3
-anchor_left = 1.0
-anchor_top = 1.0
+[node name="Background" type="ColorRect" parent="LevelSelect/Root" unique_id=1367146548]
+layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -360.0
-offset_top = -138.0
-offset_right = -16.0
-offset_bottom = -16.0
-grow_horizontal = 0
-grow_vertical = 0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.027, 0.043, 0.067, 1)
 
-[node name="Margin" type="MarginContainer" parent="HUD/TurnPanel" unique_id=958614485]
+[node name="Center" type="CenterContainer" parent="LevelSelect/Root" unique_id=1991320039]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="LevelSelect/Root/Center" unique_id=1073696741]
+custom_minimum_size = Vector2(620, 0)
 layout_mode = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 12
 
-[node name="VBox" type="VBoxContainer" parent="HUD/TurnPanel/Margin" unique_id=944152848]
+[node name="Margin" type="MarginContainer" parent="LevelSelect/Root/Center/Panel" unique_id=729478273]
 layout_mode = 2
-theme_override_constants/separation = 7
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 36
 
-[node name="TurnStatus" type="Label" parent="HUD/TurnPanel/Margin/VBox" unique_id=410986708]
+[node name="VBox" type="VBoxContainer" parent="LevelSelect/Root/Center/Panel/Margin" unique_id=1879393190]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="LevelSelect/Root/Center/Panel/Margin/VBox" unique_id=25980596]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
-theme_override_font_sizes/font_size = 18
-text = "FriendA's Turn | Round 1"
+theme_override_font_sizes/font_size = 30
+text = "Select Level"
+horizontal_alignment = 1
 
-[node name="MovementStatus" type="Label" parent="HUD/TurnPanel/Margin/VBox" unique_id=2106367089]
+[node name="Subtitle" type="Label" parent="LevelSelect/Root/Center/Panel/Margin/VBox" unique_id=1612916540]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 14
-text = "Select a friendly unit"
+theme_override_colors/font_color = Color(0.72, 0.8, 0.9, 1)
+theme_override_font_sizes/font_size = 15
+text = "Choose a battlefield to begin a new battle."
+horizontal_alignment = 1
 
-[node name="EndTurnButton" type="Button" parent="HUD/TurnPanel/Margin/VBox" unique_id=442931990]
-custom_minimum_size = Vector2(0, 38)
+[node name="LevelButtons" type="VBoxContainer" parent="LevelSelect/Root/Center/Panel/Margin/VBox" unique_id=1065539737]
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "End Turn"
+theme_override_constants/separation = 12
 
-[node name="InventoryPanel" parent="HUD" instance=ExtResource("19_inventory_panel")]
+[node name="ShowMapButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(520, 58)
+layout_mode = 2
+tooltip_text = "Begin a new journey toward the summit"
+theme_override_font_sizes/font_size = 17
+text = "New Run"
 
-[node name="InventoryButton" type="Button" parent="HUD"]
-z_index = 101
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 112.0
-offset_top = -56.0
-offset_right = 224.0
-offset_bottom = -16.0
-grow_vertical = 0
-tooltip_text = "Open the shared party inventory (I)"
-theme_override_font_sizes/font_size = 15
-text = "Inventory"
-
-[node name="DevButton" type="Button" parent="HUD" unique_id=649615961]
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = -56.0
-offset_right = 104.0
-offset_bottom = -16.0
-grow_vertical = 0
-tooltip_text = "Show AI decision score history"
-theme_override_font_sizes/font_size = 15
-text = "Dev"
-
-[node name="DevHistoryPanel" type="PanelContainer" parent="HUD" unique_id=2004355906]
+[node name="ContinueRunButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
 visible = false
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = -610.0
-offset_right = 666.0
-offset_bottom = -70.0
-grow_vertical = 0
-
-[node name="Margin" type="MarginContainer" parent="HUD/DevHistoryPanel" unique_id=1631131087]
+custom_minimum_size = Vector2(520, 48)
 layout_mode = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 10
+text = "Continue Run"
 
-[node name="VBox" type="VBoxContainer" parent="HUD/DevHistoryPanel/Margin" unique_id=784322946]
+[node name="RunMessage" type="Label" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Header" type="HBoxContainer" parent="HUD/DevHistoryPanel/Margin/VBox" unique_id=1438440474]
-layout_mode = 2
-
-[node name="Title" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header" unique_id=614464264]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
-theme_override_font_sizes/font_size = 18
-text = "AI Debug Score History"
-
-[node name="Spacer" type="Control" parent="HUD/DevHistoryPanel/Margin/VBox/Header" unique_id=851780709]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="CloseHint" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/Header" unique_id=1933916316]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.68, 0.78, 1)
-theme_override_font_sizes/font_size = 12
-text = "Press Dev to close"
-
-[node name="HistoryScroll" type="ScrollContainer" parent="HUD/DevHistoryPanel/Margin/VBox" unique_id=1392581608]
-custom_minimum_size = Vector2(0, 480)
-layout_mode = 2
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-
-[node name="DebugText" type="Label" parent="HUD/DevHistoryPanel/Margin/VBox/HistoryScroll" unique_id=1918392964]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 12
-text = "No AI decisions recorded yet."
 autowrap_mode = 2
+theme_override_font_sizes/font_size = 13
 
-[node name="HelpText" type="Label" parent="HUD" unique_id=68517187]
-offset_left = 28.0
-offset_top = 25.0
-offset_right = 410.0
-offset_bottom = 70.0
-theme_override_colors/font_color = Color(0.86, 0.93, 1, 1)
-theme_override_font_sizes/font_size = 15
-text = "Select a blue character, hover a highlighted cell, then click to move.
-WASD or middle-drag to pan  •  Mouse wheel to zoom  •  Esc to clear"
+[node name="ReplaceRunDialog" type="ConfirmationDialog" parent="LevelSelect"]
+title = "Start a new run?"
+dialog_text = "Starting a new run replaces your saved journey. Continue?"
+ok_button_text = "Start new run"
+
+[node name="EmptyState" type="Label" parent="LevelSelect/Root/Center/Panel/Margin/VBox" unique_id=1151119057]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.45, 0.4, 1)
+text = "No levels are configured."
+horizontal_alignment = 1
+
+[node name="RunMapLayer" type="CanvasLayer" parent="."]
+layer = 30
+
+[node name="RunMapScreen" parent="RunMapLayer" instance=ExtResource("6_run_map")]

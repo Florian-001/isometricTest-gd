@@ -18,6 +18,7 @@ var _definitions: Dictionary = {}
 var _wall_cells: Dictionary = {}
 var _report_runtime_warnings := false
 var _watched_definitions: Array[TileDefinition] = []
+var _batch_editing := false
 
 
 func initialize(
@@ -32,6 +33,8 @@ func initialize(
 
 
 func refresh() -> void:
+	if _batch_editing:
+		return
 	if _grid == null:
 		_grid = _find_grid()
 	if _grid == null:
@@ -68,6 +71,76 @@ func get_definitions() -> Dictionary:
 	return _definitions.duplicate()
 
 
+func capture_setup_state() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for cell: Vector2i in _definitions:
+		var definition := _definitions[cell] as TileDefinition
+		if definition == null or definition.resource_path.is_empty():
+			continue
+		result.append({
+			"cell": [cell.x, cell.y],
+			"definition": definition.resource_path,
+		})
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_cell: Array = a["cell"]
+		var b_cell: Array = b["cell"]
+		return int(a_cell[1]) < int(b_cell[1]) or (
+			int(a_cell[1]) == int(b_cell[1]) and int(a_cell[0]) < int(b_cell[0])
+		)
+	)
+	return result
+
+
+func begin_batch_edit() -> void:
+	_batch_editing = true
+
+
+func end_batch_edit(refresh_after := true) -> void:
+	_batch_editing = false
+	if refresh_after:
+		refresh()
+
+
+func replace_setup_state(entries: Array, refresh_after := true) -> void:
+	for child in get_children():
+		if child is TacticalTile:
+			remove_child(child)
+			child.queue_free()
+	for entry_value in entries:
+		var entry: Dictionary = entry_value
+		var cell_value: Array = entry.get("cell", [0, 0])
+		var definition_path := String(entry.get("definition", ""))
+		var definition_resource := load(definition_path) as TileDefinition
+		if definition_resource == null:
+			continue
+		var tile := TacticalTile.new()
+		tile.name = "Tile_%d_%d" % [int(cell_value[0]), int(cell_value[1])]
+		tile.grid_cell = Vector2i(int(cell_value[0]), int(cell_value[1]))
+		tile.definition = definition_resource
+		add_child(tile)
+	if refresh_after:
+		refresh()
+
+
+func set_tile(cell: Vector2i, definition_resource: TileDefinition) -> bool:
+	if definition_resource == null or (_grid != null and not _grid.is_in_bounds(cell)):
+		return false
+	var current := get_definition(cell)
+	if current == definition_resource:
+		return false
+	_remove_tile_node(cell)
+	var tile := TacticalTile.new()
+	tile.name = "Tile_%d_%d" % [cell.x, cell.y]
+	tile.grid_cell = cell
+	tile.definition = definition_resource
+	add_child(tile)
+	return true
+
+
+func erase_tile(cell: Vector2i) -> bool:
+	return _remove_tile_node(cell)
+
+
 func get_movement_cost_multipliers() -> Dictionary:
 	var result: Dictionary = {}
 	for cell: Vector2i in _definitions:
@@ -95,6 +168,15 @@ func _find_grid() -> IsometricGrid:
 	if root == null:
 		return null
 	return root.get_node_or_null("Grid") as IsometricGrid
+
+
+func _remove_tile_node(cell: Vector2i) -> bool:
+	for child in get_children():
+		if child is TacticalTile and child.grid_cell == cell:
+			remove_child(child)
+			child.queue_free()
+			return true
+	return false
 
 
 func _find_wall_cells() -> Dictionary:

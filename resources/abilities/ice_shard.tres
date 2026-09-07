@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3 uid="uid://fbimwcq8pc21"]
+
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="1_ability"]
+[ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="2_effect_type"]
+[ext_resource type="Resource" uid="uid://ch54y87fxss31" path="res://resources/statuses/slow.tres" id="3_slow"]
+
+[resource]
+script = ExtResource("1_ability")
+display_name = "Ice Shard"
+ability_type = 2
+effect = 1
+damage_type = 1
+innate_damage = 15
+scaling_stat = 3
+status_effect = ExtResource("3_slow")
+delivery_type = 0
+placeholder_color = Color(0.35, 0.78, 1, 1)

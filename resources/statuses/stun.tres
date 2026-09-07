@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3 uid="uid://csrk5mh1u0i2c"]
+
+[ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="1_status"]
+[ext_resource type="Texture2D" uid="uid://c3py0hp3g4cwv" path="res://assets/status_icons/stun.svg" id="2_icon"]
+
+[resource]
+script = ExtResource("1_status")
+status_id = &"stun"
+display_name = "Stun"
+effect = 3
+affected_unit_ai_utility = -20.0
+icon = ExtResource("2_icon")
+color = Color(1, 0.78, 0.18, 1)

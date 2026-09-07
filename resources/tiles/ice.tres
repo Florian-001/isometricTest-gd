@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="TileDefinition" format=3 uid="uid://bj3yc0xg083b1"]
+
+[ext_resource type="Script" uid="uid://ej41pikvcv2j" path="res://scripts/tile_triggered_effect_definition.gd" id="1_dcprb"]
+[ext_resource type="Script" uid="uid://lt1y734i3gak" path="res://scripts/tile_definition.gd" id="1_tile"]
+[ext_resource type="Resource" uid="uid://ch54y87fxss31" path="res://resources/statuses/slow.tres" id="2_slow"]
+
+[resource]
+script = ExtResource("1_tile")
+display_name = "Ice"
+tile_color = Color(0.43, 0.82, 1, 1)
+movement_cost_multiplier = 2.0
+status_effect = ExtResource("2_slow")

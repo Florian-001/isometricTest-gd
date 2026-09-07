@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3]
+
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="1_item"]
+[ext_resource type="Resource" uid="uid://ch54y87fxss31" path="res://resources/statuses/slow.tres" id="2_slow"]
+
+
+[ext_resource type="Texture2D" path="res://assets/item_icons/frost_bow.svg" id="inventory_icon"]
+
+[resource]
+script = ExtResource("1_item")
+icon = ExtResource("inventory_icon")
+display_name = "Frost Bow"
+weapon_type = 1
+weapon_damage = 10
+status_effect = ExtResource("2_slow")

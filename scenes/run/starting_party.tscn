@@ -1,0 +1,22 @@
+[gd_scene load_steps=9 format=3]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="2"]
+[ext_resource type="Resource" path="res://resources/items/goblin_bow.tres" id="bow"]
+[ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="sword"]
+[ext_resource type="Resource" path="res://resources/abilities/arrow.tres" id="arrow"]
+[ext_resource type="Resource" path="res://resources/abilities/strike.tres" id="strike"]
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability"]
+[node name="StartingParty" type="Node2D"]
+[node name="Archer" parent="." instance=ExtResource("1")]
+scenario_unit_id = "archer"
+override_template_abilities = true
+ability_overrides = Array[ExtResource("ability")]([ExtResource("arrow")])
+use_complete_equipment_override = true
+complete_equipment_overrides = Array[ExtResource("item")]([ExtResource("bow")])
+[node name="Vanguard" parent="." instance=ExtResource("2")]
+scenario_unit_id = "vanguard"
+override_template_abilities = true
+ability_overrides = Array[ExtResource("ability")]([ExtResource("strike")])
+use_complete_equipment_override = true
+complete_equipment_overrides = Array[ExtResource("item")]([ExtResource("sword")])

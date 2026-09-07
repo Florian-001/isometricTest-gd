@@ -1,11 +1,11 @@
-[gd_resource type="Resource" script_class="StatusEffectDefinition" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3 uid="uid://b01jqdoylmg7x"]
 
-[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="1_status"]
-[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
+[ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="1_status"]
+[ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
+[ext_resource type="Texture2D" uid="uid://c55hxpmsbs2ij" path="res://assets/status_icons/focus.svg" id="3_icon"]
 
 [sub_resource type="Resource" id="StrengthBonus"]
 script = ExtResource("2_modifier")
-stat = 1
 value = 2.0
 
 [sub_resource type="Resource" id="DexterityBonus"]
@@ -23,5 +23,6 @@ script = ExtResource("1_status")
 status_id = &"focus"
 display_name = "Focus"
 duration_turns = 2
+icon = ExtResource("3_icon")
 color = Color(0.72, 0.42, 1, 1)
 modifiers = Array[ExtResource("2_modifier")]([SubResource("StrengthBonus"), SubResource("DexterityBonus"), SubResource("IntelligenceBonus")])

@@ -16,10 +16,7 @@ extends Node2D
 @export var cell_color: Color = Color("17273b")
 @export var alternate_cell_color: Color = Color("1b3048")
 @export var grid_line_color: Color = Color("55718f")
-@export_range(0.0, 6.0, 0.5) var grid_line_width: float = 1.5:
-	set(value):
-		grid_line_width = maxf(0.0, value)
-		queue_redraw()
+@export_range(0.5, 6.0, 0.5) var grid_line_width: float = 1.5
 
 @export_group("Movement Overlay")
 @export var reachable_color: Color = Color(0.16, 0.78, 0.88, 0.38)
@@ -50,6 +47,10 @@ var _ability_area_cells: Array[Vector2i] = []
 var _ability_trajectory_cells: Array[Vector2i] = []
 var _ability_hover_valid := false
 var _terrain_definitions: Dictionary = {}
+var _has_dev_brush_preview := false
+var _dev_brush_cell := Vector2i.ZERO
+var _dev_brush_color := Color(0.72, 0.78, 0.84, 0.58)
+var _dev_brush_valid := true
 
 
 func grid_to_world(cell: Vector2i) -> Vector2:
@@ -84,6 +85,19 @@ func set_terrain_definitions(definitions: Dictionary) -> void:
 
 func get_terrain_definition(cell: Vector2i) -> TileDefinition:
 	return _terrain_definitions.get(cell) as TileDefinition
+
+
+func show_dev_brush_preview(cell: Vector2i, color: Color, is_valid: bool) -> void:
+	_has_dev_brush_preview = true
+	_dev_brush_cell = cell
+	_dev_brush_color = color
+	_dev_brush_valid = is_valid
+	queue_redraw()
+
+
+func clear_dev_brush_preview() -> void:
+	_has_dev_brush_preview = false
+	queue_redraw()
 
 
 func get_local_bounds() -> Rect2:
@@ -218,6 +232,13 @@ func _draw() -> void:
 		draw_circle(trajectory_points[0], ability_line_width * 0.75, trajectory_color)
 		draw_circle(trajectory_points[1], ability_line_width * 0.75, trajectory_color)
 
+	if _has_dev_brush_preview and is_in_bounds(_dev_brush_cell):
+		_draw_cell(
+			_dev_brush_cell,
+			_dev_brush_color if _dev_brush_valid else ability_invalid_color,
+			false
+		)
+
 
 func _clear_ability_state() -> void:
 	_ability_mode = false
@@ -239,6 +260,6 @@ func _draw_cell(cell: Vector2i, fill_color: Color, draw_outline: bool) -> void:
 		center + Vector2(-half_width, 0.0),
 	])
 	draw_colored_polygon(points, fill_color)
-	if draw_outline and grid_line_width > 0.0:
+	if draw_outline:
 		points.append(points[0])
 		draw_polyline(points, grid_line_color, grid_line_width, true)

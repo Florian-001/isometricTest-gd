@@ -18,10 +18,14 @@ func _run() -> void:
 
 	var caster := _make_character(true, Vector2i(1, 1))
 	var target := _make_character(false, Vector2i(2, 1))
+	caster.initial_facing = TacticalCharacter.Facing.LEFT
 	battlefield.add_child(caster)
 	battlefield.add_child(target)
 	caster.initialize(grid)
 	target.initialize(grid)
+	var weapon := ItemDefinition.new()
+	weapon.weapon_damage = 20
+	caster.equip_item(weapon)
 	caster.reset_movement()
 	caster.reset_ability_action()
 
@@ -60,6 +64,7 @@ func _run() -> void:
 	_check(not caster.ability_available, "Strike should consume the ability action")
 	_check(caster.grid_cell == original_cell, "Strike must not change grid occupancy")
 	_check(caster.global_position.is_equal_approx(original_position), "The caster should return to its exact starting position")
+	_check(caster.current_facing == TacticalCharacter.Facing.RIGHT, "using an ability should face the caster toward a target on screen-right")
 	_check(is_equal_approx(caster.remaining_movement, original_movement), "Strike must not consume movement")
 	_check(signal_order == ["started", "impact", "finished"], "Melee signals should fire once in order")
 	_check(not battlefield.has_node("MeleeSlash"), "The slash visual should be cleaned up")
@@ -92,7 +97,8 @@ func _run() -> void:
 	)
 	_check(slow_succeeded, "Slow should execute through the normal ability pipeline")
 	_check(target.get_active_statuses().size() == 1, "Slow should add one active status")
-	_check(target.get_initiative() == 6, "Slow should reduce effective Speed")
+	_check(is_equal_approx(target.get_movement_range(), 4.2), "Slow should reduce Movement Range by 30%")
+	_check(target.get_initiative() == 10, "Slow should leave initiative unchanged")
 
 	battlefield.queue_free()
 	if _failures.is_empty():
@@ -107,7 +113,7 @@ func _run() -> void:
 func _make_character(friendly: bool, cell: Vector2i) -> TacticalCharacter:
 	var definition := CharacterDefinition.new()
 	definition.faction = CharacterDefinition.Faction.FRIENDLY if friendly else CharacterDefinition.Faction.ENEMY
-	definition.max_health = 100
+	definition.constitution = 25
 	definition.movement_range = 6.0
 	var character := TacticalCharacter.new()
 	character.definition = definition

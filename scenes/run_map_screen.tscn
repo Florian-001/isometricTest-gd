@@ -1,0 +1,301 @@
+[gd_scene format=3]
+[ext_resource type="Script" path="res://scripts/run_map_screen.gd" id="screen"]
+[ext_resource type="Script" path="res://scripts/run_map_canvas.gd" id="canvas"]
+[ext_resource type="Theme" path="res://resources/run/map_theme.tres" id="theme"]
+[ext_resource type="PackedScene" path="res://scenes/run/room_button.tscn" id="room"]
+[ext_resource type="PackedScene" path="res://scenes/run/party_entry.tscn" id="party"]
+[ext_resource type="PackedScene" path="res://scenes/run/shop_offer.tscn" id="offer"]
+[ext_resource type="PackedScene" path="res://scenes/run/floor_label.tscn" id="floor"]
+[ext_resource type="Texture2D" path="res://assets/run_map/mountains.svg" id="mountains"]
+[ext_resource type="Resource" path="res://resources/run/map_settings.tres" id="preview_settings"]
+[ext_resource type="Texture2D" path="res://assets/run_map/combat.svg" id="icon1"]
+[ext_resource type="Texture2D" path="res://assets/run_map/elite.svg" id="icon2"]
+[ext_resource type="Texture2D" path="res://assets/run_map/rest.svg" id="icon3"]
+[ext_resource type="Texture2D" path="res://assets/run_map/shop.svg" id="icon4"]
+[ext_resource type="Texture2D" path="res://assets/run_map/chest.svg" id="icon5"]
+[ext_resource type="Texture2D" path="res://assets/run_map/unknown.svg" id="icon6"]
+[ext_resource type="Texture2D" path="res://assets/run_map/boss.svg" id="icon7"]
+[sub_resource type="FastNoiseLite" id="noise"]
+frequency = 0.028
+[sub_resource type="Gradient" id="paper_colors"]
+colors = PackedColorArray(0.84, 0.74, 0.55, 1, 0.92, 0.85, 0.69, 1)
+[sub_resource type="NoiseTexture2D" id="paper"]
+width = 512
+height = 512
+seamless = true
+color_ramp = SubResource("paper_colors")
+noise = SubResource("noise")
+[node name="RunMapScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+theme = ExtResource("theme")
+script = ExtResource("screen")
+party_entry_scene = ExtResource("party")
+shop_offer_scene = ExtResource("offer")
+[node name="Paper" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+texture = SubResource("paper")
+expand_mode = 1
+stretch_mode = 1
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_bottom = 12
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+[node name="Header" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 24
+[node name="BackButton" type="Button" parent="Margin/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(92, 42)
+text = "Menu"
+[node name="Title" type="Label" parent="Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"RunTitle"
+text = "THE ASCENT"
+[node name="MapLength" type="Label" parent="Margin/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "ACT I / 15 FLOORS"
+[node name="GoldLabel" type="Label" parent="Margin/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "50 GOLD"
+[node name="PartyRow" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 24
+[node name="PartyEntries" type="HBoxContainer" parent="Margin/VBox/PartyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 28
+[node name="InventoryLabel" type="Label" parent="Margin/VBox/PartyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+text = "PACK · Empty"
+text_overrun_behavior = 3
+[node name="Legend" type="HFlowContainer" parent="Margin/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/h_separation = 24
+[node name="Combat" type="HBoxContainer" parent="Margin/VBox/Legend"]
+layout_mode = 2
+theme_override_constants/separation = 6
+[node name="Icon" type="TextureRect" parent="Margin/VBox/Legend/Combat"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+texture = ExtResource("icon1")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Label" type="Label" parent="Margin/VBox/Legend/Combat"]
+layout_mode = 2
+text = "Combat"
+theme_override_font_sizes/font_size = 13
+[node name="Elite" type="HBoxContainer" parent="Margin/VBox/Legend"]
+layout_mode = 2
+theme_override_constants/separation = 6
+[node name="Icon" type="TextureRect" parent="Margin/VBox/Legend/Elite"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+texture = ExtResource("icon2")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Label" type="Label" parent="Margin/VBox/Legend/Elite"]
+layout_mode = 2
+text = "Elite"
+theme_override_font_sizes/font_size = 13
+[node name="Rest" type="HBoxContainer" parent="Margin/VBox/Legend"]
+layout_mode = 2
+theme_override_constants/separation = 6
+[node name="Icon" type="TextureRect" parent="Margin/VBox/Legend/Rest"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+texture = ExtResource("icon3")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Label" type="Label" parent="Margin/VBox/Legend/Rest"]
+layout_mode = 2
+text = "Rest"
+theme_override_font_sizes/font_size = 13
+[node name="Merchant" type="HBoxContainer" parent="Margin/VBox/Legend"]
+layout_mode = 2
+theme_override_constants/separation = 6
+[node name="Icon" type="TextureRect" parent="Margin/VBox/Legend/Merchant"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+texture = ExtResource("icon4")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Label" type="Label" parent="Margin/VBox/Legend/Merchant"]
+layout_mode = 2
+text = "Merchant"
+theme_override_font_sizes/font_size = 13
+[node name="Treasure" type="HBoxContainer" parent="Margin/VBox/Legend"]
+layout_mode = 2
+theme_override_constants/separation = 6
+[node name="Icon" type="TextureRect" parent="Margin/VBox/Legend/Treasure"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+texture = ExtResource("icon5")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Label" type="Label" parent="Margin/VBox/Legend/Treasure"]
+layout_mode = 2
+text = "Treasure"
+theme_override_font_sizes/font_size = 13
+[node name="Unknown" type="HBoxContainer" parent="Margin/VBox/Legend"]
+layout_mode = 2
+theme_override_constants/separation = 6
+[node name="Icon" type="TextureRect" parent="Margin/VBox/Legend/Unknown"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+texture = ExtResource("icon6")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Label" type="Label" parent="Margin/VBox/Legend/Unknown"]
+layout_mode = 2
+text = "Unknown"
+theme_override_font_sizes/font_size = 13
+[node name="Boss" type="HBoxContainer" parent="Margin/VBox/Legend"]
+layout_mode = 2
+theme_override_constants/separation = 6
+[node name="Icon" type="TextureRect" parent="Margin/VBox/Legend/Boss"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+texture = ExtResource("icon7")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+[node name="Label" type="Label" parent="Margin/VBox/Legend/Boss"]
+layout_mode = 2
+text = "Boss"
+theme_override_font_sizes/font_size = 13
+[node name="MapScroll" type="ScrollContainer" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+follow_focus = false
+[node name="MapCanvas" type="Control" parent="Margin/VBox/MapScroll"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(720, 2360)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 1
+script = ExtResource("canvas")
+preview_settings = ExtResource("preview_settings")
+room_scene = ExtResource("room")
+floor_label_scene = ExtResource("floor")
+icons = Array[Texture2D]([null, ExtResource("icon1"), ExtResource("icon2"), ExtResource("icon3"), ExtResource("icon4"), ExtResource("icon5"), ExtResource("icon6"), ExtResource("icon7")])
+[node name="Mountains" type="TextureRect" parent="Margin/VBox/MapScroll/MapCanvas"]
+layout_mode = 0
+offset_left = 100.0
+offset_top = 5.0
+offset_right = 700.0
+offset_bottom = 145.0
+mouse_filter = 2
+texture = ExtResource("mountains")
+expand_mode = 1
+stretch_mode = 5
+[node name="Floors" type="Control" parent="Margin/VBox/MapScroll/MapCanvas"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+[node name="Rooms" type="Control" parent="Margin/VBox/MapScroll/MapCanvas"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 1
+[node name="Message" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Choose a starting room."
+autowrap_mode = 2
+horizontal_alignment = 1
+[node name="RoomShade" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.12, 0.09, 0.06, 0.60)
+[node name="RoomPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -310.0
+offset_top = -175.0
+offset_right = 310.0
+offset_bottom = 175.0
+grow_horizontal = 2
+grow_vertical = 2
+[node name="Margin" type="MarginContainer" parent="RoomPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_bottom = 26
+[node name="Content" type="VBoxContainer" parent="RoomPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+[node name="RoomTitle" type="Label" parent="RoomPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"RunTitle"
+theme_override_font_sizes/font_size = 27
+text = "ROOM"
+horizontal_alignment = 1
+[node name="RoomBody" type="Label" parent="RoomPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+text = "Your journey continues."
+autowrap_mode = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+[node name="Offers" type="VBoxContainer" parent="RoomPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+[node name="RoomAction" type="Button" parent="RoomPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 46)
+text = "Continue along the road"

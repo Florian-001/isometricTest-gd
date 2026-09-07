@@ -1,17 +1,16 @@
-[gd_resource type="Resource" script_class="StatusEffectDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3 uid="uid://ch54y87fxss31"]
 
-[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="1_status"]
-[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
-
-[sub_resource type="Resource" id="SpeedPenalty"]
-script = ExtResource("2_modifier")
-stat = 4
-value = -4.0
+[ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="1_btysc"]
+[ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="1_status"]
+[ext_resource type="Texture2D" uid="uid://bamvbcb43xg7a" path="res://assets/status_icons/slow.svg" id="2_icon"]
 
 [resource]
 script = ExtResource("1_status")
 status_id = &"slow"
 display_name = "Slow"
 duration_turns = 2
+effect = 2
+percentage_amount = 30.0
+affected_unit_ai_utility = -8.0
+icon = ExtResource("2_icon")
 color = Color(0.3, 0.62, 1, 1)
-modifiers = Array[ExtResource("2_modifier")]([SubResource("SpeedPenalty")])

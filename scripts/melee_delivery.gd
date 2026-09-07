@@ -105,6 +105,8 @@ func _get_invalid_reason(
 		return &"invalid_caster"
 	if ability == null or ability.delivery_type != AbilityDefinition.DeliveryType.MELEE:
 		return &"invalid_ability"
+	if not ability.can_be_used_by(caster):
+		return &"incompatible_weapon"
 	if grid == null or not grid.is_in_bounds(target_cell):
 		return &"invalid_target"
 	if not can_reach(caster.grid_cell, target_cell, wall_cells):

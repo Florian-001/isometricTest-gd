@@ -110,7 +110,7 @@ func _get_blocked_cells(
 ) -> Dictionary:
 	var blocked: Dictionary = static_blocked_cells.duplicate()
 	for unit in all_units:
-		if is_instance_valid(unit) and unit != enemy:
+		if is_instance_valid(unit) and unit != enemy and unit.is_present_on_map():
 			blocked[unit.grid_cell] = true
 	return blocked
 

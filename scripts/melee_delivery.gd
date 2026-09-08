@@ -15,21 +15,26 @@ signal melee_cancelled(
 static func can_reach(
 	caster_cell: Vector2i,
 	target_cell: Vector2i,
-	wall_cells: Dictionary = {}
+	wall_cells: Dictionary = {},
+	reach: float = GridPathfinder.DIAGONAL_COST
 ) -> bool:
-	var difference := target_cell - caster_cell
-	var absolute_difference := difference.abs()
-	if absolute_difference == Vector2i.ZERO:
+	var offset := (target_cell - caster_cell).abs()
+	if offset == Vector2i.ZERO:
 		return false
-	if absolute_difference.x > 1 or absolute_difference.y > 1:
+	var diagonal_steps := mini(offset.x, offset.y)
+	var distance := float(maxi(offset.x, offset.y) - diagonal_steps) + diagonal_steps * GridPathfinder.DIAGONAL_COST
+	if distance > reach + 0.0001:
 		return false
-	if wall_cells.has(target_cell):
-		return false
-	if absolute_difference.x == 1 and absolute_difference.y == 1:
-		var horizontal_side := caster_cell + Vector2i(difference.x, 0)
-		var vertical_side := caster_cell + Vector2i(0, difference.y)
-		if wall_cells.has(horizontal_side) or wall_cells.has(vertical_side):
+	var line := GridLineOfSight.new().get_line_cells(caster_cell, target_cell)
+	for index in range(1, line.size()):
+		var current := line[index]
+		var previous := line[index - 1]
+		if wall_cells.has(current):
 			return false
+		var step := current - previous
+		if step.x != 0 and step.y != 0:
+			if wall_cells.has(previous + Vector2i(step.x, 0)) or wall_cells.has(previous + Vector2i(0, step.y)):
+				return false
 	return true
 
 
@@ -109,7 +114,7 @@ func _get_invalid_reason(
 		return &"incompatible_weapon"
 	if grid == null or not grid.is_in_bounds(target_cell):
 		return &"invalid_target"
-	if not can_reach(caster.grid_cell, target_cell, wall_cells):
+	if not can_reach(caster.grid_cell, target_cell, wall_cells, ability.get_effective_melee_reach(caster)):
 		return &"target_out_of_reach"
 	return &""
 

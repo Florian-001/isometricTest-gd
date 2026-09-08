@@ -1,0 +1,50 @@
+{
+  "tool": "Built-in image generation",
+  "date": "2026-09-08",
+  "references": [
+    "assets/characters/wolf_right.png",
+    "assets/characters/rat_right.png"
+  ],
+  "assets": [
+    {
+      "facing": "right",
+      "prompt": "Use case: stylized-concept. Asset: full-body boar enemy sprite for the same isometric tactical fantasy game as the Wolf and Rat reference images shown in this conversation. Generate a stocky wild BOAR standing on four short sturdy legs, facing SCREEN RIGHT in a slightly elevated three-quarter side view. Brown fur, coarse dark bristled ridge along its back, small pointed ears, broad snout, two clearly visible curved ivory tusks, cloven hooves. Match the Wolf's thick dark outlines, simple flat cel shading, compact readable shapes and muted palette; use the Rat as a secondary animal-style reference. Similar overall gameplay scale to the Wolf, not a giant boss. Square framing, full silhouette including feet and tusks entirely visible; approximate body bounds x 8–92% and y 20–82% so hooves align with the Wolf's frame. Neutral ready-to-charge stance. Genuine transparent RGBA PNG background with alpha zero; no ground, cast shadow, scenery, checkerboard, text or border. Readable when drawn in a 112x112 pixel game frame.",
+      "source": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-e0113e48-fa13-45a2-987d-b077b9524907.png",
+      "path": "assets/characters/boar_right.png"
+    },
+    {
+      "facing": "left",
+      "prompt": "Create the LEFT-facing game sprite of this exact boar. Flip the attached right-facing boar to face SCREEN LEFT, keeping the identical stocky brown body, bristled dark mane, ivory tusks, short legs, hooves, pose, dark outline and muted cel shading. Preserve the square canvas and exact character scale and framing: whole boar visible, feet at about 82% down the canvas. Preserve genuine RGBA transparency. Background must be empty transparent alpha, with no background pattern, floor, shadow, text, border or scenery.",
+      "reference": "assets/characters/boar_right.png",
+      "source": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-7f9b1248-ee9c-4205-8d7e-ef16bfb5b3d0.png",
+      "path": "assets/characters/boar_left.png"
+    }
+  ],
+  "validation": {
+    "format": "RGBA PNG",
+    "size": [
+      1254,
+      1254
+    ],
+    "alpha_range": [
+      0,
+      255
+    ],
+    "rendered_sizes": [
+      [
+        1280,
+        720
+      ],
+      [
+        800,
+        600
+      ]
+    ],
+    "frame": "Standard TacticalCharacter 112x112 frame, no extra scaling; both facings beside Wolf",
+    "import": "Mipmaps enabled; scene uses linear filtering with mipmaps"
+  },
+  "icon": {
+    "path": "assets/item_icons/boar_tusks.svg",
+    "source": "Native SVG matching the existing equipment icon style"
+  }
+}

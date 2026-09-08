@@ -296,8 +296,8 @@ text = "Reset to Template"
 [node name="AbilityBypass" type="CheckBox" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-text = "Developer Ability Override — Ignore Classes"
-tooltip_text = "Replaces the class loadout with the abilities checked below. Turn off to restore class unlocks."
+text = "Developer Ability Override — Custom Loadout"
+tooltip_text = "Replaces equipment, unarmed, and class abilities with the abilities checked below. Turn off to restore the normal loadout."
 
 [node name="AbilitiesScroll" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
 custom_minimum_size = Vector2(0, 128)
@@ -307,6 +307,25 @@ horizontal_scroll_mode = 0
 [node name="AbilityEntries" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/AbilitiesScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="Passives" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Passives"]
+layout_mode = 2
+text = "Passive Abilities · always active"
+
+[node name="Reset" type="Button" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Passives"]
+layout_mode = 2
+text = "Reset Passives to Template"
+
+[node name="Entries" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Passives"]
+layout_mode = 2
+
+[node name="Summary" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Passives"]
+layout_mode = 2
+autowrap_mode = 2
+theme_override_font_sizes/font_size = 12
 
 [node name="EquipmentHeader" type="HBoxContainer" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor"]
 layout_mode = 2
@@ -333,6 +352,14 @@ layout_mode = 2
 text = "Weapon"
 
 [node name="WeaponPicker" type="OptionButton" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OffhandLabel" type="Label" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
+layout_mode = 2
+text = "Offhand"
+
+[node name="OffhandPicker" type="OptionButton" parent="Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment"]
 layout_mode = 2
 size_flags_horizontal = 3
 

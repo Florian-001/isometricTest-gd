@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy_definition.gd" id="definition"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="ai"]
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item_type"]
+[ext_resource type="Resource" path="res://resources/items/boar_tusks.tres" id="tusks"]
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability_type"]
+[ext_resource type="Resource" path="res://resources/abilities/charge.tres" id="charge"]
+[ext_resource type="Resource" path="res://resources/abilities/strike.tres" id="strike"]
+
+[resource]
+script = ExtResource("definition")
+display_name = "Boar"
+faction = 1
+combat_rating = 1
+base_health_override = 0
+ai_profile = ExtResource("ai")
+constitution = 5
+strength = 2
+dexterity = 1
+intelligence = 1
+speed = 10
+movement_range = 6.0
+starting_equipment = Array[ExtResource("item_type")]([ExtResource("tusks")])
+abilities = Array[ExtResource("ability_type")]([ExtResource("charge"), ExtResource("strike")])
+body_color = Color(0.45, 0.31, 0.2, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)

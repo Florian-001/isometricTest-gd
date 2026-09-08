@@ -7,6 +7,7 @@ enum Effect {
 	DAMAGE_EACH_TURN,
 	STAT_MODIFIER,
 	STUN,
+	TAUNT,
 }
 
 enum ModifierDirection {
@@ -62,7 +63,7 @@ func _validate_property(property: Dictionary) -> void:
 	if property_name in [&"damage_type", &"damage_per_turn"]:
 		should_hide = effect != Effect.DAMAGE_EACH_TURN
 	elif property_name == &"affected_unit_ai_utility":
-		should_hide = effect not in [Effect.STAT_MODIFIER, Effect.STUN]
+		should_hide = effect not in [Effect.STAT_MODIFIER, Effect.STUN, Effect.TAUNT]
 	elif property_name in [
 		&"affected_stat",
 		&"modifier_direction",
@@ -119,15 +120,16 @@ func estimate_for_ai(
 	caster: TacticalCharacter,
 	target: TacticalCharacter,
 	simulated_health: int,
-	remaining_turns: int = -1
+	remaining_turns: int = -1,
+	simulated_armor: int = -1
 ) -> Dictionary:
 	var turns := duration_turns if remaining_turns < 0 else remaining_turns
-	var health_delta := 0
-	if effect == Effect.DAMAGE_EACH_TURN:
-		health_delta = -mini(
-			maxi(0, damage_per_turn) * maxi(0, turns),
-			maxi(0, simulated_health)
-		)
+	var armor := simulated_armor if simulated_armor >= 0 else (target.current_armor if is_instance_valid(target) else 0)
+	var resolved := DamageCalculator.resolve_damage(
+		maxi(0, damage_per_turn) * maxi(0, turns) if effect == Effect.DAMAGE_EACH_TURN else 0,
+		simulated_health,
+		armor
+	)
 	var utility := affected_unit_ai_utility
 	if (
 		is_instance_valid(caster)
@@ -136,7 +138,8 @@ func estimate_for_ai(
 	):
 		utility = -utility
 	return {
-		"health_delta": health_delta,
+		"health_delta": int(resolved.health_delta),
+		"armor_delta": int(resolved.armor_delta),
 		"utility_hint": utility,
 	}
 
@@ -180,5 +183,7 @@ func get_description(turns_override: int = -1) -> String:
 				display_name,
 				turn_text,
 			]
+		Effect.TAUNT:
+			return "%s: Attack the caster if possible; otherwise pursue them for %s" % [display_name, turn_text]
 		_:
 			return "%s for %s" % [display_name, turn_text]

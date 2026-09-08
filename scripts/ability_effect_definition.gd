@@ -31,5 +31,15 @@ func estimate_for_ai(
 	}
 
 
+## Armor-aware entry point. Existing custom health-only estimates remain compatible.
+func estimate_with_armor(
+	caster: TacticalCharacter,
+	target: TacticalCharacter,
+	simulated_health: int,
+	_simulated_armor: int
+) -> Dictionary:
+	return estimate_for_ai(caster, target, simulated_health)
+
+
 func get_description(_caster: TacticalCharacter = null) -> String:
 	return display_name

@@ -187,6 +187,7 @@ func _start_current_turn() -> void:
 	var starting_unit := current_unit
 	if not _is_living(starting_unit):
 		return
+	var was_bone_pile := starting_unit.is_bone_pile
 	turn_starting.emit(starting_unit)
 	if current_unit != starting_unit:
 		return
@@ -196,13 +197,19 @@ func _start_current_turn() -> void:
 	if not _is_living(starting_unit):
 		call_deferred("_advance_defeated_current_unit", starting_unit)
 		return
+	if was_bone_pile and starting_unit.is_bone_pile:
+		starting_unit.reform_from_bones()
+	if starting_unit.is_bone_pile:
+		# Collapsing during this turn's hazards must wait for the next turn.
+		call_deferred("_advance_defeated_current_unit", starting_unit)
+		return
 	starting_unit.reset_movement()
 	starting_unit.reset_ability_action()
 	turn_started.emit(starting_unit)
 
 
 func _advance_defeated_current_unit(unit: TacticalCharacter) -> void:
-	if current_unit == unit and not _is_living(unit):
+	if current_unit == unit and (not _is_living(unit) or unit.is_bone_pile):
 		end_current_turn()
 
 

@@ -1,0 +1,8 @@
+{
+  "asset": "assets/characters/bone_pile.png",
+  "method": "Built-in image_gen tool",
+  "reference": "assets/characters/skeleton_warrior_right.png",
+  "generated_source": "C:/Users/PC/.codex/generated_images/01a08030-67f2-7420-889e-64daca84413d/exec-0b916cb8-6a46-4ed3-b601-37d12d5bf68e.png",
+  "prompt": "Use case: stylized-concept. Asset type: transparent PNG game sprite. Create one compact pile of disarticulated skeleton bones and a skull, lying on the ground, in a three-quarter isometric view. Match the reference skeleton's hand-painted cartoon fantasy style, ivory bones, dark brown crisp outlines, simple cel shading and warm cream highlights. The reference is style guidance only: make a NEW collapsed bone pile, not a standing character. One skull lying sideways on top of scattered ribs and long bones, low wide silhouette, no weapons, clothing, blood, particles, text, border, scenery or ground tile. Entire pile visible, centered with a small transparent margin. Actual alpha-transparent background, no checkerboard baked into the image. Readable at about 80 pixels wide in an isometric tactics game.",
+  "validation": "Godot Image confirms alpha and transparent corner pixels; rendered and inspected at 1280x720 using tests/run_reassemble_tests.gd -- --capture. Original alpha preserved without image editing."
+}

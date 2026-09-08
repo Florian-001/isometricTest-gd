@@ -45,7 +45,7 @@ func test_equipment_modifier_order_replacement_and_shared_template_isolation() -
 	var sword_modifiers: Array[StatModifierDefinition] = [flat, percent_add, percent_multiply]
 	sword.modifiers = sword_modifiers
 
-	assert_eq(first.equip_item(sword), null, "equipping an empty slot should not replace an item")
+	assert_eq(first.equip_item(sword), [], "equipping an empty slot should not replace an item")
 	assert_true(
 		is_equal_approx(first.get_effective_stat(UnitStat.Type.STRENGTH), 22.5),
 		"modifier order should be (10 + 2) x 1.5 x 1.25"
@@ -62,7 +62,7 @@ func test_equipment_modifier_order_replacement_and_shared_template_isolation() -
 		_make_modifier(UnitStat.Type.STRENGTH, StatModifierDefinition.Operation.FLAT, 1.0)
 	]
 	replacement.modifiers = replacement_modifiers
-	assert_eq(first.equip_item(replacement), sword, "equipping the same slot should return the replaced item")
+	assert_eq(first.equip_item(replacement), [sword], "equipping the same slot should return the replaced item")
 	assert_true(is_equal_approx(first.get_effective_stat(UnitStat.Type.STRENGTH), 11.0), "replacement modifiers should take effect")
 	assert_eq(first.unequip_item(ItemDefinition.EquipmentSlot.WEAPON), replacement, "unequip should return the removed item")
 	assert_true(is_equal_approx(first.get_effective_stat(UnitStat.Type.STRENGTH), 10.0), "unequip should restore the base stat")

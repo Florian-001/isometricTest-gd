@@ -88,7 +88,7 @@ func _run() -> void:
 	check(not run.select_room(first_id), "double selection rejected")
 	check(run.state.route.is_empty(), "entry is not completion")
 	var battle := manager.current_battle
-	check(not battle.restart_button.visible and not battle.dev_button.visible, "run disables restart and developer tools")
+	check(not battle.restart_button.visible and battle.dev_button.visible, "run keeps Dev available while hiding the separate Restart button")
 	# JSON loads whole-number fields as floats inside nested roster/progression data.
 	var original_pending: Dictionary = JSON.parse_string(JSON.stringify(run.state.pending))
 	var entry := run.save_store.load_run()
@@ -233,7 +233,10 @@ func _run() -> void:
 	for unit in battle._characters:
 		if unit.is_friendly():
 			unit.apply_damage(100000)
-	await frames(4)
+	# Encounter completion waits for any in-flight enemy movement/ability to settle.
+	var defeat_deadline := Time.get_ticks_msec() + 5000
+	while manager.current_battle != null and Time.get_ticks_msec() < defeat_deadline:
+		await process_frame
 	check(run.state.status == RunState.Status.LOST and run.state.available_rooms().is_empty(), "full party defeat ends run")
 	await capture("run_defeat")
 	check(run.save_store.load_run().status == RunState.Status.LOST, "defeat persists")
@@ -250,6 +253,8 @@ func win_battle() -> void:
 	for unit in battle._characters:
 		if not unit.is_friendly():
 			unit.apply_damage(100000)
+			if unit.is_bone_pile:
+				unit.apply_damage(1)
 	await frames(5)
 
 func frames(count: int) -> void:

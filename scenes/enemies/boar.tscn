@@ -1,0 +1,17 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/initiative_actor.gd" id="actor"]
+[ext_resource type="Resource" path="res://resources/enemies/boar.tres" id="definition"]
+[ext_resource type="Texture2D" path="res://assets/characters/boar_left.png" id="left"]
+[ext_resource type="Texture2D" path="res://assets/characters/boar_right.png" id="right"]
+[ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="name_label"]
+
+[node name="Boar" type="Node2D"]
+texture_filter = 4
+script = ExtResource("actor")
+definition = ExtResource("definition")
+facing_left_texture = ExtResource("left")
+facing_right_texture = ExtResource("right")
+initial_facing = 0
+
+[node name="UnitNameLabel" parent="." instance=ExtResource("name_label")]

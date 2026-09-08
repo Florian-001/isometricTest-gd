@@ -55,10 +55,14 @@ const AI_LOG_SEPARATOR := "\n\n────────────────�
 @onready var constitution_reset: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats/ConstitutionReset
 @onready var speed_reset: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats/SpeedReset
 @onready var movement_reset: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Stats/MovementReset
+@onready var passive_entries: VBoxContainer = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Passives/Entries
+@onready var passive_summary: Label = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Passives/Summary
+@onready var passives_reset: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Passives/Reset
 @onready var abilities_reset: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/AbilitiesHeader/AbilitiesReset
 @onready var ability_entries: VBoxContainer = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/AbilitiesScroll/AbilityEntries
 @onready var equipment_reset: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/EquipmentHeader/EquipmentReset
 @onready var weapon_picker: OptionButton = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment/WeaponPicker
+@onready var offhand_picker: OptionButton = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment/OffhandPicker
 @onready var armor_picker: OptionButton = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment/ArmorPicker
 @onready var accessory_picker: OptionButton = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/Equipment/AccessoryPicker
 @onready var delete_unit_button: Button = $Drawer/Margin/Main/Tabs/Unit/UnitContent/UnitEditor/DeleteUnitButton
@@ -103,11 +107,13 @@ func _ready() -> void:
 	_connect_stat(constitution_spin, constitution_reset, UnitStat.Type.CONSTITUTION)
 	_connect_stat(speed_spin, speed_reset, UnitStat.Type.SPEED)
 	_connect_stat(movement_spin, movement_reset, UnitStat.Type.MOVEMENT_RANGE)
+	passives_reset.pressed.connect(_reset_passives)
 	abilities_reset.pressed.connect(_reset_abilities)
 	ability_bypass.toggled.connect(_ability_bypass_toggled)
 	add_class_button.pressed.connect(_add_class_pressed)
 	equipment_reset.pressed.connect(_reset_equipment)
 	weapon_picker.item_selected.connect(_equipment_selected.bind(ItemDefinition.EquipmentSlot.WEAPON, weapon_picker))
+	offhand_picker.item_selected.connect(_equipment_selected.bind(ItemDefinition.EquipmentSlot.OFFHAND, offhand_picker))
 	armor_picker.item_selected.connect(_equipment_selected.bind(ItemDefinition.EquipmentSlot.ARMOR, armor_picker))
 	accessory_picker.item_selected.connect(_equipment_selected.bind(ItemDefinition.EquipmentSlot.ACCESSORY, accessory_picker))
 	erase_button.button_group = _terrain_brush_group
@@ -345,6 +351,57 @@ func _stat_reset(stat: UnitStat.Type) -> void:
 	_refresh_selected_unit()
 
 
+func _reset_passives() -> void:
+	if not is_instance_valid(_selected_unit):
+		return
+	_selected_unit.reset_dev_passive_loadout()
+	_mark_setup_changed()
+	_refresh_selected_unit()
+
+
+func _passive_toggled(pressed: bool, passive: PassiveAbilityDefinition) -> void:
+	if _syncing or not is_instance_valid(_selected_unit):
+		return
+	var values := _selected_unit.get_passive_abilities()
+	for current in values.duplicate():
+		if current.passive_id == passive.passive_id:
+			values.erase(current)
+	if pressed:
+		values.append(passive)
+	_selected_unit.set_dev_passive_loadout(values)
+	_mark_setup_changed()
+	_refresh_selected_unit()
+
+
+func _rebuild_passives() -> void:
+	_clear_children(passive_entries)
+	var current := _selected_unit.get_passive_abilities()
+	var options: Array[PassiveAbilityDefinition] = []
+	if _catalog != null:
+		options.assign(_catalog.passive_abilities)
+	for passive in current:
+		if not options.has(passive):
+			options.append(passive)
+	var ids: Dictionary = {}
+	for passive in options:
+		if passive == null or ids.has(passive.passive_id):
+			continue
+		ids[passive.passive_id] = true
+		var check := CheckBox.new()
+		check.text = passive.display_name
+		check.icon = passive.icon
+		check.add_theme_constant_override("icon_max_width", 20)
+		check.tooltip_text = passive.get_description()
+		for assigned in current:
+			if assigned.passive_id == passive.passive_id:
+				check.button_pressed = true
+		check.toggled.connect(_passive_toggled.bind(passive))
+		check.set_meta("passive", passive)
+		passive_entries.add_child(check)
+	passives_reset.disabled = not _selected_unit.override_template_passives
+	passive_summary.text = ("Unit replacement override\n" if _selected_unit.override_template_passives else "Inherited from template\n") + _selected_unit.get_passive_description()
+
+
 func _reset_abilities() -> void:
 	if not is_instance_valid(_selected_unit):
 		return
@@ -398,8 +455,8 @@ func _rebuild_classes() -> void:
 	class_editor.visible = _selected_unit.is_friendly()
 	ability_bypass.visible = _selected_unit.is_friendly()
 	ability_bypass.set_pressed_no_signal(_selected_unit.override_template_abilities)
-	abilities_reset.text = "Use Class Unlocks" if _selected_unit.is_friendly() else "Reset to Template"
-	abilities_reset.tooltip_text = "Disable the developer bypass and restore class unlocks" if _selected_unit.is_friendly() else "Restore the template ability loadout"
+	abilities_reset.text = "Use Default Abilities" if _selected_unit.is_friendly() else "Reset to Template"
+	abilities_reset.tooltip_text = "Restore equipment, unarmed, and class abilities" if _selected_unit.is_friendly() else "Restore the template ability loadout"
 	_clear_children(class_entries)
 	class_picker.clear()
 	if not _selected_unit.is_friendly():
@@ -513,7 +570,9 @@ func _refresh_selected_unit() -> void:
 	]
 	_rebuild_classes()
 	_rebuild_abilities()
+	_rebuild_passives()
 	_rebuild_equipment_picker(weapon_picker, ItemDefinition.EquipmentSlot.WEAPON)
+	_rebuild_equipment_picker(offhand_picker, ItemDefinition.EquipmentSlot.OFFHAND)
 	_rebuild_equipment_picker(armor_picker, ItemDefinition.EquipmentSlot.ARMOR)
 	_rebuild_equipment_picker(accessory_picker, ItemDefinition.EquipmentSlot.ACCESSORY)
 	_syncing = false
@@ -547,6 +606,19 @@ func _base_movement_value() -> float:
 func _rebuild_abilities() -> void:
 	_clear_children(ability_entries)
 	if _selected_unit.is_friendly() and not _selected_unit.override_template_abilities:
+		var basic := _selected_unit.get_basic_attack_ability()
+		var basic_entry := VBoxContainer.new()
+		basic_entry.add_theme_constant_override("separation", 0)
+		basic_entry.set_meta("ability", basic)
+		basic_entry.set_meta("unlocked", true)
+		var basic_label := Label.new()
+		basic_label.text = "%s · %s" % [basic.display_name, _selected_unit.get_ability_source_text(basic)]
+		basic_label.tooltip_text = basic.get_description(_selected_unit)
+		basic_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		basic_label.add_theme_color_override("font_color", SUCCESS_TEXT)
+		basic_entry.add_child(basic_label)
+		_add_damage_breakdown(basic_entry, basic, basic_label.tooltip_text)
+		ability_entries.add_child(basic_entry)
 		for allocation in _selected_unit.get_class_levels():
 			if allocation == null or allocation.character_class == null:
 				continue
@@ -605,6 +677,13 @@ func _rebuild_equipment_picker(
 	picker.clear()
 	picker.add_item("Empty")
 	picker.set_item_metadata(0, null)
+	picker.tooltip_text = ""
+	if slot == ItemDefinition.EquipmentSlot.OFFHAND:
+		var occupant := _selected_unit.get_slot_occupant(slot)
+		if occupant != null and occupant.is_two_handed():
+			picker.set_item_text(0, "Occupied by %s — Two-handed" % occupant.display_name)
+			picker.set_item_disabled(0, true)
+			picker.tooltip_text = "Choose an offhand to replace the two-handed weapon."
 	var selected_index := 0
 	var equipped := _selected_unit.get_equipped_item(slot)
 	if _catalog != null:

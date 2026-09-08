@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy_definition.gd" id="script"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="ai"]
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item_type"]
+[ext_resource type="Resource" path="res://resources/items/bat_fangs.tres" id="teeth"]
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability_type"]
+[ext_resource type="Resource" path="res://resources/abilities/bite.tres" id="bite"]
+
+[ext_resource type="Script" path="res://scripts/passive_ability_definition.gd" id="passive_type"]
+[ext_resource type="Resource" path="res://resources/passives/flight.tres" id="flight"]
+
+[resource]
+script = ExtResource("script")
+display_name = "Bat"
+faction = 1
+combat_rating = 1
+base_health_override = 5
+ai_profile = ExtResource("ai")
+constitution = 1
+strength = 1
+dexterity = 1
+intelligence = 1
+speed = 10
+movement_range = 6.0
+starting_equipment = Array[ExtResource("item_type")]([ExtResource("teeth")])
+abilities = Array[ExtResource("ability_type")]([ExtResource("bite")])
+body_color = Color(0.42, 0.36, 0.3, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)
+passive_abilities = Array[ExtResource("passive_type")]([ExtResource("flight")])

@@ -44,6 +44,11 @@ enum CasterMovement {
 	CHARGE_TO_TARGET,
 }
 
+enum HitTargeting {
+	SAME_TARGET,
+	SELECT_PER_HIT,
+}
+
 @export_category("Ability")
 @export var display_name: String = "New Ability"
 ## Controls weapon requirements and weapon-damage contribution. Delivery and Damage Type
@@ -56,6 +61,23 @@ enum CasterMovement {
 			notify_property_list_changed()
 ## Optional icon used by the ability bar and projectile. A colored fallback is generated when empty.
 @export var image: Texture2D
+## Melee/Ranged abilities normally require their matching weapon. Disable for shouts.
+@export var requires_weapon: bool = true
+## Allows an empty weapon slot for friendly melee casters without removing weapon scaling.
+@export var allow_unarmed_for_friendlies: bool = false
+## Each hit resolves its own delivery, damage, and on-hit statuses for one action.
+@export_range(1, 99, 1, "or_greater") var hit_count: int = 1
+## Same Target repeats every hit on one selection. Select Per Hit requires one
+## unit selection per hit and explicit confirmation. Only stationary, single-unit
+## targeting is supported; cell, area, caster-centered and movement casts are invalid.
+@export var hit_targeting: HitTargeting = HitTargeting.SAME_TARGET:
+	set(value):
+		hit_targeting = value
+		if Engine.is_editor_hint():
+			notify_property_list_changed()
+## In Select Per Hit mode, allow the same unit to occupy multiple target slots.
+@export var allow_repeated_targets: bool = true
+@export_tool_button("Validate Targeting") var validate_targeting_button: Callable = _validate_targeting
 
 @export_category("Primary Effect")
 ## Main result of the ability. Matching entries in Additional Effects are skipped to avoid duplicates.
@@ -85,6 +107,9 @@ enum CasterMovement {
 ## Maximum weighted grid distance. Orthogonal steps cost 1 and diagonal steps cost 1.414.
 @warning_ignore("shadowed_global_identifier")
 @export_range(0.0, 100.0, 0.5, "or_greater") var range: float = 5.0
+## Adds the compatible equipped weapon's range bonus to normal casts and melee reach.
+## This never extends opportunity-attack reach. Only Strike enables it by default.
+@export var accepts_weapon_range_bonus: bool = false
 @export var delivery_type: DeliveryType = DeliveryType.CAST_ON_TARGET
 ## 0 or 1 affects one cell. Even values above 1 automatically become the next odd number.
 @export_range(0, 99, 1, "or_greater") var area_of_effect: int = 0:
@@ -94,6 +119,9 @@ enum CasterMovement {
 			area_of_effect += 1
 @export_flags("Friend:1", "Enemy:2", "Self:4", "Cell:8") var target_flags: int = TargetFlags.ENEMY
 @export var shape: Shape = Shape.SQUARE
+## Only the caster's cell confirms the cast; Range becomes the affected radius.
+## Target Flags still control recipients. Shape and Area of Effect are unused.
+@export var caster_centered: bool = false
 
 @export_category("Caster Movement")
 ## Optional movement performed before the configured delivery and effects resolve.
@@ -119,6 +147,36 @@ enum CasterMovement {
 
 func get_effective_area_span() -> int:
 	return 1 if area_of_effect <= 1 else area_of_effect
+
+
+func get_hit_count() -> int:
+	return maxi(1, hit_count)
+
+
+func selects_per_hit() -> bool:
+	return hit_targeting == HitTargeting.SELECT_PER_HIT
+
+
+func get_targeting_configuration_error() -> String:
+	if not selects_per_hit():
+		return ""
+	if has_target_flag(TargetFlags.CELL):
+		return "Select Per Hit requires unit targets; disable Cell targeting."
+	if get_effective_area_span() > 1 or shape == Shape.LINE_FROM_CASTER:
+		return "Select Per Hit requires a single-unit area and cannot use Line From Caster."
+	if caster_centered or moves_caster():
+		return "Select Per Hit requires a stationary cast without Caster Centered targeting."
+	if target_flags == 0:
+		return "Select Per Hit requires at least one unit Target Flag."
+	return ""
+
+
+func _validate_targeting() -> void:
+	var error := get_targeting_configuration_error()
+	if error.is_empty():
+		print("%s: targeting is valid." % display_name)
+	else:
+		push_warning("%s: %s" % [display_name, error])
 
 
 func moves_caster() -> bool:
@@ -152,6 +210,8 @@ func _validate_property(property: Dictionary) -> void:
 		should_hide = effect != PrimaryEffect.HEAL
 	elif property_name in [&"scaling_stat", &"scaling_amount"]:
 		should_hide = effect not in [PrimaryEffect.DAMAGE, PrimaryEffect.HEAL]
+	elif property_name == &"allow_repeated_targets":
+		should_hide = not selects_per_hit()
 	if should_hide:
 		property.usage = property.usage & ~PROPERTY_USAGE_EDITOR
 	elif property_name == &"scaling_stat":
@@ -180,6 +240,8 @@ func has_target_flag(flag: TargetFlags) -> bool:
 
 
 func get_required_weapon_type() -> int:
+	if not requires_weapon:
+		return DamageCalculator.NO_WEAPON_REQUIRED
 	match ability_type:
 		AbilityType.MELEE:
 			return ItemDefinition.WeaponType.MELEE
@@ -192,25 +254,55 @@ func get_required_weapon_type() -> int:
 func can_be_used_by(caster: TacticalCharacter) -> bool:
 	if (
 		not is_instance_valid(caster)
+		or not get_targeting_configuration_error().is_empty()
 		or caster.current_health <= 0
 		or not caster.can_use_abilities()
 	):
+		return false
+	return has_compatible_equipment(caster)
+
+
+func has_compatible_equipment(caster: TacticalCharacter) -> bool:
+	if not is_instance_valid(caster):
 		return false
 	var required_weapon_type := get_required_weapon_type()
 	return (
 		required_weapon_type == DamageCalculator.NO_WEAPON_REQUIRED
 		or caster.has_equipped_weapon_type(required_weapon_type)
+		or (allow_unarmed_for_friendlies
+			and required_weapon_type == ItemDefinition.WeaponType.MELEE
+			and caster.is_friendly()
+			and caster.get_equipped_weapon() == null)
 	)
 
 
+func get_weapon_range_bonus(caster: TacticalCharacter = null) -> float:
+	if not accepts_weapon_range_bonus or not is_instance_valid(caster):
+		return 0.0
+	var weapon := caster.get_weapon_for_ability(self)
+	return maxf(0.0, weapon.weapon_range_bonus) if weapon != null else 0.0
+
+
+func get_effective_range(caster: TacticalCharacter = null) -> float:
+	return range + get_weapon_range_bonus(caster)
+
+
+## Base melee delivery remains adjacent even for abilities with a long cast range (Charge).
+func get_effective_melee_reach(caster: TacticalCharacter = null) -> float:
+	return GridPathfinder.DIAGONAL_COST + get_weapon_range_bonus(caster)
+
+
 func get_unavailable_reason(caster: TacticalCharacter) -> String:
+	var configuration_error := get_targeting_configuration_error()
+	if not configuration_error.is_empty():
+		return configuration_error
 	if can_be_used_by(caster):
 		return ""
 	if is_instance_valid(caster) and caster.current_health > 0 and caster.is_stunned():
 		return "Stunned"
-	if ability_type == AbilityType.MELEE:
+	if get_required_weapon_type() == ItemDefinition.WeaponType.MELEE:
 		return "Requires a Melee weapon"
-	if ability_type == AbilityType.RANGED:
+	if get_required_weapon_type() == ItemDefinition.WeaponType.RANGED:
 		return "Requires a Ranged weapon"
 	return "Caster unavailable"
 
@@ -283,16 +375,32 @@ func has_damage() -> bool:
 	return false
 
 
-func calculate_damage(caster: TacticalCharacter) -> int:
+func get_passive_damage_bonus(caster: TacticalCharacter, snapshot: AIBoardSnapshot = null, origin := Vector2i(-1, -1)) -> int:
+	if not is_instance_valid(caster) or not has_damage() or get_required_weapon_type() < 0 or caster.get_weapon_for_ability(self) == null:
+		return 0
+	return PassiveAbilityResolver.weapon_damage_bonus(caster, snapshot, origin)
+
+
+func calculate_damage(caster: TacticalCharacter, snapshot: AIBoardSnapshot = null, origin := Vector2i(-1, -1)) -> int:
+	return calculate_hit_damage(caster, snapshot, origin) * get_hit_count()
+
+
+func calculate_hit_damage(caster: TacticalCharacter, snapshot: AIBoardSnapshot = null, origin := Vector2i(-1, -1)) -> int:
 	if effect == PrimaryEffect.DAMAGE:
-		return calculate_primary_effect_amount(caster)
+		return calculate_primary_effect_amount(caster, snapshot, origin)
 	var total := 0
 	for additional_effect in effects:
 		if additional_effect is DamageEffectDefinition:
 			total += (
 				additional_effect as DamageEffectDefinition
 			).calculate_amount(caster, self)
-	return total
+	return total + get_passive_damage_bonus(caster, snapshot, origin)
+
+
+func get_damage_summary(caster: TacticalCharacter, origin := Vector2i(-1, -1)) -> String:
+	if get_hit_count() > 1:
+		return "%d × %d DMG" % [get_hit_count(), calculate_hit_damage(caster, null, origin)]
+	return "%d DMG" % calculate_damage(caster, null, origin)
 
 
 ## Describes every damaging term using the selected caster's live stats and equipment.
@@ -321,13 +429,18 @@ func get_damage_calculation_description(caster: TacticalCharacter) -> String:
 					damage_effect.scaling_percentage,
 					get_required_weapon_type()
 				))
+	var passive_bonus := get_passive_damage_bonus(caster)
+	if passive_bonus > 0:
+		calculations.append("+%d passive weapon damage" % passive_bonus)
+	if get_hit_count() > 1:
+		return "Damage: %d hits × (%s) = %d %s" % [get_hit_count(), " · ".join(calculations), calculate_damage(caster), "potential cast total" if selects_per_hit() else "total"]
 	if calculations.size() == 1:
 		return "Damage: %s" % calculations[0]
 	return "Damage: %d total · %s" % [calculate_damage(caster), " · ".join(calculations)]
 
 
 ## Returns the configured primary Damage or Heal amount. Status and None have no numeric result.
-func calculate_primary_effect_amount(caster: TacticalCharacter) -> int:
+func calculate_primary_effect_amount(caster: TacticalCharacter, snapshot: AIBoardSnapshot = null, origin := Vector2i(-1, -1)) -> int:
 	match effect:
 		PrimaryEffect.DAMAGE:
 			return DamageCalculator.calculate_amount(
@@ -337,7 +450,7 @@ func calculate_primary_effect_amount(caster: TacticalCharacter) -> int:
 				scaling_stat,
 				scaling_amount,
 				get_required_weapon_type()
-			)
+			) + get_passive_damage_bonus(caster, snapshot, origin)
 		PrimaryEffect.HEAL:
 			var total := float(maxi(0, effect_amount))
 			if (
@@ -377,26 +490,37 @@ func estimate_primary_effect_for_ai(
 	caster: TacticalCharacter,
 	target: TacticalCharacter,
 	simulated_health: int,
-	include_status: bool = true
+	include_status: bool = true,
+	snapshot: AIBoardSnapshot = null
 ) -> Dictionary:
-	var maximum := target.get_max_health() if is_instance_valid(target) else maxi(0, simulated_health)
+	var maximum := (
+		snapshot.get_max_health(target) if snapshot != null
+		else (target.get_max_health() if is_instance_valid(target) else maxi(0, simulated_health))
+	)
+	var initial_armor := (
+		snapshot.get_armor(target) if snapshot != null
+		else (target.current_armor if is_instance_valid(target) else 0)
+	)
 	var health := clampi(simulated_health, 0, maximum)
+	var armor := initial_armor
 	var utility := 0.0
 	match effect:
 		PrimaryEffect.DAMAGE:
-			health = maxi(0, health - calculate_primary_effect_amount(caster))
+			var damage := DamageCalculator.resolve_damage(
+				calculate_primary_effect_amount(caster, snapshot), health, armor
+			)
+			health += int(damage.health_delta)
+			armor += int(damage.armor_delta)
 		PrimaryEffect.HEAL:
-			health = mini(maximum, health + calculate_primary_effect_amount(caster))
+			health = mini(maximum, health + calculate_primary_effect_amount(caster, snapshot))
 	if include_status and status_effect != null and health > 0:
-		var status_estimate := status_effect.estimate_for_ai(caster, target, health)
-		health = clampi(
-			health + int(status_estimate.get("health_delta", 0)),
-			0,
-			maximum
-		)
+		var status_estimate := status_effect.estimate_for_ai(caster, target, health, -1, armor)
+		health = clampi(health + int(status_estimate.get("health_delta", 0)), 0, maximum)
+		armor = maxi(0, armor + int(status_estimate.get("armor_delta", 0)))
 		utility += float(status_estimate.get("utility_hint", 0.0))
 	return {
 		"health_delta": health - simulated_health,
+		"armor_delta": armor - initial_armor,
 		"utility_hint": utility,
 	}
 
@@ -453,6 +577,8 @@ func get_description(caster: TacticalCharacter = null) -> String:
 			else:
 				effect_descriptions.append(additional_effect.get_description(caster))
 	if is_instance_valid(caster):
+		if effect != PrimaryEffect.DAMAGE and get_passive_damage_bonus(caster) > 0:
+			effect_descriptions.append(get_damage_calculation_description(caster))
 		var weapon_status_description := get_weapon_status_description(caster)
 		if not weapon_status_description.is_empty():
 			effect_descriptions.append(weapon_status_description)
@@ -468,11 +594,23 @@ func get_description(caster: TacticalCharacter = null) -> String:
 	var result := "%s ability | %s | Range %.2f | %s" % [
 		get_ability_type_name(),
 		delivery,
-		range,
+		get_effective_range(caster),
 		description,
 	]
 	if caster_movement == CasterMovement.CHARGE_TO_TARGET:
 		result += " | Charges in a clear straight line and stops adjacent"
+	if caster_centered:
+		result += " | Radius %.2f around caster; click caster to confirm" % get_effective_range(caster)
+	if get_weapon_range_bonus(caster) > 0.0:
+		result += " | +%s weapon range (normal attacks only)" % str(get_weapon_range_bonus(caster))
+	if selects_per_hit():
+		result += " | Choose %d targets in order; %s; confirm to fire" % [get_hit_count(), "repeats allowed" if allow_repeated_targets else "distinct units only"]
+		if is_instance_valid(caster) and has_damage():
+			result += " | %d damage per hit; %d potential cast total" % [calculate_hit_damage(caster), calculate_damage(caster)]
+	elif get_hit_count() > 1:
+		result += " | %d separate hits on the same target" % get_hit_count()
+		if is_instance_valid(caster):
+			result += " | %d damage per hit" % calculate_hit_damage(caster)
 	if is_instance_valid(caster):
 		var unavailable_reason := get_unavailable_reason(caster)
 		if not unavailable_reason.is_empty():
@@ -503,7 +641,7 @@ func _get_damage_description(caster: TacticalCharacter) -> String:
 	if scaling_stat == DamageCalculator.ScalingSource.WEAPON and _can_select_weapon_scaling():
 		if scaling_amount > 0.0:
 			parts.append("weapon damage x%d%%" % roundi(scaling_amount))
-	elif ability_type in [AbilityType.MELEE, AbilityType.RANGED]:
+	elif get_required_weapon_type() >= 0 and (not is_instance_valid(caster) or caster.get_weapon_for_ability(self) != null):
 		parts.append("weapon damage")
 	if (
 		scaling_stat != DamageCalculator.ScalingSource.NONE
@@ -511,6 +649,11 @@ func _get_damage_description(caster: TacticalCharacter) -> String:
 		and scaling_amount > 0.0
 	):
 		parts.append("%s x%d%%" % [DamageCalculator.get_scaling_source_display_name(scaling_stat), roundi(scaling_amount)])
+	var passive_bonus := get_passive_damage_bonus(caster)
+	if passive_bonus > 0:
+		parts.append("%d passive weapon damage" % passive_bonus)
+	if get_hit_count() > 1:
+		return "%s (%d hits × (%s))" % [total_prefix, get_hit_count(), " + ".join(parts)]
 	return "%s (%s)" % [total_prefix, " + ".join(parts) if not parts.is_empty() else "0"]
 
 

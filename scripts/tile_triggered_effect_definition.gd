@@ -28,23 +28,26 @@ func apply(
 	trigger: Trigger,
 	source: Object = null
 ) -> void:
-	if applies_on(trigger) and effect != null and is_instance_valid(unit) and unit.current_health > 0:
+	if applies_on(trigger) and effect != null and is_instance_valid(unit) and unit.current_health > 0 and not PassiveAbilityResolver.ignores_tile_effects(unit):
 		effect.apply(null, unit, source)
 
 
 func estimate_for_ai(
 	unit: TacticalCharacter,
 	trigger: Trigger,
-	simulated_health: int
+	simulated_health: int,
+	simulated_armor: int = -1
 ) -> Dictionary:
-	if not applies_on(trigger):
+	if not applies_on(trigger) or PassiveAbilityResolver.ignores_tile_effects(unit):
 		return {"health_delta": 0, "utility_hint": 0.0}
+	var armor := simulated_armor if simulated_armor >= 0 else unit.current_armor
 	var estimate := (
-		effect.estimate_for_ai(null, unit, simulated_health)
+		effect.estimate_with_armor(null, unit, simulated_health, armor)
 		if effect != null
 		else {"health_delta": 0, "utility_hint": 0.0}
 	)
 	return {
 		"health_delta": int(estimate.get("health_delta", 0)),
+		"armor_delta": int(estimate.get("armor_delta", 0)),
 		"utility_hint": float(estimate.get("utility_hint", 0.0)) + occupant_ai_utility,
 	}

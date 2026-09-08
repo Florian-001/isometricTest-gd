@@ -19,7 +19,11 @@ Start the game and choose **New Run**, select 1–4 characters in the [starting 
 
 `TacticalBattle` restores surviving party members and inventory before initiative starts. It emits `battle_finished` once, with the result, party condition/equipment, and inventory. Temporary statuses and action state do not carry between encounters. Fallen run members cannot be revived and lose equipped items; shared spare inventory remains. Standalone battles retain their existing behavior.
 
-Run battles disable developer tools and manual restart. **Save & Exit** abandons the in-progress battle; continuation repeats that same encounter from its entry checkpoint. Results are saved before their panels are shown. A failed result save keeps the completed battle alive with a retry button.
+The **Dev** button is always available in battles, including runs; the separate manual Restart button stays hidden during runs. Opening Dev during an action queues it until a safe pause point. Developer mode supports unit and terrain edits, scenario saves/loads, and AI checkpoint restoration. **Restart & Play** keeps the edited setup, current party health and equipment, and current inventory while resetting combat turns, actions, temporary statuses, and enemy health. Exact snapshots restore their captured runtime instead. Reloads retain the active run encounter and room, without regenerating enemies or applying elite/boss scaling again.
+
+Developer edits affect the current encounter. Normal run results carry health, equipment, class levels, and inventory into subsequent rooms. Deleted original party members are recorded as lost, and defeated run friendlies remain permanently defeated after a developer restart. Added friendly units help in the current encounter but do not join the persistent run party or prevent defeat when all original members are lost. The legacy `enable_dev_tools` property is retained for compatibility but no longer hides or disables Dev, and it is no longer shown in the Inspector.
+
+**Save & Exit** abandons the in-progress battle; continuation repeats that same encounter from its committed entry checkpoint, including its original party state. Developer scenario saves remain separate from that checkpoint. Results are saved before their panels are shown. A failed result save keeps the completed battle alive with a retry button.
 
 ## Saving
 
@@ -35,11 +39,14 @@ Run with Godot 4.7 from the project directory:
 godot --headless --path . --script res://tests/run_run_map_tests.gd
 godot --headless --path . --script res://tests/run_run_state_tests.gd
 godot --path . --script res://tests/run_run_map_integration.gd
+godot --headless --path . --script res://tests/run_dev_run_integration.gd
 ```
 
 The map suite checks 1,000 seeds twice, topology and room constraints, serialization, and bounded failure for impossible weights. State tests exercise every room effect, unknown outcomes, purchases, duplicate actions, permanent loss, backup recovery, invalid saves, and failed-write rollback. Integration drives real mouse/keyboard input, scrolling and resizing, inventory equipment, a fresh application session, a full 16-room route with ten actual battle instances, merchant UI, victory, and defeat. Battle outcomes in the complete-route fixture are accelerated by applying lethal damage to test combatants; this verifies transitions and persistence rather than game balance.
 
 Rendered checks cover 1024×720, 1280×720, and 1920×1080. Screenshots and isolated test saves go under `.godot/run_validation` and `.godot/run_state_validation`.
+
+The developer-run suite covers normal, elite, boss, and generated-template encounters; queued opening; class edits; fresh and exact reloads; AI checkpoints; party health, equipment, and inventory; permanent defeat; result-save recovery; and rewards committed once. Its saves are isolated under `.godot/dev_run_validation`. Add `-- --capture` to a rendered run of that suite for 1280×720 screenshots of the battle Dev button and editor.
 
 Also checked: melee integration, active enemy AI integration, battle shortcuts, developer-mode integration, and developer-save unit tests. These pass with normal Godot permissions. Restricted processes can report a Windows certificate-store/cache error; those errors are absent when Godot has its ordinary runtime permissions.
 

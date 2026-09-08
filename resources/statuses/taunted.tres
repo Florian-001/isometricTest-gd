@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="status"]
+
+[resource]
+script = ExtResource("status")
+status_id = &"taunted"
+display_name = "Taunted"
+duration_turns = 1
+effect = 4
+affected_unit_ai_utility = -10.0
+color = Color(0.95, 0.3, 0.2, 1)

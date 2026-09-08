@@ -38,8 +38,8 @@ func is_in_bounds(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < grid_size.x and cell.y < grid_size.y
 
 
-func get_reachable(start: Vector2i, budget: float, blocked_cells: Dictionary = {}) -> Dictionary:
-	return build_reachability(start, budget, blocked_cells)["costs"] as Dictionary
+func get_reachable(start: Vector2i, budget: float, blocked_cells: Dictionary = {}, ignore_terrain_costs: bool = false) -> Dictionary:
+	return build_reachability(start, budget, blocked_cells, {}, ignore_terrain_costs)["costs"] as Dictionary
 
 
 ## Runs one deterministic weighted search and retains enough information to reconstruct
@@ -48,7 +48,8 @@ func build_reachability(
 	start: Vector2i,
 	budget: float,
 	blocked_cells: Dictionary = {},
-	cell_preference_penalties: Dictionary = {}
+	cell_preference_penalties: Dictionary = {},
+	ignore_terrain_costs: bool = false
 ) -> Dictionary:
 	var costs: Dictionary = {}
 	var preference_costs: Dictionary = {}
@@ -68,7 +69,7 @@ func build_reachability(
 		var current := _pop_lowest_cost(open_cells, costs, preference_costs)
 		var current_cost: float = costs[current]
 		for neighbor in _get_neighbors(current, blocked_cells):
-			var new_cost := current_cost + get_step_cost(current, neighbor)
+			var new_cost := current_cost + get_step_cost(current, neighbor, ignore_terrain_costs)
 			if new_cost > budget + COST_EPSILON:
 				continue
 			var new_preference_cost := (
@@ -118,7 +119,8 @@ func find_path(
 	destination: Vector2i,
 	budget: float = INF,
 	blocked_cells: Dictionary = {},
-	cell_preference_penalties: Dictionary = {}
+	cell_preference_penalties: Dictionary = {},
+	ignore_terrain_costs: bool = false
 ) -> Array[Vector2i]:
 	var empty_path: Array[Vector2i] = []
 	if not is_in_bounds(start) or not is_in_bounds(destination):
@@ -141,7 +143,7 @@ func find_path(
 
 		var current_cost: float = costs[current]
 		for neighbor in _get_neighbors(current, blocked_cells):
-			var new_cost := current_cost + get_step_cost(current, neighbor)
+			var new_cost := current_cost + get_step_cost(current, neighbor, ignore_terrain_costs)
 			var new_preference_cost := (
 				float(preference_costs[current])
 				+ maxf(0.0, float(cell_preference_penalties.get(neighbor, 0.0)))
@@ -167,21 +169,21 @@ func find_path(
 	return empty_path
 
 
-func get_path_cost(path: Array[Vector2i]) -> float:
+func get_path_cost(path: Array[Vector2i], ignore_terrain_costs: bool = false) -> float:
 	var total := 0.0
 	for index in range(1, path.size()):
-		total += get_step_cost(path[index - 1], path[index])
+		total += get_step_cost(path[index - 1], path[index], ignore_terrain_costs)
 	return total
 
 
-func get_step_cost(from_cell: Vector2i, to_cell: Vector2i) -> float:
+func get_step_cost(from_cell: Vector2i, to_cell: Vector2i, ignore_terrain_costs: bool = false) -> float:
 	var difference := to_cell - from_cell
 	var base_cost := (
 		DIAGONAL_COST
 		if difference.x != 0 and difference.y != 0
 		else ORTHOGONAL_COST
 	)
-	return base_cost * float(cell_cost_multipliers.get(to_cell, 1.0))
+	return base_cost if ignore_terrain_costs else base_cost * float(cell_cost_multipliers.get(to_cell, 1.0))
 
 
 func is_path_walkable(path: Array[Vector2i], blocked_cells: Dictionary = {}) -> bool:

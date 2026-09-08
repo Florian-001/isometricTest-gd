@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=7 format=3 uid="uid://b5fu8otkut4yk"]
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=9 format=3 uid="uid://b5fu8otkut4yk"]
 
 [ext_resource type="Script" uid="uid://bk0vykrwdip6a" path="res://scripts/enemy_definition.gd" id="1_enemy"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="2_ability_type"]
@@ -6,6 +6,9 @@
 [ext_resource type="Resource" uid="uid://ypvhtrfkl6un" path="res://resources/abilities/strike.tres" id="4_strike"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="5_item_type"]
 [ext_resource type="Resource" uid="uid://iugc2d6vvdp6" path="res://resources/items/wolf_claws.tres" id="6_claws"]
+
+[ext_resource type="Script" path="res://scripts/passive_ability_definition.gd" id="passive_type"]
+[ext_resource type="Resource" path="res://resources/passives/pack_tactics.tres" id="pack"]
 
 [resource]
 script = ExtResource("1_enemy")
@@ -22,3 +25,4 @@ body_color = Color(0.47, 0.53, 0.61, 1)
 health_bar_color = Color(0.96, 0.62, 0.18, 1)
 abilities = Array[ExtResource("2_ability_type")]([ExtResource("4_strike")])
 ai_profile = ExtResource("3_ai")
+passive_abilities = Array[ExtResource("passive_type")]([ExtResource("pack")])

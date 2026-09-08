@@ -9,6 +9,7 @@ var sword: ItemDefinition = load("res://resources/items/iron_sword.tres")
 var bow: ItemDefinition = load("res://resources/items/frost_bow.tres")
 var armor: ItemDefinition = load("res://resources/items/ranger_armor.tres")
 var charm: ItemDefinition = load("res://resources/items/sage_charm.tres")
+var shield: ItemDefinition = load("res://resources/items/wooden_shield.tres")
 var _capture_directory: String = ""
 var _mouse_position := Vector2.ZERO
 var _mouse_down: bool = false
@@ -40,6 +41,7 @@ func _run() -> void:
 	_test_model()
 	_test_equipment_statistics()
 	await _test_ui()
+	await _test_offhand_ui()
 	await _test_save_flow()
 	await _test_battle_signals()
 	await _capture_overview()
@@ -124,7 +126,7 @@ func _test_ui() -> void:
 	_reset()
 	await _frames(3)
 	_check(screen.general_entries.columns == 5 and screen.general_entries.get_child_count() >= 20, "five-column grid with at least four rows")
-	_check(screen.equipment_entries.get_child_count() == 3, "three labeled equipment cells")
+	_check(screen.equipment_entries.get_child_count() == 4 and screen.equipment_entries.columns == 2, "four labeled equipment cells in two columns")
 	_check(_cell(0).artwork.texture == sword.icon and sword.icon != null, "item icons render from resources")
 	_check(_equipment(0).artwork.texture != null and _equipment(0).artwork.modulate.a < 1.0, "empty equipment uses faint category symbols")
 	var fallback := ItemDefinition.new()
@@ -231,6 +233,65 @@ func _test_ui() -> void:
 	screen.setup(inventory, no_characters)
 	_check(not screen.can_drop_on(_equipment(0), screen.create_drag_payload(_cell(0))), "equipment drop without selected character rejected")
 	screen.setup(inventory, [character, other])
+
+
+func _test_offhand_ui() -> void:
+	_reset()
+	inventory.initialize_starting_items([sword, shield, bow, shield])
+	await _frames(3)
+	var offhand := _equipment(ItemDefinition.EquipmentSlot.OFFHAND)
+	_check(_equipment(0).position.y == offhand.position.y and _equipment(1).global_position.y > offhand.global_position.y, "Weapon/Offhand above Armor/Accessory")
+	await _click(_cell(0), true)
+	await _click(_cell(1), true)
+	_check(character.get_equipped_item(0) == sword and offhand.item == shield, "double-click equips sword and shield together")
+	await _motion(offhand.get_global_rect().get_center())
+	await create_timer(0.3).timeout
+	_check(screen.item_details.visible and screen.item_details.body.text.contains("+3 Constitution"), "shield hover describes Constitution")
+	await _capture("wooden_shield")
+	await _drag(_cell(2), _equipment(0))
+	_check(character.get_equipped_item(0) == bow and character.get_equipped_item(3) == null, "dragging a bow displaces both hands")
+	_check(inventory.get_item_at(2) == sword and inventory.get_item_at(0) == shield, "UI swap returns weapon then shield to vacancies")
+	_check(offhand.item == null and offhand.reserved_by == bow and offhand.artwork.texture == bow.icon and offhand.artwork.modulate.a < 1.0, "offhand displays dim reserved weapon")
+	_check(offhand.tooltip_text == "Occupied by Frost Bow — Two-handed" and offhand.accessibility_name == offhand.tooltip_text, "reservation explains occupancy accessibly")
+	_check(screen.create_drag_payload(offhand).is_empty(), "reservation has no second draggable copy")
+	await _click(offhand, true)
+	_check(character.get_equipped_item(0) == bow, "reservation has no separate quick unequip action")
+	await _motion(_equipment(0).get_global_rect().get_center())
+	await create_timer(0.3).timeout
+	_check(screen.item_details.category.text.contains("Two-handed"), "weapon hover shows handedness")
+	_check(root.get_visible_rect().encloses(screen.item_details.get_global_rect()), "handedness card fits viewport")
+	await _capture("two_handed")
+	await _motion(offhand.get_global_rect().get_center())
+	await create_timer(0.7).timeout
+	await _capture("offhand_reserved")
+	await _drag(_cell(3), offhand)
+	_check(character.get_equipped_item(0) == null and offhand.item == shield and inventory.get_item_at(3) == bow, "shield drop onto reservation returns bow")
+	_check(inventory.get_item_at(0) == shield and offhand.reserved_by == null and offhand.tooltip_text.is_empty(), "second shield copy preserved and reservation cleared")
+	offhand.grab_focus()
+	await _press_enter()
+	_check(character.get_equipped_item(3) == null, "Enter unequips shield")
+	_cell(0).grab_focus()
+	await _press_enter()
+	_check(character.get_equipped_item(3) == shield, "Enter equips shield")
+	var payload := screen.create_drag_payload(_cell(3))
+	character.equip_item(sword)
+	_check(not screen.can_drop_on(_equipment(0), payload), "hand changes invalidate stale equipment drag")
+	await _frames(3)
+	var fallback := ItemDefinition.new()
+	fallback.slot = ItemDefinition.EquipmentSlot.OFFHAND
+	_check(screen.get_item_icon(fallback) == screen.offhand_fallback_icon and screen.offhand_fallback_icon != null, "offhand uses shield fallback artwork")
+	_reset()
+
+
+func _press_enter() -> void:
+	var event := InputEventKey.new()
+	event.keycode = KEY_ENTER
+	event.pressed = true
+	root.push_input(event, true)
+	event = event.duplicate()
+	event.pressed = false
+	root.push_input(event, true)
+	await _frames(3)
 
 
 func _test_save_flow() -> void:
@@ -360,7 +421,11 @@ func _cell(index: int) -> InventoryItemSlot:
 
 
 func _equipment(slot: int) -> InventoryItemSlot:
-	return screen.equipment_entries.get_child(slot).get_node("Slot") as InventoryItemSlot
+	for column in screen.equipment_entries.get_children():
+		var cell := column.get_node("Slot") as InventoryItemSlot
+		if cell.equipment_slot == slot:
+			return cell
+	return null
 
 
 func _click(cell: Control, double_click: bool = false) -> void:

@@ -59,7 +59,7 @@ func _test_roster_and_creation() -> void:
 	check(ResourceSaver.save(run.config.duplicate(), config_path) == OK, "Inspector-editable roster configuration saves as a resource")
 	var reloaded := ResourceLoader.load(config_path, "", ResourceLoader.CACHE_MODE_IGNORE) as RunConfig
 	check(reloaded != null and reloaded.inspect_starting_roster().errors.is_empty() and reloaded.starting_character_roster.size() == 4, "roster resource reload preserves scenes and classes")
-	var expected := {"vanguard": ["Strike"], "archer": ["Arrow"], "wizard": ["Ice Shard"], "cleric": ["Heal", "Beam"]}
+	var expected := {"vanguard": ["Strike"], "archer": ["Shoot"], "wizard": ["Strike", "Ice Shard"], "cleric": ["Strike", "Heal", "Beam"]}
 	for entry in report.entries:
 		var character := (entry.scene as PackedScene).instantiate() as TacticalCharacter
 		var names: Array[String] = []

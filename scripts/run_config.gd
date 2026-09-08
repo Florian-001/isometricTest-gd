@@ -62,6 +62,7 @@ func validate_configuration(party_slots: int = -1) -> Dictionary:
 					errors.append("The starting party must contain only friendly characters.")
 				else:
 					errors.append_array(CharacterClassProgression.validate_levels(child.get_class_levels(), true))
+					errors.append_array(child.get_passive_validation_errors())
 		party.free()
 	if slots == 0:
 		errors.append("The starting party must contain characters.")
@@ -95,6 +96,7 @@ func inspect_starting_roster() -> Dictionary:
 		if id.strip_edges().is_empty() or ids.has(id):
 			errors.append("Roster characters need unique, nonempty scenario unit IDs.")
 		ids[id] = true
+		errors.append_array(character.get_passive_validation_errors())
 		var levels := character.get_class_levels()
 		errors.append_array(CharacterClassProgression.validate_levels(levels, true))
 		if character.get_character_level() != 1 or character.override_template_abilities:
@@ -109,7 +111,8 @@ func inspect_starting_roster() -> Dictionary:
 			classes.append(allocation)
 		var abilities: Array[String] = []
 		for ability in character.get_abilities():
-			abilities.append(ability.display_name)
+			var source_text := character.get_ability_source_text(ability)
+			abilities.append(ability.display_name if source_text.is_empty() else "%s (%s)" % [ability.display_name, source_text])
 		entries.append({"id": id, "scene": scene, "name": str(character.name),
 			"class_summary": CharacterClassProgression.get_summary(levels), "abilities": ", ".join(abilities),
 			"art": character.facing_right_texture, "health": character.get_max_health(),

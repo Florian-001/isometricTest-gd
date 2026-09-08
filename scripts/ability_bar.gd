@@ -38,6 +38,7 @@ func rebuild(unit: TacticalCharacter, interaction_enabled: bool) -> void:
 
 
 func set_selected(ability: AbilityDefinition) -> void:
+	reset_damage_previews()
 	_selected_ability = ability
 	for child in _get_entries().get_children():
 		if child is Button:
@@ -67,7 +68,7 @@ func _create_button(
 	button.custom_minimum_size = Vector2(button_width, button_height)
 	button.toggle_mode = true
 	var has_damage := ability.has_damage()
-	var damage_text := "%d DMG" % ability.calculate_damage(caster)
+	var damage_text := ability.get_damage_summary(caster)
 	var unavailable_reason := ability.get_unavailable_reason(caster)
 	var summary_text := damage_text if has_damage else ""
 	if not unavailable_reason.is_empty():
@@ -79,6 +80,19 @@ func _create_button(
 			if not shortcut_text.is_empty()
 			else ability.display_name
 		)
+		# Keep long resource names readable within the configured button width.
+		var title_lines: Array[String] = []
+		var line := ""
+		var font := button.get_theme_font("font")
+		for word in title_text.split(" "):
+			var candidate := word if line.is_empty() else "%s %s" % [line, word]
+			if not line.is_empty() and font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x > button_width - 16.0:
+				title_lines.append(line)
+				line = word
+			else:
+				line = candidate
+		title_lines.append(line)
+		title_text = "\n".join(title_lines)
 		button.text = (
 			"%s\n%s" % [title_text, summary_text]
 			if not summary_text.is_empty()
@@ -93,8 +107,15 @@ func _create_button(
 	button.icon = ability.image
 	button.expand_icon = true
 	button.tooltip_text = "%s\n%s" % [ability.display_name, ability.get_description(caster)]
+	var source_text := caster.get_ability_source_text(ability)
+	if not source_text.is_empty():
+		button.tooltip_text += "\n" + source_text
 	if shortcut_number > 0:
 		button.tooltip_text += "\nShortcut: %d" % shortcut_number
+	button.set_meta("base_text", button.text)
+	button.set_meta("base_tooltip", button.tooltip_text)
+	button.set_meta("base_damage", ability.calculate_damage(caster))
+	button.set_meta("base_damage_summary", damage_text)
 	button.set_meta("ability", ability)
 	button.set_meta("unavailable_reason", unavailable_reason)
 	button.set_meta("shortcut_number", shortcut_number)
@@ -130,3 +151,24 @@ func _on_ability_pressed(ability: AbilityDefinition) -> void:
 
 func _get_entries() -> HBoxContainer:
 	return get_node("Margin/HBox") as HBoxContainer
+
+
+func reset_damage_previews() -> void:
+	for button in _get_entries().get_children():
+		button.text = button.get_meta("base_text", button.text)
+		button.tooltip_text = button.get_meta("base_tooltip", button.tooltip_text)
+
+
+func set_damage_preview(caster: TacticalCharacter, ability: AbilityDefinition, origin: Vector2i) -> void:
+	reset_damage_previews()
+	if ability == null or not ability.has_damage():
+		return
+	for button in _get_entries().get_children():
+		if button.get_meta("ability") != ability or not str(button.get_meta("unavailable_reason", "")).is_empty():
+			continue
+		var damage := ability.calculate_damage(caster, null, origin)
+		button.text = str(button.get_meta("base_text")).replace(str(button.get_meta("base_damage_summary")), ability.get_damage_summary(caster, origin))
+		if ability.selects_per_hit():
+			button.tooltip_text += "\nTarget preview: %d damage per hit; %d potential cast total" % [ability.calculate_hit_damage(caster, null, origin), damage]
+		else:
+			button.tooltip_text += "\nTarget preview: %d damage (+%d passive weapon damage)" % [damage, ability.get_passive_damage_bonus(caster, null, origin)]

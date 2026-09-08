@@ -63,6 +63,10 @@ func _run() -> void:
 	EditorInterface.edit_resource(character)
 	await _frames()
 	_check(_property("starting_class") != null and _property("abilities") == null, "Friendly template exposes classes instead of legacy abilities")
+	var strike := load("res://resources/abilities/strike.tres") as AbilityDefinition
+	EditorInterface.edit_resource(strike)
+	await _frames()
+	_check(_property("allow_unarmed_for_friendlies") != null and strike.allow_unarmed_for_friendlies, "Strike Inspector exposes its opt-in unarmed friendly setting")
 	var path := "res://.godot/class_validation/editor_allocation_%d.tres" % Time.get_ticks_usec()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
 	_check(ResourceSaver.save(allocation, path) == OK, "Allocation and inline class save")

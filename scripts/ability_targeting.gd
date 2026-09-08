@@ -53,21 +53,22 @@ func get_valid_target_cells_from(
 
 func get_cells_in_range(caster: TacticalCharacter, ability: AbilityDefinition) -> Dictionary:
 	return (
-		get_cells_in_range_from(caster.grid_cell, ability)
+		get_cells_in_range_from(caster.grid_cell, ability, caster)
 		if _is_living(caster) and ability != null and ability.can_be_used_by(caster)
 		else {}
 	)
 
 
-func get_cells_in_range_from(caster_cell: Vector2i, ability: AbilityDefinition) -> Dictionary:
+func get_cells_in_range_from(caster_cell: Vector2i, ability: AbilityDefinition, caster: TacticalCharacter = null) -> Dictionary:
 	var range_cells: Dictionary = {}
 	if ability == null:
 		return range_cells
+	var effective_range := ability.get_effective_range(caster)
 	for y in range(grid_size.y):
 		for x in range(grid_size.x):
 			var cell := Vector2i(x, y)
 			var distance := get_weighted_distance(caster_cell, cell)
-			if distance <= ability.range + COST_EPSILON:
+			if distance <= effective_range + COST_EPSILON:
 				range_cells[cell] = distance
 	return range_cells
 
@@ -104,12 +105,14 @@ func is_valid_primary_target_from(
 		or not _is_in_bounds(selected_cell)
 	):
 		return false
-	if get_weighted_distance(caster_cell, selected_cell) > ability.range + COST_EPSILON:
+	if get_weighted_distance(caster_cell, selected_cell) > ability.get_effective_range(caster) + COST_EPSILON:
 		return false
 	if wall_cells.has(selected_cell):
 		return false
 	if not _line_of_sight.has_line_of_sight(caster_cell, selected_cell, wall_cells):
 		return false
+	if ability.caster_centered:
+		return selected_cell == caster_cell
 	var delivery_origin := caster_cell
 	if ability.moves_caster():
 		var movement_path := get_caster_movement_path_from(
@@ -125,7 +128,7 @@ func is_valid_primary_target_from(
 		delivery_origin = AbilityCasterMovementScript.get_landing_cell(movement_path)
 	if (
 		ability.delivery_type == AbilityDefinition.DeliveryType.MELEE
-		and not MeleeDeliveryScript.can_reach(delivery_origin, selected_cell, wall_cells)
+		and not MeleeDeliveryScript.can_reach(delivery_origin, selected_cell, wall_cells, ability.get_effective_melee_reach(caster))
 	):
 		return false
 	if ability.moves_caster():
@@ -192,10 +195,16 @@ func get_affected_cells(
 	caster_cell: Vector2i,
 	selected_cell: Vector2i,
 	ability: AbilityDefinition,
-	wall_cells: Dictionary = {}
+	wall_cells: Dictionary = {},
+	caster: TacticalCharacter = null
 ) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	if ability == null or not _is_in_bounds(selected_cell):
+		return cells
+	if ability.caster_centered:
+		for cell in get_cells_in_range_from(caster_cell, ability, caster):
+			if not wall_cells.has(cell) and _line_of_sight.has_line_of_sight(caster_cell, cell, wall_cells):
+				cells.append(cell)
 		return cells
 	var span := ability.get_effective_area_span()
 	var radius := floori(float(span - 1) / 2.0)
@@ -273,7 +282,7 @@ func get_affected_units_from(
 	var affected: Array[TacticalCharacter] = []
 	if not _is_living(caster) or ability == null or not ability.can_be_used_by(caster):
 		return affected
-	var cells := get_affected_cells(caster_cell, selected_cell, ability, wall_cells)
+	var cells := get_affected_cells(caster_cell, selected_cell, ability, wall_cells, caster)
 	for unit in units:
 		var unit_cell := caster_cell if unit == caster else unit.grid_cell
 		if _is_living(unit) and cells.has(unit_cell) and _matches_unit_flag(caster, unit, ability):

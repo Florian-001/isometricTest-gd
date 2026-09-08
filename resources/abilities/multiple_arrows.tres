@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+display_name = "Multiple Arrows"
+ability_type = 1
+hit_count = 3
+hit_targeting = 1
+allow_repeated_targets = true
+effect = 1
+scaling_stat = 2
+scaling_amount = 60.0
+range = 5.0
+delivery_type = 0
+target_flags = 2
+placeholder_color = Color(0.72, 0.48, 0.22, 1)
+projectile_speed = 760.0

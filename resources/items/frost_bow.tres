@@ -11,5 +11,6 @@ script = ExtResource("1_item")
 icon = ExtResource("inventory_icon")
 display_name = "Frost Bow"
 weapon_type = 1
+weapon_handedness = 1
 weapon_damage = 10
 status_effect = ExtResource("2_slow")

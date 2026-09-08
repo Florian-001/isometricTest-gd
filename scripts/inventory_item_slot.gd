@@ -13,6 +13,7 @@ extends Button
 var screen: InventoryScreen
 var slot_index: int = -1
 var item: ItemDefinition
+var reserved_by: ItemDefinition
 @onready var artwork: TextureRect = $Icon
 
 
@@ -23,12 +24,23 @@ func _ready() -> void:
 
 func bind_item(value: ItemDefinition, owner_screen: InventoryScreen, index: int = -1) -> void:
 	item = value
+	reserved_by = null
+	tooltip_text = ""
 	screen = owner_screen
 	slot_index = index
 	set_meta("item", item)
 	artwork.texture = screen.get_item_icon(item) if item != null else empty_icon
 	artwork.modulate.a = 1.0 if item != null else empty_icon_opacity
 	accessibility_name = item.display_name if item != null else "Empty %s" % (ItemDefinition.EquipmentSlot.keys()[equipment_slot].capitalize() if equipment_slot >= 0 else "inventory cell")
+
+
+## A reservation is presentation only: item stays null, so it cannot be taken twice.
+func bind_reservation(weapon: ItemDefinition) -> void:
+	reserved_by = weapon
+	artwork.texture = screen.get_item_icon(weapon)
+	artwork.modulate.a = 0.4
+	tooltip_text = "Occupied by %s — Two-handed" % weapon.display_name
+	accessibility_name = tooltip_text
 
 
 func _gui_input(event: InputEvent) -> void:

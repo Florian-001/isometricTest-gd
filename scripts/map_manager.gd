@@ -129,10 +129,14 @@ func reload_battle_from_payload(payload: Dictionary, source_battle: TacticalBatt
 		return false
 	var map_path := str(validation.payload.get("map_definition", ""))
 	var definition: BattleMapDefinitionScript
-	for configured_level in levels:
-		if configured_level != null and configured_level.resource_path == map_path:
-			definition = configured_level
-			break
+	if (source_battle.run_encounter != null and source_battle.map_definition != null
+		and source_battle.map_definition.resource_path == map_path):
+		definition = source_battle.map_definition
+	else:
+		for configured_level in levels:
+			if configured_level != null and configured_level.resource_path == map_path:
+				definition = configured_level
+				break
 	if definition == null:
 		source_battle.report_reload_failed("This save uses a map that is not in the level catalog.")
 		return false
@@ -146,6 +150,16 @@ func reload_battle_from_payload(payload: Dictionary, source_battle: TacticalBatt
 	replacement.map_definition = definition
 	replacement.pending_restore_payload = validation.payload
 	replacement.unit_names_visible = unit_names_visible
+	if source_battle.run_encounter != null:
+		replacement.run_encounter = source_battle.run_encounter
+		replacement.run_node_id = source_battle.run_node_id
+		replacement.run_party_input = source_battle.run_party_input.duplicate(true)
+		replacement.run_inventory_input = source_battle.run_inventory_input.duplicate()
+		replacement.template_setup_input = source_battle.template_setup_input.duplicate(true)
+		if bool(validation.payload.get("runtime", {}).get("fresh_start", false)):
+			replacement.run_inventory_input = source_battle.general_inventory.capture_state()
+			for member in source_battle.capture_run_party():
+				replacement.run_restart_health_input[str(member.id)] = int(member.health)
 	_connect_battle(replacement)
 	replacement.visible = false
 	add_child(replacement)
@@ -159,6 +173,7 @@ func reload_battle_from_payload(payload: Dictionary, source_battle: TacticalBatt
 	remove_child(source_battle)
 	source_battle.queue_free()
 	current_battle = replacement
+	_pending_run_result.clear()
 	level_select.hide()
 	replacement.visible = true
 	get_tree().paused = false
@@ -201,6 +216,8 @@ func _connect_battle(battle: TacticalBattleScript) -> void:
 		reload_battle_from_payload.bind(battle)
 	)
 	battle.unit_name_visibility_changed.connect(_on_unit_name_visibility_changed)
+	if battle.run_encounter != null:
+		battle.battle_finished.connect(_on_run_battle_finished.bind(battle, battle.run_node_id))
 
 
 func return_to_level_select() -> void:
@@ -267,13 +284,13 @@ func _start_run_battle(encounter: RunEncounterDefinition, members: Array[Diction
 	var battle := battle_scene.instantiate() as TacticalBattleScript
 	battle.map_definition = encounter.battle_map
 	battle.run_encounter = encounter
+	battle.run_node_id = node_id
 	battle.run_party_input = members
 	battle.run_inventory_input = inventory
 	if encounter.battle_map is BattleMapTemplateDefinition:
 		battle.template_setup_input = run_controller.state.pending.get("template_setup", {}).duplicate(true)
 	battle.unit_names_visible = unit_names_visible
 	_connect_battle(battle)
-	battle.battle_finished.connect(_on_run_battle_finished.bind(battle, node_id))
 	current_battle = battle
 	starting_hub.hide()
 	level_select.hide()

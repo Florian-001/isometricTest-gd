@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/long_sword.svg" id="icon"]
+
+[resource]
+script = ExtResource("item")
+display_name = "Long Sword"
+slot = 0
+icon = ExtResource("icon")
+weapon_handedness = 1
+weapon_type = 0
+weapon_damage = 10

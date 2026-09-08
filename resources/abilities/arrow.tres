@@ -5,7 +5,7 @@
 
 [resource]
 script = ExtResource("1_ability")
-display_name = "Arrow"
+display_name = "Shoot"
 ability_type = 1
 effect = 1
 scaling_stat = 2

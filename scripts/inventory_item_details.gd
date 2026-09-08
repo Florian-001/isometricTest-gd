@@ -15,9 +15,18 @@ func show_item(item: ItemDefinition, equipped: bool) -> void:
 	var lines: Array[String] = []
 	if item.slot == ItemDefinition.EquipmentSlot.WEAPON:
 		category.text += " · " + ItemDefinition.WeaponType.keys()[item.weapon_type].capitalize()
+		category.text += " · " + ("Two-handed" if item.is_two_handed() else "One-handed")
 		lines.append("%d weapon damage" % item.weapon_damage)
+		if item.weapon_range_bonus > 0.0:
+			lines.append("%s Strike range (normal attacks only)" % _signed_amount(item.weapon_range_bonus))
+		var granted_names: Array[String] = []
+		for ability in item.get_granted_abilities():
+			granted_names.append(ability.display_name)
+		lines.append("Grants while equipped: %s" % ", ".join(granted_names))
 		if item.status_effect != null:
 			lines.append("Applies %s\n%s" % [item.status_effect.display_name, item.status_effect.get_description()])
+	if item.armor > 0:
+		lines.append("+%d Armor" % item.armor)
 	for modifier in item.modifiers:
 		if modifier == null:
 			continue

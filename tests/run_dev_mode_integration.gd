@@ -28,7 +28,10 @@ func _run() -> void:
 func _test_pause_resume_dirty_and_unit_operations() -> void:
 	var hidden_battle := _spawn_battle(false)
 	_check(hidden_battle.initialization_succeeded, "hidden-controls battle initializes")
-	_check(not hidden_battle.dev_button.visible, "enable_dev_tools false hides Dev")
+	_check(hidden_battle.dev_button.visible, "legacy enable_dev_tools false no longer hides Dev")
+	hidden_battle._on_dev_button_pressed()
+	_check(hidden_battle._dev_open and paused, "legacy false also permits opening Dev")
+	hidden_battle._on_dev_play_requested()
 	_remove_now(hidden_battle)
 
 	var battle := _spawn_battle(true)
@@ -561,7 +564,7 @@ func _test_atomic_cross_map_load() -> void:
 	_check(is_equal_approx(restored_active.remaining_movement, saved_movement), "exact load restores remaining movement")
 	_check(not restored_active.ability_available, "exact load restores the spent action")
 	_check(not restored_active.opportunity_reaction_available, "exact load restores the spent reaction")
-	_check(exact_replacement.general_inventory.get_items().size() == 7, "exact load restores ordered general inventory")
+	_check(exact_replacement.general_inventory.capture_state() == exact_payload.runtime.inventory, "exact load restores ordered general inventory")
 	var restored_statuses := restored_active.get_active_statuses()
 	_check(restored_statuses.size() == 1, "exact load restores active statuses")
 	if restored_statuses.size() == 1:

@@ -154,7 +154,7 @@ func apply_trigger(
 	unit: TacticalCharacter,
 	trigger: TileTriggeredEffectDefinition.Trigger
 ) -> void:
-	if not is_instance_valid(unit) or unit.current_health <= 0:
+	if not is_instance_valid(unit) or unit.current_health <= 0 or PassiveAbilityResolver.ignores_tile_effects(unit):
 		return
 	var definition := get_definition(unit.grid_cell)
 	if definition == null:

@@ -38,9 +38,9 @@ func _run() -> void:
 
 func _test_unlocks_and_isolation() -> void:
 	var expected := {
-		"warrior": ["Strike", "Charge"], "archer": ["Arrow", "Focus"],
-		"wizard": ["Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam"],
-		"cleric": ["Heal", "Beam", "Focus"],
+		"warrior": ["Strike", "Charge", "Battle Stomp", "Taunt", "Multi Attack"], "archer": ["Strike", "Focus", "Multiple Arrows", "Dagger Throw"],
+		"wizard": ["Strike", "Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam"],
+		"cleric": ["Strike", "Heal", "Beam", "Focus"],
 	}
 	for id in expected:
 		var unit := TacticalCharacter.new()
@@ -49,7 +49,8 @@ func _test_unlocks_and_isolation() -> void:
 		_check(unit.get_character_level() == 1, "%s starts at level one" % id)
 		for level in range(1, expected[id].size() + 1):
 			_check(unit.set_class_level(_classes[id], level), "%s level can be edited" % id)
-			_check(_names(unit) == expected[id].slice(0, mini(level + 1, 3) if id == "cleric" else level), "%s level %d unlock boundary" % [id, level])
+			var count: int = mini(level + 2, 4) if id == "cleric" else level + 1 if id == "wizard" else level
+			_check(_names(unit) == expected[id].slice(0, count), "%s level %d unlock boundary" % [id, level])
 		unit.set_class_level(_classes[id], 150)
 		_check(_names(unit) == expected[id], "levels beyond last unlock remain valid")
 		unit.free()
@@ -71,7 +72,7 @@ func _test_unlocks_and_isolation() -> void:
 	first.set_class_level(_classes.cleric, 3)
 	first.set_class_level(_classes.archer, 2)
 	_check(_names(first).count("Beam") == 1 and _names(first).count("Focus") == 1, "multiclass shared abilities are deduplicated")
-	_check(_names(first) == ["Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam", "Heal", "Focus", "Arrow"], "class ordering and unlock ordering are stable")
+	_check(_names(first) == ["Strike", "Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam", "Heal", "Focus"], "equipment attack precedes stable class and unlock ordering")
 	var unsorted := CharacterClassDefinition.new()
 	unsorted.class_id = &"test_order"
 	for level in [3, 1, 2, 1]:
@@ -165,7 +166,7 @@ func _test_execution() -> void:
 	_check(caster.ability_available, "rejected locked casts spend no action")
 	caster.set_class_level(_classes.warrior, 2)
 	_check(executor.can_execute(caster, charge, enemy.grid_cell, units, grid, targeting), "unlocked Charge can execute")
-	_check(OpportunityAttackSystem.get_opportunity_attack_ability(caster).display_name == "Strike", "class-derived Strike enables opportunity attacks")
+	_check(OpportunityAttackSystem.get_opportunity_attack_ability(caster).display_name == "Strike", "equipment-derived Strike enables opportunity attacks")
 	caster.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
 	_check(not executor.can_execute(caster, charge, enemy.grid_cell, units, grid, targeting), "class unlocks still require matching equipment")
 	caster.equip_item(load("res://resources/items/iron_sword.tres"))
@@ -174,7 +175,7 @@ func _test_execution() -> void:
 	_check(await executor.execute(caster, charge, enemy.grid_cell, units, grid, targeting), "explicit developer bypass executes locked class ability")
 	_check(not caster.ability_available, "successful bypass cast spends normal action")
 	caster.reset_dev_ability_loadout()
-	_check(_names(caster) == ["Strike"], "disabling bypass restores class abilities")
+	_check(_names(caster) == ["Strike"], "disabling bypass restores equipment and class abilities")
 	world.free()
 	await process_frame
 
@@ -201,7 +202,7 @@ func _test_battle_ui_and_saves() -> void:
 			panel.class_picker.select(index)
 	panel.add_class_button.pressed.emit()
 	_check(actor.get_character_level() == 3 and actor.get_class_levels().size() == 2, "developer picker adds a class at level one")
-	_check(panel.ability_entries.get_child_count() == 5, "developer preview shows both classes' locked and unlocked entries")
+	_check(panel.ability_entries.get_child_count() == 7, "developer preview includes Dagger Throw among both classes' locked and unlocked entries")
 	panel.ability_bypass.button_pressed = true
 	_check(actor.override_template_abilities and panel.ability_bypass.button_pressed, "developer bypass is explicit and visible")
 	panel.ability_bypass.button_pressed = false
@@ -288,7 +289,7 @@ func _test_battle_ui_and_saves() -> void:
 	for character in run_battle._characters:
 		if character.scenario_unit_id == "archer":
 			run_actor = character
-	_check(run_actor != null and run_actor.get_character_level() == 3 and _names(run_actor) == ["Arrow", "Focus", "Ice Shard"], "run battle restores independent class levels and unlocks")
+	_check(run_actor != null and run_actor.get_character_level() == 3 and _names(run_actor) == ["Shoot", "Focus", "Ice Shard"], "run battle restores equipment attacks and independent class unlocks")
 	run_actor.set_class_level(_classes.wizard, 2)
 	var results := run_battle.capture_run_party()
 	var malformed_results: Array[Dictionary] = results.duplicate(true)

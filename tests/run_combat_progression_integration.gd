@@ -34,6 +34,10 @@ func _test_checkpoint_and_battle() -> void:
 	run.config.combat_stages = []
 	for stage in source_config.combat_stages:
 		run.config.combat_stages.append(stage.duplicate())
+	# This fixture later lowers stage two to CR 5. Keep its earlier stage below
+	# that value instead of depending on the current authored starting budget.
+	run.config.combat_stages[0].starting_cr = 1
+	run.config.combat_stages[0].cr_per_floor = 1
 	run.save_path = "res://.godot/progression_validation/run_%d.json" % Time.get_ticks_usec()
 	_paths.append(run.save_path)
 	root.add_child(manager)
@@ -131,6 +135,11 @@ func _test_checkpoint_and_battle() -> void:
 	next_node.type = RunMapGraph.NodeType.NORMAL_COMBAT
 	run.config.combat_stages[1].starting_cr = 5
 	var next := run._prepare_room(next_node)
+	_check(not next.is_empty(), "Edited stage settings prepare a future room: " + run.error_message)
+	if next.is_empty():
+		manager.queue_free()
+		await process_frame
+		return
 	_check(next.combat_progression.combat_rating == 8 and next.combat_progression.enemy_pool == ["res://scenes/enemies/goblin_archer.tscn"], "Future uncommitted rooms use current stage settings")
 	var before := run.state.to_data()
 	var valid_path := run.save_store.path

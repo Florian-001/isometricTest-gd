@@ -311,6 +311,7 @@ static func validate_payload(input: Dictionary) -> Dictionary:
 			elif occupied.has(key):
 				errors.append("Units %s and %s share a cell." % [occupied[key], unit_id])
 			occupied[key] = unit_id
+		errors.append_array(PassiveLoadout.validate_setup(unit))
 		_validate_resource_paths(unit.get("abilities", []), "ability", errors)
 		_validate_resource_paths(unit.get("equipment", []), "item", errors)
 		_validate_resource_paths(unit.get("legacy_equipment", []), "item", errors)
@@ -342,6 +343,24 @@ static func _validate_runtime(
 			continue
 		var state: Dictionary = raw_state
 		var unit_id := str(state.get("id", ""))
+		var armor_spent: Variant = state.get("armor_damage_spent", 0)
+		if not RunState._integer(armor_spent) or float(armor_spent) < 0.0:
+			errors.append("Unit %s has invalid spent armor; expected a nonnegative integer." % unit_id)
+		if not state.get("bone_pile", false) is bool or not state.get("reassembly_destroyed", false) is bool:
+			errors.append("Unit %s has invalid Reassemble runtime flags." % unit_id)
+		if bool(state.get("reassembly_destroyed", false)) and int(state.get("current_health", 0)) != 0:
+			errors.append("Destroyed bone piles must have zero health.")
+		if bool(state.get("bone_pile", false)):
+			var reassembly: Variant = state.get("reassembly", {})
+			if not reassembly is Dictionary:
+				errors.append("Unit %s has invalid Reassemble runtime settings." % unit_id)
+			else:
+				var reassembly_errors := ReassemblePassiveEffect.validate_data(reassembly)
+				errors.append_array(reassembly_errors)
+				if reassembly_errors.is_empty() and (int(state.get("current_health", 0)) < 1 or int(state.get("current_health", 0)) > int(reassembly.pile_health)):
+					errors.append("Unit %s has invalid bone-pile health." % unit_id)
+			if bool(state.get("reassembly_destroyed", false)):
+				errors.append("A destroyed pile cannot still be reassembling.")
 		var removed_enemy := (
 			int(unit_factions.get(unit_id, -1)) == CharacterDefinition.Faction.ENEMY
 			and int(state.get("current_health", 1)) <= 0

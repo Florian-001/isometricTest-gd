@@ -9,4 +9,5 @@ display_name = "Weathered Bow"
 icon = ExtResource("icon")
 slot = 0
 weapon_type = 1
+weapon_handedness = 1
 weapon_damage = 4

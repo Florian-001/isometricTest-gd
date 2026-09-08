@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="PassiveAbilityDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/passive_ability_definition.gd" id="passive"]
+[ext_resource type="Script" path="res://scripts/passive_effect_definition.gd" id="effect_type"]
+[ext_resource type="Script" path="res://scripts/ground_immunity_passive_effect.gd" id="effect"]
+
+[ext_resource type="Texture2D" path="res://assets/passive_icons/flight.svg" id="icon"]
+
+[sub_resource type="Resource" id="settings"]
+script = ExtResource("effect")
+ignore_tile_effects = true
+ignore_movement_modifiers = true
+
+[resource]
+script = ExtResource("passive")
+passive_id = &"flight"
+display_name = "Flight"
+description = "Always airborne."
+effects = Array[ExtResource("effect_type")]([SubResource("settings")])
+icon = ExtResource("icon")

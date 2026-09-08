@@ -15,18 +15,23 @@ const CHARACTER_ART_RECT := Rect2(-56.0, -104.0, 112.0, 112.0)
 const CHARACTER_ART_HIT_RECT := Rect2(-36.0, -100.0, 72.0, 98.0)
 const FALLBACK_HEALTH_BAR_RECT := Rect2(-23.0, -57.0, 46.0, 7.0)
 const ARTWORK_HEALTH_BAR_RECT := Rect2(-27.0, -117.0, 54.0, 7.0)
+const ARMOR_COLOR := Color("65b9ff")
 
 signal health_changed(current_health: int, max_health: int)
+signal armor_changed(current_armor: int, max_armor: int)
 signal movement_started(character)
 signal movement_finished(character)
 signal cell_entered(character, cell: Vector2i)
 signal defeated(character)
+signal form_changed(character)
 signal movement_remaining_changed(remaining: float, maximum: float)
 signal ability_availability_changed(available: bool)
 signal opportunity_reaction_availability_changed(available: bool)
 signal stats_changed
 signal equipment_changed(slot: ItemDefinition.EquipmentSlot, item: ItemDefinition)
 signal statuses_changed
+signal passive_abilities_changed
+signal passive_context_changed
 signal class_progression_changed
 
 @export_category("Scenario Identity")
@@ -37,6 +42,7 @@ signal class_progression_changed
 @export var definition: CharacterDefinition:
 	set(value):
 		definition = value
+		_refresh_passive_sources()
 		_runtime_stats_initialized = false
 		if Engine.is_editor_hint():
 			notify_property_list_changed()
@@ -68,6 +74,14 @@ signal class_progression_changed
 	get:
 		return get_max_health()
 
+@export_custom(
+	PROPERTY_HINT_NONE,
+	"",
+	PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY
+) var max_armor: int:
+	get:
+		return get_max_armor()
+
 ## Set to zero or higher to override the template's movement range for this unit.
 ## Set to -1 to inherit the value from Character Template.
 @export_range(-1.0, 100.0, 0.5, "or_greater") var movement_range_override: float = -1.0
@@ -87,12 +101,24 @@ signal class_progression_changed
 		if Engine.is_editor_hint():
 			update_configuration_warnings()
 
-@export_category("Developer Ability Override — Ignore Classes")
-## Friendly developer bypass: replaces ALL class abilities. Enemies override their template loadout.
+@export_category("Developer Ability Override — Custom Loadout")
+## Friendly developer bypass: replaces equipment, unarmed, and class abilities. Enemies override their template loadout.
 @export var override_template_abilities: bool = false
 ## Resize this list and choose New AbilityDefinition to author an inline, unit-specific ability.
 ## You can also drag existing ability .tres files here from the FileSystem dock.
 @export var ability_overrides: Array[AbilityDefinition] = []
+
+@export_category("Passive Abilities")
+## Replaces the template list completely, including an intentionally empty list.
+@export var override_template_passives: bool = false:
+	set(value):
+		override_template_passives = value
+		_refresh_passive_sources()
+## Drag shared .tres assets here or choose New PassiveAbilityDefinition.
+@export var passive_overrides: Array[PassiveAbilityDefinition] = []:
+	set(value):
+		passive_overrides = value.duplicate()
+		_refresh_passive_sources()
 
 @export_category("Starting Equipment Overrides")
 ## Applied after the Character Template equipment. Matching slots replace inherited items.
@@ -125,12 +151,21 @@ signal class_progression_changed
 @export_range(20.0, 1000.0, 10.0) var movement_animation_speed: float = 260.0
 
 var current_health: int = 0
+## The spent amount survives equipment swaps, including temporarily having no armor.
+var _armor_damage_spent: int = 0
+var current_armor: int:
+	get:
+		return maxi(0, get_max_armor() - _armor_damage_spent)
+## A pile retains unit identity and initiative; only its destruction emits defeated.
+var is_bone_pile: bool = false
+var _reassembly_effect: ReassemblePassiveEffect
+var _reassembly_destroyed: bool = false
 var grid_cell: Vector2i = Vector2i.ZERO
 var current_facing: Facing = Facing.RIGHT
 var is_moving := false
 var remaining_movement: float:
 	get:
-		return 0.0 if is_stunned() else _remaining_movement
+		return 0.0 if is_stunned() or is_bone_pile else _remaining_movement
 var ability_available: bool:
 	get:
 		return _ability_available and can_use_abilities()
@@ -155,11 +190,16 @@ var _unit_name_label: Label
 
 
 func _ready() -> void:
+	_refresh_passive_sources()
+	health_changed.connect(func(_health: int, _maximum: int) -> void: _notify_passive_context_changed())
+	cell_entered.connect(func(_unit: TacticalCharacter, _cell: Vector2i) -> void: _notify_passive_context_changed())
+	_notify_passive_context_changed.call_deferred()
 	_unit_name_label = get_node_or_null("UnitNameLabel") as Label
 	_initialize_runtime_stats()
 	grid_cell = starting_grid_cell
 	current_facing = initial_facing
 	current_health = get_max_health()
+	_armor_damage_spent = 0
 	_sync_map_presence()
 	_refresh_unit_name_label()
 	if Engine.is_editor_hint():
@@ -277,8 +317,19 @@ func _refresh_unit_name_label() -> void:
 		_unit_name_label = get_node_or_null("UnitNameLabel") as Label
 	if _unit_name_label == null:
 		return
-	_unit_name_label.text = str(name)
+	_unit_name_label.text = get_combat_display_name()
+	if is_bone_pile:
+		_unit_name_label.text += "\nReforms next turn"
+	_unit_name_label.tooltip_text = "Reforms next turn if this pile survives." if is_bone_pile else ""
 	_unit_name_label.visible = _unit_name_visible
+
+
+func get_combat_display_name() -> String:
+	return "Bone Pile" if is_bone_pile else str(name)
+
+
+func get_reassembly_effect() -> ReassemblePassiveEffect:
+	return _reassembly_effect if is_bone_pile else PassiveAbilityResolver.reassemble_effect(self)
 
 
 func set_facing(value: Facing) -> void:
@@ -300,6 +351,8 @@ func has_directional_artwork() -> bool:
 
 
 func _get_facing_texture() -> Texture2D:
+	if is_bone_pile and _reassembly_effect != null:
+		return _reassembly_effect.pile_texture
 	var preferred := (
 		facing_left_texture
 		if current_facing == Facing.LEFT
@@ -403,17 +456,68 @@ func _calculate_effective_stat(stat: UnitStat.Type, include_equipment: bool, inc
 	return maxf(0.0, subtotal * percent_add_multiplier * percent_multiplier)
 
 
-func equip_item(item: ItemDefinition) -> ItemDefinition:
+## Preview every displaced item, starting with the destination's current item.
+func get_displaced_items(item: ItemDefinition) -> Array[ItemDefinition]:
+	_initialize_runtime_stats()
+	var displaced: Array[ItemDefinition] = []
 	if item == null:
-		return null
+		return displaced
+	var destination := get_equipped_item(item.slot)
+	if destination != null:
+		displaced.append(destination)
+	for slot in ItemDefinition.EquipmentSlot.values():
+		if slot == item.slot:
+			continue
+		var existing := get_equipped_item(slot)
+		if item.conflicts_with(existing):
+			displaced.append(existing)
+	return displaced
+
+
+## Unlike get_equipped_item(), includes the weapon reserving Offhand.
+func get_slot_occupant(slot: ItemDefinition.EquipmentSlot) -> ItemDefinition:
+	if slot == ItemDefinition.EquipmentSlot.OFFHAND:
+		var weapon := get_equipped_weapon()
+		if weapon != null and weapon.is_two_handed():
+			return weapon
+	return get_equipped_item(slot)
+
+
+func _equipment_occupancy() -> Dictionary:
+	var occupancy := {}
+	for slot in ItemDefinition.EquipmentSlot.values():
+		occupancy[slot] = get_slot_occupant(slot)
+	return occupancy
+
+
+func _emit_equipment_changes(previous: Dictionary, requested_slot: int) -> void:
+	for slot in ItemDefinition.EquipmentSlot.values():
+		if slot == requested_slot or previous.get(slot) != get_slot_occupant(slot):
+			equipment_changed.emit(slot, get_equipped_item(slot))
+
+
+## Shared loadout mutation for runtime edits, authored equipment, and saves.
+## It deliberately emits no signals until the complete loadout is installed.
+func _apply_equipped_item(item: ItemDefinition) -> Array[ItemDefinition]:
+	var displaced := get_displaced_items(item)
+	for existing in displaced:
+		_equipped_items.erase(existing.slot)
+	if item != null:
+		_equipped_items[item.slot] = item
+	return displaced
+
+
+func equip_item(item: ItemDefinition) -> Array[ItemDefinition]:
+	if item == null:
+		return []
 	_initialize_runtime_stats()
 	var previous_movement := get_movement_range()
 	var previous_max_health := get_max_health()
-	var replaced := get_equipped_item(item.slot)
-	_equipped_items[item.slot] = item
-	equipment_changed.emit(item.slot, item)
+	var previous_occupancy := _equipment_occupancy()
+	var displaced := _apply_equipped_item(item)
 	_notify_stats_changed(previous_movement, previous_max_health)
-	return replaced
+	_emit_equipment_changes(previous_occupancy, item.slot)
+	return displaced
 
 
 func unequip_item(slot: ItemDefinition.EquipmentSlot) -> ItemDefinition:
@@ -422,10 +526,11 @@ func unequip_item(slot: ItemDefinition.EquipmentSlot) -> ItemDefinition:
 		return null
 	var previous_movement := get_movement_range()
 	var previous_max_health := get_max_health()
+	var previous_occupancy := _equipment_occupancy()
 	var removed := _equipped_items[slot] as ItemDefinition
 	_equipped_items.erase(slot)
-	equipment_changed.emit(slot, null)
 	_notify_stats_changed(previous_movement, previous_max_health)
+	_emit_equipment_changes(previous_occupancy, slot)
 	return removed
 
 
@@ -437,11 +542,7 @@ func get_equipped_item(slot: ItemDefinition.EquipmentSlot) -> ItemDefinition:
 func get_equipped_items() -> Array[ItemDefinition]:
 	_initialize_runtime_stats()
 	var result: Array[ItemDefinition] = []
-	for slot in [
-		ItemDefinition.EquipmentSlot.WEAPON,
-		ItemDefinition.EquipmentSlot.ARMOR,
-		ItemDefinition.EquipmentSlot.ACCESSORY,
-	]:
+	for slot in ItemDefinition.EquipmentSlot.values():
 		var item := get_equipped_item(slot)
 		if item != null:
 			result.append(item)
@@ -504,15 +605,29 @@ func is_stunned() -> bool:
 
 
 func can_move() -> bool:
-	return current_health > 0 and not is_stunned()
+	return current_health > 0 and not is_stunned() and not is_bone_pile
+
+
+func get_taunt_target() -> TacticalCharacter:
+	for active_status in get_active_statuses():
+		if (
+			active_status.definition != null
+			and active_status.definition.effect == StatusEffectDefinition.Effect.TAUNT
+			and active_status.remaining_turns > 0
+			and is_instance_valid(active_status.source_unit)
+			and active_status.source_unit.current_health > 0
+			and active_status.source_unit.is_friendly() != is_friendly()
+		):
+			return active_status.source_unit
+	return null
 
 
 func can_use_abilities() -> bool:
-	return current_health > 0 and not is_stunned()
+	return current_health > 0 and not is_stunned() and not is_bone_pile
 
 
 func can_use_opportunity_reactions() -> bool:
-	return current_health > 0 and not is_stunned()
+	return current_health > 0 and not is_stunned() and not is_bone_pile
 
 
 func apply_status(
@@ -568,7 +683,10 @@ func get_active_statuses() -> Array[ActiveStatus]:
 
 func process_status_turn_start() -> void:
 	_initialize_runtime_stats()
-	for active_status in _active_statuses:
+	# Collapse clears the live list during damage; do not tick removed statuses.
+	for active_status in _active_statuses.duplicate():
+		if not _active_statuses.has(active_status):
+			continue
 		if active_status.definition == null:
 			continue
 		active_status.processed_this_turn = true
@@ -600,7 +718,7 @@ func get_abilities() -> Array[AbilityDefinition]:
 	if override_template_abilities:
 		return ability_overrides
 	if is_friendly():
-		var unlocked: Array[AbilityDefinition] = []
+		var unlocked: Array[AbilityDefinition] = [get_basic_attack_ability()]
 		for entry in get_class_levels():
 			if entry == null or entry.character_class == null or entry.level < 1:
 				continue
@@ -612,6 +730,25 @@ func get_abilities() -> Array[AbilityDefinition]:
 		return definition.abilities
 	var empty_abilities: Array[AbilityDefinition] = []
 	return empty_abilities
+
+
+## Equipment attacks are independent of class and occupy the first normal loadout slot.
+func get_basic_attack_ability() -> AbilityDefinition:
+	if not is_friendly():
+		return null
+	var weapon := get_equipped_weapon()
+	if weapon != null:
+		var grants := weapon.get_granted_abilities()
+		if not grants.is_empty():
+			return grants[0]
+	return load("res://resources/abilities/strike.tres") as AbilityDefinition
+
+
+func get_ability_source_text(ability: AbilityDefinition) -> String:
+	if not is_friendly() or override_template_abilities or ability != get_basic_attack_ability():
+		return ""
+	var weapon := get_equipped_weapon()
+	return "Unarmed" if weapon == null else "Equipped: %s" % weapon.display_name
 
 
 func get_class_levels() -> Array[CharacterClassLevel]:
@@ -714,12 +851,14 @@ func reset_dev_ability_loadout() -> void:
 
 
 func set_dev_equipment(slot: ItemDefinition.EquipmentSlot, item: ItemDefinition) -> void:
+	if item != null and item.slot != slot:
+		return
 	if not use_complete_equipment_override:
 		complete_equipment_overrides.assign(get_equipped_items())
 		use_complete_equipment_override = true
 	for index in range(complete_equipment_overrides.size() - 1, -1, -1):
 		var existing := complete_equipment_overrides[index]
-		if existing != null and existing.slot == slot:
+		if existing != null and (existing.slot == slot or (item != null and item.conflicts_with(existing))):
 			complete_equipment_overrides.remove_at(index)
 	if item != null:
 		complete_equipment_overrides.append(item)
@@ -738,11 +877,7 @@ func reset_dev_equipment_to_template() -> void:
 	_runtime_stats_initialized = false
 	_initialize_runtime_stats()
 	_notify_stats_changed(previous_movement, previous_max_health)
-	for slot in [
-		ItemDefinition.EquipmentSlot.WEAPON,
-		ItemDefinition.EquipmentSlot.ARMOR,
-		ItemDefinition.EquipmentSlot.ACCESSORY,
-	]:
+	for slot in ItemDefinition.EquipmentSlot.values():
 		equipment_changed.emit(slot, get_equipped_item(slot))
 
 
@@ -753,10 +888,93 @@ func set_grid_cell_immediate(cell: Vector2i) -> void:
 
 func _set_runtime_grid_cell_immediate(cell: Vector2i) -> void:
 	grid_cell = cell
+	_notify_passive_context_changed()
 	if _grid != null:
 		global_position = _grid.grid_to_global(cell)
 	_update_sorting()
 	queue_redraw()
+
+
+func _get_passive_assignments() -> Array[PassiveAbilityDefinition]:
+	var assignments: Array[PassiveAbilityDefinition] = []
+	if override_template_passives:
+		assignments.assign(passive_overrides)
+	elif definition != null:
+		assignments.assign(definition.passive_abilities)
+	return assignments
+
+
+func get_passive_abilities() -> Array[PassiveAbilityDefinition]:
+	var result: Array[PassiveAbilityDefinition] = []
+	var ids: Dictionary = {}
+	var assignments := _get_passive_assignments()
+	for passive in assignments:
+		if passive != null and passive.passive_id != &"" and not ids.has(passive.passive_id):
+			result.append(passive)
+			ids[passive.passive_id] = true
+	return result
+
+
+func _notify_passive_context_changed() -> void:
+	for unit in get_passive_battle_units():
+		unit.passive_context_changed.emit()
+
+
+func get_passive_description() -> String:
+	var descriptions: Array[String] = []
+	var has_proximity_bonus := false
+	for passive in get_passive_abilities():
+		descriptions.append("%s: %s" % [passive.display_name, passive.get_description()])
+		for effect in passive.effects:
+			if effect is NearbyAlliesWeaponDamagePassiveEffect:
+				has_proximity_bonus = true
+	if has_proximity_bonus:
+		descriptions.append("Current nearby-allies weapon damage bonus: +%d" % PassiveAbilityResolver.weapon_damage_bonus(self))
+	return "\n".join(descriptions) if not descriptions.is_empty() else "No passive abilities"
+
+
+func get_passive_validation_errors() -> Array[String]:
+	return PassiveLoadout.validate(_get_passive_assignments())
+
+
+func get_passive_battle_units() -> Array[TacticalCharacter]:
+	var result: Array[TacticalCharacter] = []
+	if get_parent() != null:
+		for child in get_parent().get_children():
+			if child is TacticalCharacter:
+				result.append(child)
+	return result
+
+
+func set_dev_passive_loadout(passives: Array[PassiveAbilityDefinition]) -> void:
+	passive_overrides = passives
+	override_template_passives = true
+
+
+func reset_dev_passive_loadout() -> void:
+	override_template_passives = false
+	passive_overrides = []
+
+
+var _watched_passive_sources: Array[Resource] = []
+
+
+func _refresh_passive_sources() -> void:
+	for source in _watched_passive_sources:
+		if source.changed.is_connected(_refresh_passive_sources):
+			source.changed.disconnect(_refresh_passive_sources)
+	_watched_passive_sources = []
+	if definition != null:
+		_watched_passive_sources.append(definition)
+	for passive in _get_passive_assignments():
+		if passive != null and not _watched_passive_sources.has(passive):
+			_watched_passive_sources.append(passive)
+	for source in _watched_passive_sources:
+		source.changed.connect(_refresh_passive_sources)
+	passive_abilities_changed.emit()
+	_notify_passive_context_changed()
+	if Engine.is_editor_hint() and is_inside_tree():
+		update_configuration_warnings()
 
 
 func capture_setup_state() -> Dictionary:
@@ -776,6 +994,8 @@ func capture_setup_state() -> Dictionary:
 			"speed": speed_override,
 			"movement_range": movement_range_override,
 		},
+		"override_passives": override_template_passives,
+		"passives": PassiveLoadout.to_data(passive_overrides),
 		"override_abilities": override_template_abilities,
 		"class_levels": CharacterClassProgression.to_data(get_class_levels()),
 		"abilities": _resource_paths(ability_overrides),
@@ -807,6 +1027,13 @@ func apply_setup_state(state: Dictionary) -> void:
 	constitution_override = int(stats.get("constitution", -1))
 	speed_override = int(stats.get("speed", -1))
 	movement_range_override = float(stats.get("movement_range", -1.0))
+	if state.has("override_passives") or state.has("passives"):
+		var passive_errors := PassiveLoadout.validate_setup(state)
+		if passive_errors.is_empty():
+			passive_overrides = PassiveLoadout.from_data(state.get("passives", []))
+			override_template_passives = state.get("override_passives", false)
+		else:
+			push_error("Invalid passive setup: %s" % " ".join(passive_errors))
 	override_template_abilities = bool(state.get("override_abilities", false))
 	ability_overrides = _load_abilities(state.get("abilities", []))
 	use_complete_equipment_override = bool(state.get("complete_equipment", false))
@@ -845,15 +1072,22 @@ func capture_runtime_state() -> Dictionary:
 		"cell": [grid_cell.x, grid_cell.y],
 		"facing": int(current_facing),
 		"current_health": current_health,
+		"armor_damage_spent": _armor_damage_spent,
 		"remaining_movement": _remaining_movement,
 		"ability_available": _ability_available,
 		"reaction_available": _opportunity_reaction_available,
 		"equipped_items": _resource_paths(get_equipped_items()),
 		"statuses": statuses,
+		"bone_pile": is_bone_pile,
+		"reassembly": _reassembly_effect.to_data() if is_bone_pile and _reassembly_effect != null else {},
+		"reassembly_destroyed": _reassembly_destroyed,
 	}
 
 
 func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
+	is_bone_pile = bool(state.get("bone_pile", false))
+	_reassembly_effect = ReassemblePassiveEffect.from_data(state.get("reassembly", {})) if is_bone_pile else null
+	_reassembly_destroyed = bool(state.get("reassembly_destroyed", false))
 	var cell_value: Array = state.get("cell", [starting_grid_cell.x, starting_grid_cell.y])
 	if cell_value.size() >= 2:
 		_set_runtime_grid_cell_immediate(Vector2i(int(cell_value[0]), int(cell_value[1])))
@@ -865,7 +1099,7 @@ func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
 	_equipped_items.clear()
 	_runtime_stats_initialized = true
 	for item in _load_items(state.get("equipped_items", [])):
-		_equipped_items[item.slot] = item
+		_apply_equipped_item(item)
 	_active_statuses.clear()
 	for raw_status in state.get("statuses", []):
 		if not raw_status is Dictionary:
@@ -887,8 +1121,11 @@ func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
 		restored.processed_this_turn = bool(status.get("processed_this_turn", false))
 		_active_statuses.append(restored)
 	current_health = clampi(saved_health, 0, get_max_health())
+	_armor_damage_spent = maxi(0, int(state.get("armor_damage_spent", 0)))
+	_notify_armor_changed()
 	_defeat_emitted = current_health <= 0
 	_sync_map_presence()
+	_refresh_unit_name_label()
 	health_changed.emit(current_health, get_max_health())
 	movement_remaining_changed.emit(remaining_movement, get_movement_range())
 	ability_availability_changed.emit(ability_available)
@@ -898,7 +1135,7 @@ func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
 
 
 func reset_movement() -> void:
-	_remaining_movement = get_movement_range() if current_health > 0 else 0.0
+	_remaining_movement = get_movement_range() if current_health > 0 and not is_bone_pile else 0.0
 	movement_remaining_changed.emit(remaining_movement, get_movement_range())
 
 
@@ -917,7 +1154,7 @@ func spend_movement(cost: float) -> bool:
 
 
 func reset_ability_action() -> void:
-	_ability_available = current_health > 0
+	_ability_available = current_health > 0 and not is_bone_pile
 	ability_availability_changed.emit(ability_available)
 
 
@@ -930,7 +1167,7 @@ func spend_ability_action() -> bool:
 
 
 func reset_opportunity_reaction() -> void:
-	_opportunity_reaction_available = current_health > 0
+	_opportunity_reaction_available = current_health > 0 and not is_bone_pile
 	opportunity_reaction_availability_changed.emit(opportunity_reaction_available)
 
 
@@ -943,6 +1180,8 @@ func spend_opportunity_reaction() -> bool:
 
 
 func contains_global_point(point: Vector2) -> bool:
+	if is_bone_pile:
+		return Rect2(-44.0, -52.0, 88.0, 60.0).has_point(to_local(point))
 	if has_directional_artwork():
 		return CHARACTER_ART_HIT_RECT.has_point(to_local(point))
 	var body_center := global_position + Vector2(0.0, -29.0)
@@ -985,8 +1224,25 @@ func apply_damage(amount: int) -> void:
 	if amount <= 0 or current_health <= 0:
 		return
 	var previous_health := current_health
-	current_health = maxi(0, current_health - amount)
+	var resolved := DamageCalculator.resolve_damage(amount, current_health, current_armor)
+	var armor_taken := -int(resolved.armor_delta)
+	_armor_damage_spent += armor_taken
+	current_health += int(resolved.health_delta)
+	if armor_taken > 0:
+		_notify_armor_changed()
+		_show_damage_number(armor_taken, true, int(resolved.health_delta) < 0)
 	var damage_taken := previous_health - current_health
+	if current_health == 0 and not is_bone_pile and not _reassembly_destroyed:
+		var effect := PassiveAbilityResolver.reassemble_effect(self)
+		if effect != null:
+			_collapse_to_bones(effect)
+			_show_damage_number(damage_taken)
+			return
+	if current_health == 0 and is_bone_pile:
+		_reassembly_destroyed = true
+		is_bone_pile = false
+		_reassembly_effect = null
+		_refresh_unit_name_label()
 	health_changed.emit(current_health, get_max_health())
 	queue_redraw()
 	_show_damage_number(damage_taken)
@@ -1000,8 +1256,44 @@ func apply_damage(amount: int) -> void:
 		defeated.emit(self)
 
 
+func _collapse_to_bones(effect: ReassemblePassiveEffect) -> void:
+	# Freeze the pending transformation so developer loadout edits cannot strand it.
+	_reassembly_effect = effect.duplicate() as ReassemblePassiveEffect
+	is_bone_pile = true
+	current_health = effect.pile_health
+	_active_statuses.clear()
+	_remaining_movement = 0.0
+	_ability_available = false
+	_opportunity_reaction_available = false
+	_publish_form_change()
+
+
+func reform_from_bones() -> void:
+	if not is_bone_pile or current_health <= 0 or _reassembly_effect == null:
+		return
+	var percentage := _reassembly_effect.restored_health_percentage
+	is_bone_pile = false
+	_reassembly_effect = null
+	current_health = maxi(1, ceili(get_max_health() * percentage / 100.0))
+	reset_opportunity_reaction()
+	_publish_form_change()
+
+
+func _publish_form_change() -> void:
+	_sync_map_presence()
+	_refresh_unit_name_label()
+	health_changed.emit(current_health, get_max_health())
+	statuses_changed.emit()
+	stats_changed.emit()
+	movement_remaining_changed.emit(remaining_movement, get_movement_range())
+	ability_availability_changed.emit(ability_available)
+	opportunity_reaction_availability_changed.emit(opportunity_reaction_available)
+	form_changed.emit(self)
+	queue_redraw()
+
+
 func heal(amount: int) -> void:
-	if amount <= 0 or (permanent_defeat and _defeat_emitted):
+	if amount <= 0 or _reassembly_destroyed or (permanent_defeat and _defeat_emitted):
 		return
 	var previous_health := current_health
 	var maximum_health := get_max_health()
@@ -1015,9 +1307,28 @@ func heal(amount: int) -> void:
 
 
 func get_max_health() -> int:
+	if is_bone_pile and _reassembly_effect != null:
+		return _reassembly_effect.pile_health
 	return calculate_max_health_for_constitution(
 		get_effective_stat(UnitStat.Type.CONSTITUTION)
 	)
+
+
+func get_max_armor() -> int:
+	var total := 0
+	for item in get_equipped_items():
+		total += maxi(0, item.armor)
+	return total
+
+
+func restore_armor() -> void:
+	_armor_damage_spent = 0
+	_notify_armor_changed()
+
+
+func _notify_armor_changed() -> void:
+	armor_changed.emit(current_armor, get_max_armor())
+	queue_redraw()
 
 
 func get_max_health_without_statuses() -> int:
@@ -1034,6 +1345,7 @@ func calculate_max_health_for_constitution(effective_constitution: float) -> int
 
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
+	warnings.append_array(get_passive_validation_errors())
 	if is_friendly():
 		warnings.append_array(CharacterClassProgression.validate_levels(get_class_levels()))
 	if definition == null:
@@ -1042,32 +1354,22 @@ func _get_configuration_warnings() -> PackedStringArray:
 		warnings.append("Enemy units need an Enemy AI Profile to take tactical actions.")
 	elif definition.faction == CharacterDefinition.Faction.FRIENDLY and get_enemy_ai_profile() != null:
 		warnings.append("Enemy AI Profile is ignored because this unit is friendly.")
-	if definition != null:
-		var occupied_slots: Dictionary = {}
-		for item in definition.starting_equipment:
-			if item == null:
-				continue
-			if occupied_slots.has(item.slot):
-				warnings.append(
-					"Starting Equipment contains more than one item for the %s slot; the last item wins."
-					% ItemDefinition.EquipmentSlot.keys()[item.slot]
-				)
-			occupied_slots[item.slot] = true
-	var override_slots: Dictionary = {}
-	var configured_overrides := (
-		complete_equipment_overrides
-		if use_complete_equipment_override
-		else starting_equipment_overrides
-	)
-	for item in configured_overrides:
+	var configured: Array[ItemDefinition] = []
+	if use_complete_equipment_override:
+		configured.assign(complete_equipment_overrides)
+	else:
+		if definition != null:
+			configured.append_array(definition.starting_equipment)
+		configured.append_array(starting_equipment_overrides)
+	var loadout: Array[ItemDefinition] = []
+	for item in configured:
 		if item == null:
 			continue
-		if override_slots.has(item.slot):
-			warnings.append(
-				"Starting Equipment Overrides contains more than one item for the %s slot; the last item wins."
-				% ItemDefinition.EquipmentSlot.keys()[item.slot]
-			)
-		override_slots[item.slot] = true
+		for index in range(loadout.size() - 1, -1, -1):
+			if item.conflicts_with(loadout[index]):
+				warnings.append("Starting Equipment: %s conflicts with %s; the last item wins." % [item.display_name, loadout[index].display_name])
+				loadout.remove_at(index)
+		loadout.append(item)
 	return warnings
 
 
@@ -1081,14 +1383,14 @@ func _initialize_runtime_stats() -> void:
 	if not use_complete_equipment_override:
 		for item in definition.starting_equipment:
 			if item != null:
-				_equipped_items[item.slot] = item
+				_apply_equipped_item(item)
 		for item in starting_equipment_overrides:
 			if item != null:
-				_equipped_items[item.slot] = item
+				_apply_equipped_item(item)
 	else:
 		for item in complete_equipment_overrides:
 			if item != null:
-				_equipped_items[item.slot] = item
+				_apply_equipped_item(item)
 
 
 func _resource_paths(resources: Array) -> Array[String]:
@@ -1142,6 +1444,7 @@ func _notify_stats_changed(previous_movement: float, previous_max_health: int) -
 	if not is_equal_approx(previous_movement, new_movement):
 		movement_remaining_changed.emit(_remaining_movement, new_movement)
 	_reconcile_health_after_max_change(previous_max_health)
+	_notify_armor_changed()
 	stats_changed.emit()
 
 
@@ -1192,19 +1495,22 @@ func _reconcile_health_after_max_change(previous_max_health: int) -> void:
 		queue_redraw()
 
 
-func _show_damage_number(amount: int) -> void:
+func _show_damage_number(amount: int, armor_damage := false, split_hit := false) -> void:
 	if amount <= 0 or Engine.is_editor_hint() or not is_inside_tree():
 		return
 	var label := Label.new()
 	label.text = "-%d" % amount
 	label.set_meta("damage_number", true)
+	label.set_meta("armor_damage", armor_damage)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.position = Vector2(-36.0, -148.0) if has_directional_artwork() else Vector2(-36.0, -88.0)
+	if split_hit:
+		label.position += Vector2(0.0, -25.0)
 	label.size = Vector2(72.0, 28.0)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.z_index = 300
 	label.add_theme_font_size_override("font_size", 20)
-	label.add_theme_color_override("font_color", Color("ff5a5f"))
+	label.add_theme_color_override("font_color", ARMOR_COLOR if armor_damage else Color("ff5a5f"))
 	label.add_theme_color_override("font_outline_color", Color(0.04, 0.02, 0.03, 0.95))
 	label.add_theme_constant_override("outline_size", 5)
 	add_child(label)
@@ -1231,13 +1537,15 @@ func _draw() -> void:
 
 	var facing_texture := _get_facing_texture()
 	if facing_texture != null:
-		draw_texture_rect(facing_texture, CHARACTER_ART_RECT, false)
+		draw_texture_rect(facing_texture, Rect2(-44.0, -52.0, 88.0, 58.67) if is_bone_pile else CHARACTER_ART_RECT, false)
 	else:
 		draw_circle(Vector2(0.0, -29.0), 19.0, Color(0.04, 0.07, 0.11, 1.0))
 		draw_circle(Vector2(0.0, -29.0), 16.0, body_color)
 		draw_circle(Vector2(-5.0, -34.0), 4.0, body_color.lightened(0.35))
 
 	var bar_rect := ARTWORK_HEALTH_BAR_RECT if facing_texture != null else FALLBACK_HEALTH_BAR_RECT
+	if is_bone_pile:
+		bar_rect = Rect2(-27.0, -60.0, 54.0, 7.0)
 	draw_rect(bar_rect, Color(0.025, 0.035, 0.05, 0.95), true)
 	var ratio := clampf(float(current_health) / float(get_max_health()), 0.0, 1.0)
 	draw_rect(
@@ -1256,6 +1564,8 @@ func _draw() -> void:
 		if facing_texture != null
 		else Vector2(-65.0, -48.5)
 	)
+	if is_bone_pile:
+		health_position = Vector2(-70.0, -51.5)
 	draw_string_outline(
 		health_font,
 		health_position,
@@ -1276,6 +1586,27 @@ func _draw() -> void:
 		Color.WHITE
 	)
 	_draw_status_icons()
+	if get_max_armor() > 0:
+		_draw_armor_bar(bar_rect, health_position)
+
+
+func _draw_armor_bar(health_rect: Rect2, health_text_position: Vector2) -> void:
+	var bar := Rect2(health_rect.position + Vector2(0.0, 12.0), health_rect.size)
+	draw_rect(bar, Color(0.025, 0.035, 0.05, 0.95), true)
+	var ratio := clampf(float(current_armor) / float(get_max_armor()), 0.0, 1.0)
+	draw_rect(
+		Rect2(bar.position + Vector2.ONE, Vector2((bar.size.x - 2.0) * ratio, bar.size.y - 2.0)),
+		ARMOR_COLOR
+	)
+	var text_position := health_text_position + Vector2(0.0, 12.0)
+	draw_string_outline(
+		ThemeDB.fallback_font, text_position, str(current_armor),
+		HORIZONTAL_ALIGNMENT_RIGHT, 38.0, 12, 3, Color(0.01, 0.015, 0.025, 0.95)
+	)
+	draw_string(
+		ThemeDB.fallback_font, text_position, str(current_armor),
+		HORIZONTAL_ALIGNMENT_RIGHT, 38.0, 12, ARMOR_COLOR
+	)
 
 
 func _draw_status_icons() -> void:

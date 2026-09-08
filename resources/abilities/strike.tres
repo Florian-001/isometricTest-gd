@@ -7,9 +7,16 @@
 script = ExtResource("1_ability")
 display_name = "Strike"
 ability_type = 0
+requires_weapon = true
+allow_unarmed_for_friendlies = true
+hit_count = 1
+hit_targeting = 0
+allow_repeated_targets = true
 effect = 1
 range = 1.414
+accepts_weapon_range_bonus = true
 delivery_type = 2
 target_flags = 10
+caster_centered = false
 placeholder_color = Color(0.9, 0.68, 0.2, 1)
 melee_slash_color = Color(1, 0.94, 0.56, 1)

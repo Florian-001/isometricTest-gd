@@ -102,7 +102,7 @@ func _test_definition_and_health() -> void:
 	rat.free()
 	var paths: Array[String] = ["res://resources/enemy_raider.tres"]
 	for file in DirAccess.get_files_at("res://resources/enemies"):
-		if file.ends_with(".tres") and file != "rat.tres":
+		if file.ends_with(".tres") and file not in ["rat.tres", "bat.tres"]:
 			paths.append("res://resources/enemies/" + file)
 	for enemy_path in paths:
 		var existing := load(enemy_path) as EnemyDefinition

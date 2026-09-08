@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemy_definition.gd" id="definition"]
 [ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="ai"]
@@ -6,9 +6,12 @@
 [ext_resource type="Resource" path="res://resources/items/rusty_sword.tres" id="weapon"]
 [ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability_type"]
 [ext_resource type="Resource" path="res://resources/abilities/strike.tres" id="attack"]
+[ext_resource type="Script" path="res://scripts/passive_ability_definition.gd" id="passive_type"]
+[ext_resource type="Resource" path="res://resources/passives/reassemble.tres" id="reassemble"]
 
 [resource]
 script = ExtResource("definition")
+passive_abilities = Array[ExtResource("passive_type")]([ExtResource("reassemble")])
 display_name = "Skeleton Warrior"
 faction = 1
 combat_rating = 1

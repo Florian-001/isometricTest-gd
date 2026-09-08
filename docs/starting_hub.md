@@ -6,7 +6,7 @@ If a saved journey needs replacement, confirmation appears only after Start Run.
 
 ## Editing the roster
 
-Open `resources/run/default_run.tres` and edit **Starting Character Roster**. Use **Validate Starting Roster** to report authoring errors. Each entry must be a separately saved scene whose root is a friendly `TacticalCharacter`. Set a unique **Scenario Unit ID**, class allocation totaling level 1, facing textures, and equipment. Disable **Developer Ability Override — Ignore Classes**. Hub presentation and snapshots come from the scene, so changing its stats or level-one unlocks updates the card automatically.
+Open `resources/run/default_run.tres` and edit **Starting Character Roster**. Use **Validate Starting Roster** to report authoring errors. Each entry must be a separately saved scene whose root is a friendly `TacticalCharacter`. Set a unique **Scenario Unit ID**, class allocation totaling level 1, facing textures, and equipment. Disable **Developer Ability Override — Custom Loadout**. Hub presentation and snapshots come from the scene, so changing its stats or level-one unlocks updates the card automatically.
 
 | Scene | Stable ID | Starting class | Equipment |
 | --- | --- | --- | --- |

@@ -1,0 +1,21 @@
+{
+  "generated_with": "Built-in image generation",
+  "style_reference": "res://assets/characters/rat_right.png (viewed before generation)",
+  "prompts": {
+    "initial": "Use case: stylized-concept. Create a full-body BAT enemy game sprite for the tactical fantasy game whose existing rat sprite is shown in this conversation. Match that rat's crisp dark brown outlines, simple muted cel shading, readable compact animal proportions and slightly elevated three-quarter isometric view. A small hovering bat facing SCREEN RIGHT, smoky brown-grey fur, large pointed ears with muted pink interiors, tiny ivory fangs and expressive dark eyes, two spread dark plum leathery wings. Wings shown in perspective, not a front-on symmetrical emblem. All body, wings, ears and feet fully visible on a square canvas, occupying roughly x 10–90% and y 15–85%; leave clear margins. Readable at 112 by 112 game pixels. Actual transparent RGBA PNG background with alpha zero, no ground, shadow, scenery, lettering, border or backdrop. Single game character only.",
+    "left_first_attempt": "Edit the attached Bat game sprite into its LEFT-facing counterpart: mirror the entire character horizontally, keeping the identical character, pose, proportions, colours, outline detail, resolution and canvas framing. Preserve actual transparent background and all soft edge alpha. No backdrop, shadow, text or other changes. This is the same small enemy viewed facing screen left.",
+    "background_extraction_attempt": "BACKGROUND EXTRACTION ONLY. Remove the entire grey-and-white checkerboard backdrop from the attached left-facing bat sprite and replace it with true transparent alpha zero. Return an RGBA PNG cutout with genuine transparency, not a depiction of transparency. Preserve the bat exactly including every wing, ear, foot, outline and colour, same size and framing. Do not add a shadow or redraw the bat. The background, including the spaces between wings and body, must be actually transparent.",
+    "left_final": "Create a transparent-background PNG sprite of this exact bat facing LEFT. Use the attached RIGHT-facing RGBA bat as the source and flip its facing to screen left. Keep the whole bat visible on the same square canvas with the same margins and muted brown/plum cel-shaded design. Background must be empty transparent alpha, with no background pattern, floor, shadow, lettering or scenery. Preserve the original transparency."
+  },
+  "assets": {
+    "right": {
+      "path": "res://assets/characters/bat_right.png",
+      "source": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-d516ad2f-eb04-4098-9e58-4d8cd329b20a.png"
+    },
+    "left": {
+      "path": "res://assets/characters/bat_left.png",
+      "source": "C:/Users/PC/.codex/generated_images/01a07bfd-949f-7ea0-b43e-3983ffbab654/exec-010cb1f4-aef5-4734-a195-b5a15bdb21a6.png"
+    }
+  },
+  "verification": "Both final sprites are 1254x1254 RGBA PNGs with alpha extrema 0..255. Mipmaps enabled; Bat uses linear filtering with mipmaps. Inspected in Godot alongside wolves at gameplay scale. The first left-facing and background-extraction attempts had baked checkerboards and were not shipped."
+}

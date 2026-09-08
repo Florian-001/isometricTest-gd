@@ -51,27 +51,35 @@ func apply(
 
 func estimate_for_ai(
 	caster: TacticalCharacter,
-	_target: TacticalCharacter,
+	target: TacticalCharacter,
 	simulated_health: int
 ) -> Dictionary:
-	var calculated_amount := calculate_amount(caster)
-	return {
-		"health_delta": -mini(calculated_amount, maxi(0, simulated_health)),
-		"utility_hint": ai_utility_hint,
-	}
+	return estimate_with_armor(caster, target, simulated_health, target.current_armor if is_instance_valid(target) else 0)
+
+
+func estimate_with_armor(
+	caster: TacticalCharacter,
+	_target: TacticalCharacter,
+	simulated_health: int,
+	simulated_armor: int
+) -> Dictionary:
+	var result := DamageCalculator.resolve_damage(calculate_amount(caster), simulated_health, simulated_armor)
+	result.utility_hint = ai_utility_hint
+	return result
 
 
 func estimate_for_ability(
 	caster: TacticalCharacter,
-	_target: TacticalCharacter,
+	target: TacticalCharacter,
 	simulated_health: int,
-	source_ability: AbilityDefinition
+	source_ability: AbilityDefinition,
+	passive_bonus: int = 0,
+	simulated_armor: int = -1
 ) -> Dictionary:
-	var calculated_amount := calculate_amount(caster, source_ability)
-	return {
-		"health_delta": -mini(calculated_amount, maxi(0, simulated_health)),
-		"utility_hint": ai_utility_hint,
-	}
+	var armor := simulated_armor if simulated_armor >= 0 else (target.current_armor if is_instance_valid(target) else 0)
+	var result := DamageCalculator.resolve_damage(calculate_amount(caster, source_ability) + passive_bonus, simulated_health, armor)
+	result.utility_hint = ai_utility_hint
+	return result
 
 
 func get_description(caster: TacticalCharacter = null) -> String:

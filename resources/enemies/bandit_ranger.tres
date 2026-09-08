@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy_definition.gd" id="definition"]
+[ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="ai"]
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item_type"]
+[ext_resource type="Resource" path="res://resources/items/weathered_bow.tres" id="weapon"]
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability_type"]
+[ext_resource type="Resource" path="res://resources/abilities/enemy_shot.tres" id="attack"]
+
+[resource]
+script = ExtResource("definition")
+display_name = "Bandit Ranger"
+faction = 1
+combat_rating = 1
+base_health_override = 0
+ai_profile = ExtResource("ai")
+constitution = 3
+strength = 1
+dexterity = 1
+intelligence = 1
+speed = 10
+movement_range = 6.0
+starting_equipment = Array[ExtResource("item_type")]([ExtResource("weapon")])
+abilities = Array[ExtResource("ability_type")]([ExtResource("attack")])
+body_color = Color(0.48, 0.3, 0.2, 1)
+health_bar_color = Color(0.96, 0.62, 0.18, 1)

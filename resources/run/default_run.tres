@@ -23,6 +23,11 @@
 [ext_resource type="Script" uid="uid://bi7uj0xgbv3ea" path="res://scripts/run_combat_stage.gd" id="stage_type"]
 [ext_resource type="Resource" uid="uid://m36t2nhg31dr" path="res://resources/items/wooden_sword.tres" id="wooden_sword"]
 
+[ext_resource type="Resource" path="res://resources/items/wooden_shield.tres" id="wooden_shield"]
+
+[ext_resource type="Resource" path="res://resources/items/long_sword.tres" id="long_sword"]
+[ext_resource type="Resource" path="res://resources/items/spear.tres" id="spear"]
+
 [resource]
 script = ExtResource("script")
 map_settings = ExtResource("map")
@@ -32,4 +37,4 @@ normal_encounters = Array[ExtResource("encounter_type")]([ExtResource("progressi
 elite_encounters = Array[ExtResource("encounter_type")]([ExtResource("progression_elite")])
 boss_encounter = ExtResource("boss")
 combat_stages = Array[ExtResource("stage_type")]([ExtResource("goblins"), ExtResource("skeletons")])
-equipment_pool = Array[ExtResource("item_type")]([ExtResource("wooden_sword"), ExtResource("iron_sword"), ExtResource("ranger_bow"), ExtResource("frost_bow"), ExtResource("ranger_armor"), ExtResource("sage_charm")])
+equipment_pool = Array[ExtResource("item_type")]([ExtResource("wooden_sword"), ExtResource("iron_sword"), ExtResource("ranger_bow"), ExtResource("frost_bow"), ExtResource("ranger_armor"), ExtResource("sage_charm"), ExtResource("wooden_shield"), ExtResource("long_sword"), ExtResource("spear")])

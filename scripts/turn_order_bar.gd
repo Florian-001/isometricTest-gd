@@ -26,7 +26,9 @@ func _create_entry(unit: TacticalCharacter, is_current: bool) -> PanelContainer:
 	var panel := PanelContainer.new()
 	var entry_size := square_size + (active_size_bonus if is_current else 0.0)
 	panel.custom_minimum_size = Vector2(entry_size, entry_size)
-	panel.tooltip_text = "%s%s" % [unit.name, " | Current Turn" if is_current else ""]
+	panel.tooltip_text = "%s%s" % [unit.get_combat_display_name(), " | Current Turn" if is_current else ""]
+	if unit.is_bone_pile:
+		panel.tooltip_text += " | %d HP | Reforms next turn if it survives" % unit.current_health
 	panel.set_meta("unit", unit)
 	panel.set_meta("is_current", is_current)
 	panel.set_meta("uses_portrait", unit.definition != null and unit.definition.portrait != null)
@@ -42,7 +44,14 @@ func _create_entry(unit: TacticalCharacter, is_current: bool) -> PanelContainer:
 
 	var center := CenterContainer.new()
 	panel.add_child(center)
-	if unit.definition != null and unit.definition.portrait != null:
+	if unit.is_bone_pile:
+		var portrait := TextureRect.new()
+		portrait.texture = unit.get_reassembly_effect().pile_texture
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.custom_minimum_size = Vector2(entry_size - 12.0, entry_size - 12.0)
+		center.add_child(portrait)
+	elif unit.definition != null and unit.definition.portrait != null:
 		var portrait := TextureRect.new()
 		portrait.texture = unit.definition.portrait
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

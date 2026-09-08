@@ -31,6 +31,17 @@ const USE_DAMAGE_TYPE_WEAPON_RULE := -2
 const NO_WEAPON_REQUIRED := -1
 
 
+## Shared pool resolution for runtime damage and side-effect-free AI estimates.
+## Damage is split before either pool is clamped, including on low-health targets.
+static func resolve_damage(amount: int, health: int, armor: int) -> Dictionary:
+	var absorbed := mini(maxi(0, armor), maxi(0, amount)) if health > 0 else 0
+	return {
+		"armor_delta": -absorbed,
+		"health_delta": -mini(maxi(0, health), maxi(0, amount - absorbed)),
+		"utility_hint": 0.0,
+	}
+
+
 static func calculate_amount(
 	caster: TacticalCharacter,
 	damage_type: int,

@@ -27,10 +27,16 @@ signal battle_finished(victory: bool, party_results: Array[Dictionary], inventor
 var run_party_input: Array[Dictionary] = []
 var run_inventory_input: Array[String] = []
 var run_encounter: RunEncounterDefinition
+## Active run room; carried through developer reloads by MapManager.
+var run_node_id: int = -1
+## Live party health for a developer fresh restart, keyed by stable unit ID.
+var run_restart_health_input: Dictionary = {}
 ## Concrete generated roster, committed by RunController before a run battle opens.
 var template_setup_input: Dictionary = {}
 var initialization_error: String = ""
 var _run_result_emitted := false
+var _combat_finalized := false
+var _combat_finalization_queued := false
 
 @export_category("Battle Map")
 @export var map_definition: BattleMapDefinitionScript
@@ -38,7 +44,8 @@ var _run_result_emitted := false
 @export_category("Battle Presentation")
 @export var unit_names_visible := true
 @export_category("Developer Tools")
-@export var enable_dev_tools := true
+## Deprecated compatibility property. Developer tools are always available.
+var enable_dev_tools := true
 @export var dev_tool_catalog: DevToolCatalog
 @export_range(1, 10, 1) var ai_debug_candidate_count := 5
 @export_range(1, 100, 1) var ai_debug_history_limit := 30
@@ -48,6 +55,7 @@ var _run_result_emitted := false
 @onready var tactical_camera: TacticalCameraController = $TacticalCamera
 @onready var turn_order_bar: TurnOrderBar = $HUD/TurnOrderBar
 @onready var ability_bar: AbilityBar = $HUD/AbilityBar
+@onready var target_selection_panel: AbilityTargetSelectionPanel = $HUD/AbilityTargetSelectionPanel
 @onready var general_inventory: GeneralInventory = $GeneralInventory
 @onready var names_button: Button = $HUD/TopRightActions/NamesButton
 @onready var inventory_button: Button = $HUD/TopRightActions/InventoryButton
@@ -73,6 +81,7 @@ var _characters: Array[TacticalCharacter] = []
 var _walls: Array[TacticalWall] = []
 var _selected_character: TacticalCharacter
 var _selected_ability: AbilityDefinition
+var _selected_hit_targets: Array[TacticalCharacter] = []
 var _reachable_cells: Dictionary = {}
 var _ability_range_cells: Dictionary = {}
 var _ability_target_cells: Dictionary = {}
@@ -123,8 +132,7 @@ func _ready() -> void:
 		if not _prepare_template_characters():
 			return
 	if run_encounter != null:
-		enable_dev_tools = false
-		if not _prepare_run_characters():
+		if pending_restore_payload.is_empty() and not _prepare_run_characters():
 			return
 		restart_button.hide()
 		levels_button.text = "Save & Exit"
@@ -146,6 +154,9 @@ func _ready() -> void:
 	turn_manager.round_started.connect(_on_round_started)
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	ability_bar.ability_selected.connect(_on_ability_selected)
+	target_selection_panel.fire_requested.connect(_begin_selected_targets_cast)
+	target_selection_panel.cancel_requested.connect(_cancel_ability_targeting)
+	target_selection_panel.target_removed.connect(_remove_hit_target)
 	inventory_button.toggled.connect(_on_inventory_button_toggled)
 	inventory_screen.closed.connect(_on_inventory_screen_closed)
 	dev_button.pressed.connect(_on_dev_button_pressed)
@@ -170,7 +181,10 @@ func _ready() -> void:
 
 	_collect_and_initialize_characters()
 	if run_encounter != null:
-		_restore_run_party()
+		if pending_restore_payload.is_empty():
+			_restore_run_party()
+		elif bool(pending_restore_payload.get("runtime", {}).get("fresh_start", false)):
+			_restore_run_restart_party()
 	_apply_unit_name_visibility()
 	_initialize_walls()
 	terrain.initialize(grid, _get_wall_cells())
@@ -184,7 +198,7 @@ func _ready() -> void:
 
 	if center_camera_on_start:
 		tactical_camera.position = grid.position + grid.get_local_bounds().get_center()
-	dev_button.visible = enable_dev_tools
+	dev_button.show()
 	dev_mode_panel.setup(dev_tool_catalog, terrain.palette)
 	dev_mode_panel.close_panel()
 	_restore_ai_history_context(ai_restore_context)
@@ -201,6 +215,8 @@ func _ready() -> void:
 	inventory_screen.setup(general_inventory, _get_living_friendlies())
 	_update_turn_hud()
 	initialization_succeeded = true
+	if _combat_over:
+		_queue_run_result()
 	if not ai_restore_context.is_empty():
 		_restored_ai_turn_pending = (
 			not _combat_over
@@ -221,6 +237,7 @@ func _exit_tree() -> void:
 
 
 func shutdown_battle() -> void:
+	_clear_hit_selection()
 	if _dev_open and get_tree() != null:
 		tactical_camera.set_dev_mode_pan_enabled(false)
 		get_tree().paused = false
@@ -294,6 +311,8 @@ func _collect_and_initialize_characters() -> void:
 		if not child is TacticalCharacter:
 			continue
 		var character := child as TacticalCharacter
+		if run_encounter != null and character.is_friendly():
+			character.permanent_defeat = true
 		character.scenario_unit_id = _make_unique_unit_id(character, used_ids)
 		used_ids[character.scenario_unit_id] = true
 		_characters.append(character)
@@ -303,6 +322,8 @@ func _collect_and_initialize_characters() -> void:
 
 
 func _connect_character(character: TacticalCharacter) -> void:
+	character.passive_context_changed.connect(_queue_passive_refresh)
+	character.passive_abilities_changed.connect(_queue_passive_refresh)
 	character.class_progression_changed.connect(_on_character_class_progression_changed.bind(character))
 	character.movement_remaining_changed.connect(
 		_on_unit_movement_changed.bind(character)
@@ -315,6 +336,7 @@ func _connect_character(character: TacticalCharacter) -> void:
 	)
 	character.cell_entered.connect(_on_character_cell_entered)
 	character.defeated.connect(_on_character_defeated)
+	character.form_changed.connect(_on_character_form_changed)
 	character.equipment_changed.connect(
 		_on_character_equipment_changed.bind(character)
 	)
@@ -340,7 +362,11 @@ func capture_save_payload(fresh_start := false) -> Dictionary:
 	for character in _characters:
 		if not is_instance_valid(character):
 			continue
-		setup_units.append(character.capture_setup_state())
+		var setup := character.capture_setup_state()
+		if fresh_start and run_encounter != null and character.is_friendly():
+			setup.complete_equipment = true
+			setup.equipment = character.capture_runtime_state().equipped_items
+		setup_units.append(setup)
 		if not fresh_start:
 			runtime_units.append(character.capture_runtime_state())
 	var wall_cells: Array[Array] = []
@@ -357,6 +383,7 @@ func capture_save_payload(fresh_start := false) -> Dictionary:
 		"turn": turn_manager.capture_state(_characters, _is_dev_stable()),
 		"combat_over": _combat_over,
 		"combat_result": _combat_result_text,
+		"combat_finalized": _combat_finalized,
 		"movement_locked": _movement_locked,
 	}
 	return {
@@ -393,6 +420,7 @@ func _restore_runtime_state(runtime: Dictionary) -> bool:
 	general_inventory.restore_state(runtime.get("inventory", []))
 	_combat_over = bool(runtime.get("combat_over", false))
 	_combat_result_text = str(runtime.get("combat_result", ""))
+	_combat_finalized = bool(runtime.get("combat_finalized", false)) and _combat_over
 	_movement_locked = bool(runtime.get("movement_locked", _combat_over))
 	if not turn_manager.restore_state(runtime.get("turn", {}), units_by_id):
 		push_error("Could not restore the saved turn order.")
@@ -582,6 +610,8 @@ func _add_dev_unit(unit_scene: PackedScene, cell: Vector2i) -> void:
 	var character := instance as TacticalCharacter
 	character.starting_grid_cell = cell
 	character.scenario_unit_id = _new_dev_unit_id(unit_scene)
+	if run_encounter != null and character.is_friendly():
+		character.permanent_defeat = true
 	characters_container.add_child(character, true)
 	character.initialize(grid)
 	character.set_unit_name_visible(unit_names_visible)
@@ -631,8 +661,12 @@ func _character_display_name(character: TacticalCharacter) -> String:
 
 
 func _process(_delta: float) -> void:
+	if _combat_over and not _combat_finalized:
+		_queue_run_result()
 	if _dev_open or get_tree().paused:
 		return
+	if target_selection_panel.visible and not _movement_locked:
+		_refresh_hit_target_selection()
 	if not _movement_locked and turn_manager.is_player_turn() and _has_mouse_screen_position:
 		if _selected_ability != null:
 			_update_ability_hover(_screen_to_world(_last_mouse_screen_position))
@@ -677,6 +711,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func clear_selection() -> void:
+	_clear_hit_selection()
 	_selected_character = null
 	_selected_ability = null
 	_reachable_cells.clear()
@@ -717,7 +752,7 @@ func _handle_left_click(global_mouse: Vector2) -> void:
 		_selected_character.grid_cell,
 		cell,
 		_selected_character.remaining_movement,
-		blocked_cells
+		blocked_cells, {}, PassiveAbilityResolver.ignores_movement_modifiers(_selected_character)
 	)
 	if path.size() > 1:
 		_begin_friendly_move(path)
@@ -726,6 +761,7 @@ func _handle_left_click(global_mouse: Vector2) -> void:
 func _select_character(character: TacticalCharacter) -> void:
 	if not turn_manager.is_player_turn() or character != turn_manager.current_unit:
 		return
+	_clear_hit_selection()
 	_selected_character = character
 	_selected_ability = null
 	_ability_range_cells.clear()
@@ -749,7 +785,7 @@ func _refresh_reachable_cells() -> void:
 	_reachable_cells = _pathfinder.get_reachable(
 		_selected_character.grid_cell,
 		_selected_character.remaining_movement,
-		_get_blocked_cells(_selected_character)
+		_get_blocked_cells(_selected_character), PassiveAbilityResolver.ignores_movement_modifiers(_selected_character)
 	)
 	grid.show_reachable(_selected_character.grid_cell, _reachable_cells)
 
@@ -769,7 +805,7 @@ func _update_hover(global_mouse: Vector2) -> void:
 		_selected_character.grid_cell,
 		cell,
 		_selected_character.remaining_movement,
-		_get_blocked_cells(_selected_character)
+		_get_blocked_cells(_selected_character), {}, PassiveAbilityResolver.ignores_movement_modifiers(_selected_character)
 	)
 	if path.size() > 1:
 		grid.show_path(cell, path)
@@ -792,8 +828,19 @@ func _on_ability_selected(ability: AbilityDefinition) -> void:
 	if _selected_ability == ability:
 		_cancel_ability_targeting()
 		return
+	_clear_hit_selection()
 	_selected_character = caster
 	_selected_ability = ability
+	_refresh_ability_targets()
+	ability_bar.set_selected(ability)
+	if ability.selects_per_hit():
+		target_selection_panel.configure(ability)
+		_refresh_hit_target_selection()
+
+
+func _refresh_ability_targets() -> void:
+	var caster := _selected_character
+	var ability := _selected_ability
 	_has_hovered_cell = false
 	_ability_targeting.set_grid_size(grid.grid_size)
 	_ability_range_cells = _ability_targeting.get_cells_in_range(caster, ability)
@@ -804,10 +851,10 @@ func _on_ability_selected(ability: AbilityDefinition) -> void:
 		_get_wall_cells()
 	)
 	grid.show_ability_targets(caster.grid_cell, _ability_range_cells, _ability_target_cells)
-	ability_bar.set_selected(ability)
 
 
 func _cancel_ability_targeting() -> void:
+	_clear_hit_selection()
 	_selected_ability = null
 	_ability_range_cells.clear()
 	_ability_target_cells.clear()
@@ -828,7 +875,9 @@ func _update_ability_hover(global_mouse: Vector2) -> void:
 	_hovered_cell = cell
 	if not grid.is_in_bounds(cell):
 		grid.clear_ability_preview()
+		ability_bar.reset_damage_previews()
 		return
+	ability_bar.reset_damage_previews()
 	var is_valid := _ability_target_cells.has(cell)
 	var wall_cells := _get_wall_cells()
 	var affected_cells: Array[Vector2i] = []
@@ -851,7 +900,8 @@ func _update_ability_hover(global_mouse: Vector2) -> void:
 			effect_origin,
 			cell,
 			_selected_ability,
-			wall_cells
+			wall_cells,
+			_selected_character
 		)
 		if (
 			_selected_ability.shape == AbilityDefinition.Shape.LINE_FROM_CASTER
@@ -877,6 +927,8 @@ func _update_ability_hover(global_mouse: Vector2) -> void:
 		else:
 			for index in range(1, projectile_path.size()):
 				trajectory_cells.append(projectile_path[index])
+	if is_valid:
+		ability_bar.set_damage_preview(_selected_character, _selected_ability, effect_origin)
 	grid.show_ability_preview(cell, affected_cells, trajectory_cells, is_valid)
 
 
@@ -884,7 +936,71 @@ func _handle_ability_click(global_mouse: Vector2) -> void:
 	var target_cell := _get_ability_cell_at_global_point(global_mouse)
 	if not _ability_target_cells.has(target_cell):
 		return
+	if _selected_ability.selects_per_hit():
+		_append_hit_target(_get_character_at(target_cell))
+		return
 	_begin_ability_cast(target_cell)
+
+
+func _clear_hit_selection() -> void:
+	_selected_hit_targets.clear()
+	if is_instance_valid(target_selection_panel):
+		target_selection_panel.hide()
+
+
+func _append_hit_target(target: TacticalCharacter) -> void:
+	if (_movement_locked or not turn_manager.is_player_turn()
+		or _selected_ability == null or not _selected_ability.selects_per_hit()
+		or _selected_character != turn_manager.current_unit
+		or _selected_hit_targets.size() >= _selected_ability.get_hit_count()):
+		return
+	if not _selected_ability.allow_repeated_targets and _selected_hit_targets.has(target):
+		return
+	if not _ability_executor.can_select_hit_target(_selected_character, _selected_ability, target,
+		_characters, grid, _ability_targeting, _get_wall_cells()):
+		return
+	_selected_hit_targets.append(target)
+	_refresh_hit_target_selection()
+
+
+func _remove_hit_target(index: int) -> void:
+	if _movement_locked or index < 0 or index >= _selected_hit_targets.size():
+		return
+	_selected_hit_targets.remove_at(index)
+	_refresh_hit_target_selection()
+
+
+func _refresh_hit_target_selection() -> void:
+	if _selected_ability == null or not _selected_ability.selects_per_hit():
+		_clear_hit_selection()
+		return
+	var valid: Array[bool] = []
+	var walls := _get_wall_cells()
+	for target in _selected_hit_targets:
+		valid.append(is_instance_valid(target) and _ability_executor.can_select_hit_target(_selected_character, _selected_ability,
+			target, _characters, grid, _ability_targeting, walls))
+	var can_fire := (not _movement_locked and turn_manager.is_player_turn()
+		and _selected_character == turn_manager.current_unit
+		and _ability_executor.can_execute_targets(_selected_character, _selected_ability,
+			_selected_hit_targets, _characters, grid, _ability_targeting, walls))
+	target_selection_panel.set_targets(_selected_hit_targets, valid, can_fire)
+
+
+func _begin_selected_targets_cast() -> void:
+	if (_movement_locked or _dev_open or get_tree().paused or inventory_screen.visible
+		or not turn_manager.is_player_turn() or _selected_character != turn_manager.current_unit
+		or not _ability_executor.can_execute_targets(_selected_character, _selected_ability,
+			_selected_hit_targets, _characters, grid, _ability_targeting, _get_wall_cells())):
+		return
+	var caster := _selected_character
+	var ability := _selected_ability
+	var targets: Array[TacticalCharacter] = _selected_hit_targets.duplicate()
+	_clear_hit_selection()
+	_set_movement_locked(true)
+	grid.clear_overlays()
+	var cast_succeeded := await _ability_executor.execute_targets(caster, ability, targets,
+		_characters, grid, _ability_targeting, _get_wall_cells())
+	_finish_ability_cast(caster, cast_succeeded)
 
 
 func _begin_ability_cast(target_cell: Vector2i) -> void:
@@ -907,6 +1023,11 @@ func _begin_ability_cast(target_cell: Vector2i) -> void:
 		_get_wall_cells(),
 		Callable(self, "_before_ability_movement_step")
 	)
+	_finish_ability_cast(caster, cast_succeeded)
+
+
+func _finish_ability_cast(caster: TacticalCharacter, cast_succeeded: bool) -> void:
+	_clear_hit_selection()
 	_selected_ability = null
 	_ability_range_cells.clear()
 	_ability_target_cells.clear()
@@ -919,12 +1040,14 @@ func _begin_ability_cast(target_cell: Vector2i) -> void:
 		_set_movement_locked(false)
 	_refresh_ability_bar()
 	_update_turn_hud()
+	if is_instance_valid(caster) and caster.is_bone_pile and caster == turn_manager.current_unit:
+		_end_defeated_current_unit.call_deferred(caster)
 
 
 func _begin_friendly_move(path: Array[Vector2i]) -> void:
 	if _movement_locked or _selected_character != turn_manager.current_unit:
 		return
-	var path_cost := _pathfinder.get_path_cost(path)
+	var path_cost := _pathfinder.get_path_cost(path, PassiveAbilityResolver.ignores_movement_modifiers(_selected_character))
 	if not _selected_character.can_afford_path(path_cost):
 		return
 
@@ -939,6 +1062,7 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 		is_instance_valid(moving_character)
 		and moving_character == turn_manager.current_unit
 		and moving_character.current_health > 0
+		and not moving_character.is_bone_pile
 	)
 	_set_movement_locked(not can_continue)
 	if can_continue:
@@ -949,7 +1073,7 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 	elif (
 		is_instance_valid(moving_character)
 		and moving_character == turn_manager.current_unit
-		and moving_character.current_health <= 0
+		and (moving_character.current_health <= 0 or moving_character.is_bone_pile)
 	):
 		call_deferred("_end_defeated_current_unit", moving_character)
 
@@ -979,7 +1103,7 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 	)
 	_update_ai_debug(unit, plan)
 	var executed := await _execute_enemy_plan(unit, plan)
-	if not executed and unit == turn_manager.current_unit and unit.current_health > 0:
+	if not executed and unit == turn_manager.current_unit and unit.current_health > 0 and not unit.is_bone_pile:
 		# Signals or future dynamic effects can make a forecast stale. Replan once from
 		# the live state; a second invalidation safely ends the turn.
 		plan = _enemy_ai_planner.choose_plan(
@@ -1013,6 +1137,12 @@ func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
 			return false
 
 	if plan.ability != null:
+		if not _enemy_ai_planner.respects_taunt(
+			unit, unit.grid_cell, plan.ability, plan.target_cell,
+			AIBoardSnapshot.from_battle(_characters, grid.grid_size, _get_wall_cells()),
+			_ability_targeting
+		):
+			return false
 		if not _ability_executor.can_execute(
 			unit,
 			plan.ability,
@@ -1063,11 +1193,11 @@ func _move_enemy_to(
 			unit.grid_cell,
 			destination,
 			unit.remaining_movement,
-			blocked_cells
+			blocked_cells, {}, PassiveAbilityResolver.ignores_movement_modifiers(unit)
 		)
 	if path.size() < 2:
 		return false
-	var path_cost := _pathfinder.get_path_cost(path)
+	var path_cost := _pathfinder.get_path_cost(path, PassiveAbilityResolver.ignores_movement_modifiers(unit))
 	if not unit.can_afford_path(path_cost):
 		return false
 	if unit != turn_manager.current_unit:
@@ -1086,7 +1216,7 @@ func _before_character_movement_step(
 		return false
 	if not mover.can_move():
 		return false
-	var step_cost := _pathfinder.get_step_cost(current_cell, next_cell)
+	var step_cost := _pathfinder.get_step_cost(current_cell, next_cell, PassiveAbilityResolver.ignores_movement_modifiers(mover))
 	return mover.spend_movement(step_cost)
 
 
@@ -1142,8 +1272,6 @@ func _update_ai_debug(
 	plan: EnemyTurnPlan,
 	status: String = "Chosen"
 ) -> void:
-	if not enable_dev_tools:
-		return
 	var effective_profile := unit.get_enemy_ai_profile()
 	var profile_name := effective_profile.display_name if effective_profile != null else "General AI"
 	var lines: Array[String] = [
@@ -1189,8 +1317,6 @@ func _capture_ai_debug_checkpoint() -> Dictionary:
 
 
 func _on_dev_button_pressed() -> void:
-	if not enable_dev_tools:
-		return
 	if _dev_open:
 		return
 	if not _is_dev_stable():
@@ -1202,11 +1328,13 @@ func _on_dev_button_pressed() -> void:
 
 
 func _is_dev_stable() -> bool:
+	if _ability_executor.is_resolving():
+		return false
 	for character in _characters:
 		if is_instance_valid(character) and character.is_moving:
 			return false
 	if _combat_over:
-		return true
+		return _combat_finalized
 	return not _movement_locked and turn_manager.is_player_turn()
 
 
@@ -1222,6 +1350,7 @@ func report_reload_failed(message: String) -> void:
 
 
 func _open_dev_mode(initial_tab := DevModePanel.UNIT_TAB) -> void:
+	_clear_hit_selection()
 	_dev_open_pending = false
 	dev_button.text = "Dev"
 	dev_button.tooltip_text = "Pause and edit the current scenario"
@@ -1412,6 +1541,7 @@ func _open_restored_ai_checkpoint() -> void:
 
 
 func _on_dev_setup_changed() -> void:
+	_queue_passive_refresh()
 	_dev_dirty = true
 	dev_mode_panel.set_dirty(true)
 
@@ -1506,6 +1636,7 @@ func _set_dev_blocked_actions_disabled(disabled: bool) -> void:
 func _on_restart_button_pressed() -> void:
 	if run_encounter != null:
 		return
+	_cancel_ability_targeting()
 	var fresh_payload := capture_save_payload(true)
 	var validation := ScenarioSaveStore.validate_payload(fresh_payload)
 	if not validation.ok:
@@ -1515,6 +1646,7 @@ func _on_restart_button_pressed() -> void:
 
 
 func _on_levels_button_pressed() -> void:
+	_cancel_ability_targeting()
 	if not _return_dialog_paused_battle:
 		_return_dialog_paused_battle = true
 		get_tree().paused = true
@@ -1541,6 +1673,7 @@ func _resume_after_return_dialog() -> void:
 
 func _on_inventory_button_toggled(open: bool) -> void:
 	if open:
+		_cancel_ability_targeting()
 		var preferred_character := _selected_character
 		if not is_instance_valid(preferred_character) or not preferred_character.is_friendly():
 			var current_unit := turn_manager.current_unit
@@ -1558,14 +1691,21 @@ func _on_inventory_equipment_updated(character: TacticalCharacter) -> void:
 	if (
 		character == _selected_character
 		and _selected_ability != null
-		and not _selected_ability.can_be_used_by(character)
+		and (not character.get_abilities().has(_selected_ability)
+			or not _selected_ability.can_be_used_by(character))
 	):
 		_cancel_ability_targeting()
 	if character == turn_manager.current_unit:
 		_refresh_ability_bar()
 		_update_turn_hud()
 	if character == _selected_character and not _movement_locked:
-		_refresh_reachable_cells()
+		if _selected_ability == null:
+			_refresh_reachable_cells()
+		else:
+			_refresh_ability_targets()
+			_update_ability_hover(get_global_mouse_position())
+			if _selected_ability.selects_per_hit():
+				_refresh_hit_target_selection()
 
 
 func _on_character_equipment_changed(
@@ -1597,6 +1737,7 @@ func _on_turn_starting(unit: TacticalCharacter) -> void:
 
 
 func _on_turn_started(unit: TacticalCharacter) -> void:
+	_clear_hit_selection()
 	if _combat_over:
 		return
 	_selected_ability = null
@@ -1616,6 +1757,7 @@ func _on_turn_started(unit: TacticalCharacter) -> void:
 
 
 func _on_turn_ended(_unit: TacticalCharacter) -> void:
+	_clear_hit_selection()
 	grid.clear_overlays()
 
 
@@ -1635,6 +1777,13 @@ func _on_character_defeated(character: TacticalCharacter) -> void:
 		return
 	if character == turn_manager.current_unit and not character.is_moving:
 		call_deferred("_end_defeated_current_unit", character)
+
+
+func _on_character_form_changed(character: TacticalCharacter) -> void:
+	turn_manager.notify_unit_state_changed()
+	_queue_passive_refresh()
+	if character.is_bone_pile and character == turn_manager.current_unit and not character.is_moving and not _movement_locked:
+		_end_defeated_current_unit.call_deferred(character)
 
 
 func _on_character_cell_entered(
@@ -1754,11 +1903,7 @@ func _check_combat_end() -> bool:
 	turn_manager.stop_combat()
 	clear_selection()
 	_refresh_ability_bar()
-	if _dev_open_pending:
-		_open_dev_mode.call_deferred()
-	if run_encounter != null and not _run_result_emitted:
-		_run_result_emitted = true
-		_emit_run_result.call_deferred(has_living_friendlies)
+	_queue_run_result()
 	return true
 
 
@@ -1891,8 +2036,23 @@ func _restore_run_party() -> void:
 				break
 
 
+func _restore_run_restart_party() -> void:
+	general_inventory.restore_state(run_inventory_input)
+	for character in _characters:
+		if not character.is_friendly():
+			continue
+		# Fresh scene instances already reset statuses, actions and enemy health.
+		# Preserve live party health, including defeat; restoration clamps to the
+		# edited maximum without carrying temporary Constitution bonuses forward.
+		var runtime := character.capture_runtime_state()
+		runtime.current_health = int(run_restart_health_input.get(character.scenario_unit_id, character.get_max_health()))
+		runtime.statuses = []
+		character.restore_runtime_state(runtime, {})
+
+
 func capture_run_party() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
+	var included_ids := {}
 	for character in _characters:
 		if not is_instance_valid(character) or not character.is_friendly():
 			continue
@@ -1901,16 +2061,68 @@ func capture_run_party() -> Array[Dictionary]:
 			for item in character.get_equipped_items():
 				equipment.append(item.resource_path)
 		var persistent_max := character.get_max_health_without_statuses()
+		included_ids[character.scenario_unit_id] = true
 		result.append({"id": character.scenario_unit_id, "health": mini(character.current_health, persistent_max),
 			"max_health": persistent_max, "equipment": equipment,
 			"class_levels": CharacterClassProgression.to_data(character.get_class_levels())})
+	# Developer deletion is a loss of that member, not an incomplete run result.
+	for member in run_party_input:
+		if not included_ids.has(str(member.id)) and not bool(member.get("lost", false)):
+			result.append({"id": str(member.id), "health": 0,
+				"max_health": int(member.get("max_health", 1)), "equipment": []})
 	return result
+
+
+## Deferred so synchronous area/status effects finish before restoration.
+## Animated abilities (including aborted casts and nested reactions) and movement
+## keep this pending until their outer resolution has actually returned.
+func _queue_run_result() -> void:
+	if _combat_finalization_queued or not _combat_over:
+		return
+	_combat_finalization_queued = true
+	_finalize_combat.call_deferred()
+
+
+func _finalize_combat() -> void:
+	_combat_finalization_queued = false
+	if not _combat_over:
+		return
+	if not _combat_finalized:
+		if _ability_executor.is_resolving():
+			return
+		for character in _characters:
+			if is_instance_valid(character) and character.is_moving:
+				return
+		_combat_finalized = true
+		for character in _characters:
+			if is_instance_valid(character) and character.current_health > 0:
+				character.restore_armor()
+		if _dev_open_pending:
+			_open_dev_mode.call_deferred()
+	_publish_run_result()
+
+
+func _publish_run_result() -> void:
+	if run_encounter == null or _run_result_emitted:
+		return
+	_run_result_emitted = true
+	_emit_run_result.call_deferred(not _get_living_friendlies().is_empty())
 
 
 func _emit_run_result(_victory: bool) -> void:
 	# A multi-target effect may also defeat the last friendly after combat ends.
 	var victory := not _get_living_friendlies().is_empty()
-	battle_finished.emit(victory, capture_run_party(), general_inventory.capture_state())
+	var results := capture_run_party()
+	if not run_party_input.is_empty():
+		# Developer-added allies are encounter units, not new persistent members.
+		# A helper surviving cannot continue a run whose original party is lost.
+		victory = false
+		for member in run_party_input:
+			for result in results:
+				if str(result.id) == str(member.id) and int(result.health) > 0:
+					victory = true
+					break
+	battle_finished.emit(victory, results, general_inventory.capture_state())
 
 
 func _get_living_friendlies() -> Array[TacticalCharacter]:
@@ -2069,3 +2281,27 @@ func _get_wall_cells() -> Dictionary:
 
 func _screen_to_world(screen_position: Vector2) -> Vector2:
 	return get_canvas_transform().affine_inverse() * screen_position
+
+
+var _passive_refresh_pending := false
+
+
+func _queue_passive_refresh() -> void:
+	if not _passive_refresh_pending:
+		_passive_refresh_pending = true
+		_refresh_passive_context.call_deferred()
+
+
+func _refresh_passive_context() -> void:
+	_passive_refresh_pending = false
+	if not is_node_ready():
+		return
+	_refresh_ability_bar()
+	_update_turn_hud()
+	_has_hovered_cell = false
+	if is_instance_valid(_selected_character) and not _movement_locked and _selected_ability == null and not _dev_open:
+		_refresh_reachable_cells()
+	if inventory_screen != null and inventory_screen.visible:
+		inventory_screen._refresh_character_details()
+	if dev_mode_panel != null and dev_mode_panel.visible:
+		dev_mode_panel._refresh_selected_unit()

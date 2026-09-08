@@ -43,6 +43,13 @@ enum Faction {
 @export var body_color: Color = Color("3c8cff")
 @export var health_bar_color: Color = Color("42e66b")
 
+@export_category("Passive Abilities")
+## Always available, independently of active abilities and classes.
+@export var passive_abilities: Array[PassiveAbilityDefinition] = []:
+	set(value):
+		passive_abilities = value.duplicate()
+		emit_changed()
+
 @export_category("Ability Loadout")
 ## Enemy loadout. Friendly characters resolve their abilities from class levels instead.
 @export var abilities: Array[AbilityDefinition] = []

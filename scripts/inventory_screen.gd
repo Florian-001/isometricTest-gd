@@ -14,6 +14,7 @@ signal equipment_updated(character: TacticalCharacter)
 @export var ranged_fallback_icon: Texture2D
 @export var armor_fallback_icon: Texture2D
 @export var accessory_fallback_icon: Texture2D
+@export var offhand_fallback_icon: Texture2D
 @export_range(1, 20) var minimum_rows: int = 4
 @export_range(0.0, 1.0, 0.05) var hover_delay: float = 0.2
 
@@ -131,10 +132,15 @@ func _set_character(character: TacticalCharacter) -> void:
 func _connect_character_signals() -> void:
 	if not is_instance_valid(_character):
 		return
+	for source in [_character.passive_context_changed, _character.passive_abilities_changed]:
+		if not source.is_connected(_on_selected_character_stats_changed):
+			source.connect(_on_selected_character_stats_changed)
 	if not _character.class_progression_changed.is_connected(_on_selected_character_stats_changed):
 		_character.class_progression_changed.connect(_on_selected_character_stats_changed)
 	if not _character.stats_changed.is_connected(_on_selected_character_stats_changed):
 		_character.stats_changed.connect(_on_selected_character_stats_changed)
+	if not _character.armor_changed.is_connected(_on_selected_character_armor_changed):
+		_character.armor_changed.connect(_on_selected_character_armor_changed)
 	if not _character.health_changed.is_connected(_on_selected_character_health_changed):
 		_character.health_changed.connect(_on_selected_character_health_changed)
 	if not _character.equipment_changed.is_connected(_on_selected_character_equipment_changed):
@@ -144,10 +150,15 @@ func _connect_character_signals() -> void:
 func _disconnect_character_signals() -> void:
 	if not is_instance_valid(_character):
 		return
+	for source in [_character.passive_context_changed, _character.passive_abilities_changed]:
+		if source.is_connected(_on_selected_character_stats_changed):
+			source.disconnect(_on_selected_character_stats_changed)
 	if _character.class_progression_changed.is_connected(_on_selected_character_stats_changed):
 		_character.class_progression_changed.disconnect(_on_selected_character_stats_changed)
 	if _character.stats_changed.is_connected(_on_selected_character_stats_changed):
 		_character.stats_changed.disconnect(_on_selected_character_stats_changed)
+	if _character.armor_changed.is_connected(_on_selected_character_armor_changed):
+		_character.armor_changed.disconnect(_on_selected_character_armor_changed)
 	if _character.health_changed.is_connected(_on_selected_character_health_changed):
 		_character.health_changed.disconnect(_on_selected_character_health_changed)
 	if _character.equipment_changed.is_connected(_on_selected_character_equipment_changed):
@@ -155,6 +166,10 @@ func _disconnect_character_signals() -> void:
 
 
 func _on_selected_character_stats_changed() -> void:
+	_refresh_character_details()
+
+
+func _on_selected_character_armor_changed(_current: int, _maximum: int) -> void:
 	_refresh_character_details()
 
 
@@ -182,6 +197,11 @@ func _refresh_character_details() -> void:
 		_add_empty_label(ability_entries, "No abilities available")
 		return
 	_build_stat_entries()
+	var passives := Label.new()
+	passives.name = "Passives"
+	passives.text = "Passives\n" + _character.get_passive_description()
+	passives.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stats_entries.add_child(passives)
 	_build_ability_entries()
 
 
@@ -197,6 +217,7 @@ func _build_stat_entries() -> void:
 		"Health",
 		"%d / %d" % [_character.current_health, _character.get_max_health()]
 	)
+	_add_stat_row("armor", "Armor", "%d / %d" % [_character.current_armor, _character.get_max_armor()])
 	_add_effective_stat_row("movement", "Movement", UnitStat.Type.MOVEMENT_RANGE)
 	_add_effective_stat_row("strength", "Strength", UnitStat.Type.STRENGTH)
 	_add_effective_stat_row("dexterity", "Dexterity", UnitStat.Type.DEXTERITY)
@@ -321,6 +342,16 @@ func _make_ability_entry(ability: AbilityDefinition) -> PanelContainer:
 	name_label.text = ability.display_name
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	labels.add_child(name_label)
+	var source_text := _character.get_ability_source_text(ability)
+	if not source_text.is_empty():
+		var source_label := Label.new()
+		source_label.name = "Source"
+		source_label.text = source_text
+		source_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		source_label.add_theme_font_size_override("font_size", 12)
+		source_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		labels.add_child(source_label)
+		entry.tooltip_text += "\n" + source_text
 	var summary_label := Label.new()
 	summary_label.name = "Summary"
 	summary_label.text = summary
@@ -376,6 +407,10 @@ func _build_equipment_slots() -> void:
 	for column in equipment_entries.get_children():
 		var cell := column.get_node("Slot") as InventoryItemSlot
 		cell.bind_item(_character.get_equipped_item(cell.equipment_slot) if is_instance_valid(_character) else null, self)
+		if cell.item == null and is_instance_valid(_character):
+			var occupant := _character.get_slot_occupant(cell.equipment_slot)
+			if occupant != null:
+				cell.bind_reservation(occupant)
 
 
 func get_item_icon(item: ItemDefinition) -> Texture2D:
@@ -386,6 +421,8 @@ func get_item_icon(item: ItemDefinition) -> Texture2D:
 			return armor_fallback_icon
 		ItemDefinition.EquipmentSlot.ACCESSORY:
 			return accessory_fallback_icon
+		ItemDefinition.EquipmentSlot.OFFHAND:
+			return offhand_fallback_icon
 		_:
 			return ranged_fallback_icon if item.weapon_type == ItemDefinition.WeaponType.RANGED else weapon_fallback_icon
 

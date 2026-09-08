@@ -57,7 +57,7 @@ func should_apply_additional_effect(
 
 
 func apply_trigger(unit: TacticalCharacter, trigger: TileTriggeredEffectDefinition.Trigger) -> void:
-	if not is_instance_valid(unit) or unit.current_health <= 0:
+	if not is_instance_valid(unit) or unit.current_health <= 0 or PassiveAbilityResolver.ignores_tile_effects(unit):
 		return
 	if status_applies_on(trigger):
 		unit.apply_status(status_effect, self)
@@ -72,30 +72,39 @@ func apply_trigger(unit: TacticalCharacter, trigger: TileTriggeredEffectDefiniti
 func estimate_trigger(
 	unit: TacticalCharacter,
 	trigger: TileTriggeredEffectDefinition.Trigger,
-	simulated_health: int
+	simulated_health: int,
+	simulated_armor: int = -1
 ) -> Dictionary:
+	if PassiveAbilityResolver.ignores_tile_effects(unit):
+		return {"health": simulated_health, "health_delta": 0, "utility_hint": 0.0}
+	var initial_armor := simulated_armor if simulated_armor >= 0 else unit.current_armor
+	var armor := initial_armor
 	var health := clampi(simulated_health, 0, unit.get_max_health())
 	var utility := 0.0
 	if status_applies_on(trigger):
-		var status_estimate := status_effect.estimate_for_ai(null, unit, health)
+		var status_estimate := status_effect.estimate_for_ai(null, unit, health, -1, armor)
 		health = clampi(
 			health + int(status_estimate.get("health_delta", 0)),
 			0,
 			unit.get_max_health()
 		)
+		armor = maxi(0, armor + int(status_estimate.get("armor_delta", 0)))
 		utility += float(status_estimate.get("utility_hint", 0.0))
 	for triggered_effect in effects:
 		if not should_apply_additional_effect(triggered_effect) or health <= 0:
 			continue
-		var estimate := triggered_effect.estimate_for_ai(unit, trigger, health)
+		var estimate := triggered_effect.estimate_for_ai(unit, trigger, health, armor)
 		health = clampi(
 			health + int(estimate.get("health_delta", 0)),
 			0,
 			unit.get_max_health()
 		)
+		armor = maxi(0, armor + int(estimate.get("armor_delta", 0)))
 		utility += float(estimate.get("utility_hint", 0.0))
 	return {
 		"health": health,
+		"armor": armor,
+		"armor_delta": armor - initial_armor,
 		"health_delta": health - simulated_health,
 		"utility_hint": utility,
 	}

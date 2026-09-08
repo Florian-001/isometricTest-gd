@@ -1,21 +1,34 @@
 [gd_resource type="Resource" script_class="CharacterClassDefinition" format=3 uid="uid://1b2lkaipypt5"]
 
-[ext_resource type="Resource" uid="uid://ypvhtrfkl6un" path="res://resources/abilities/strike.tres" id="ability_0"]
 [ext_resource type="Resource" path="res://resources/abilities/charge.tres" id="ability_1"]
+[ext_resource type="Resource" path="res://resources/abilities/battle_stomp.tres" id="ability_2"]
+[ext_resource type="Resource" path="res://resources/abilities/taunt.tres" id="ability_3"]
+[ext_resource type="Resource" path="res://resources/abilities/multi_attack.tres" id="ability_4"]
 [ext_resource type="Script" uid="uid://cb2sfxg1krtk4" path="res://scripts/character_class_definition.gd" id="class"]
 [ext_resource type="Script" uid="uid://dtcq17r6pgivp" path="res://scripts/class_ability_unlock.gd" id="unlock"]
-
-[sub_resource type="Resource" id="Unlock_0"]
-script = ExtResource("unlock")
-ability = ExtResource("ability_0")
 
 [sub_resource type="Resource" id="Unlock_1"]
 script = ExtResource("unlock")
 ability = ExtResource("ability_1")
 required_level = 2
 
+[sub_resource type="Resource" id="Unlock_2"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_2")
+required_level = 3
+
+[sub_resource type="Resource" id="Unlock_3"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_3")
+required_level = 4
+
+[sub_resource type="Resource" id="Unlock_4"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_4")
+required_level = 5
+
 [resource]
 script = ExtResource("class")
 class_id = &"warrior"
 display_name = "Warrior"
-ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_0"), SubResource("Unlock_1")])
+ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("Unlock_3"), SubResource("Unlock_4")])

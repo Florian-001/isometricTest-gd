@@ -9,6 +9,7 @@
 [ext_resource type="Texture2D" path="res://assets/item_icons/ranger_bow.svg" id="ranged"]
 [ext_resource type="Texture2D" path="res://assets/item_icons/ranger_armor.svg" id="armor"]
 [ext_resource type="Texture2D" path="res://assets/item_icons/sage_charm.svg" id="accessory"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/wooden_shield.svg" id="offhand"]
 
 [node name="InventoryScreen" type="Control"]
 visible = false
@@ -27,6 +28,7 @@ weapon_fallback_icon = ExtResource("weapon")
 ranged_fallback_icon = ExtResource("ranged")
 armor_fallback_icon = ExtResource("armor")
 accessory_fallback_icon = ExtResource("accessory")
+offhand_fallback_icon = ExtResource("offhand")
 
 [node name="Dim" type="ColorRect" parent="."]
 layout_mode = 1
@@ -173,7 +175,7 @@ autowrap_mode = 3
 layout_mode = 2
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
-columns = 3
+columns = 2
 
 [node name="DetailsPanel" type="PanelContainer" parent="Dim/Panel/Margin/VBox/Columns"]
 custom_minimum_size = Vector2(400, 0)
@@ -295,6 +297,22 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 13
 horizontal_alignment = 1
 text = "Weapon"
+
+[node name="Offhand" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 8
+
+[node name="Slot" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries/Offhand" instance=ExtResource("slot")]
+layout_mode = 2
+equipment_slot = 3
+empty_icon = ExtResource("offhand")
+
+[node name="Label" type="Label" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries/Offhand"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "Offhand"
 
 [node name="Armor" type="VBoxContainer" parent="Dim/Panel/Margin/VBox/Columns/EquipmentPanel/Margin/VBox/EquipmentEntries"]
 layout_mode = 2

@@ -45,6 +45,28 @@ returns both the previous weapon and offhand. The first displaced item returns
 to the source cell, with any additional item placed in the first vacancy.
 Transfers preserve duplicate copies and notify observers after the complete swap.
 
+Six stat accessories are available under `resources/items/accessory/`:
+
+| Item | Flat bonus |
+|---|---|
+| Strength Charm | +1 Strength |
+| Dexterity Charm | +1 Dexterity |
+| Intelligence Charm | +1 Intelligence |
+| Constitution Charm | +1 Constitution |
+| Speed Charm | +1 Speed |
+| Movement Charm | +1 Movement Range |
+
+Each occupies the single Accessory slot, grants only its listed modifier, and has
+its own pendant icon. Assign them through the Inspector selector or developer item
+catalog. These are editor-only additions; shop/reward pools, sample inventory, and
+starting equipment retain their existing contents. Sage Charm still grants +2 Intelligence.
+
+Constitution uses the existing maximum-health scaling (+4 maximum HP per point
+with current settings) without healing. Speed uses the existing initiative and
+movement scaling (+1 initiative and +0.25 movement per point with current settings).
+Movement Charm adds its +1 range subject to the existing movement cap of 10.
+Equipping a different accessory replaces the previous accessory's contribution.
+
 **Wooden Shield** grants **10 armor** and a flat **+3 Constitution**, using the normal maximum
 health calculation. Equipping it does not heal health; removing it clamps current health
 only if it exceeds the new maximum. It is available from run loot and merchants,

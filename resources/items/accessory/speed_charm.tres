@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/speed_charm.svg" id="icon"]
+
+[sub_resource type="Resource" id="SpeedBonus"]
+script = ExtResource("modifier")
+stat = 4
+operation = 0
+value = 1.0
+
+[resource]
+script = ExtResource("item")
+display_name = "Speed Charm"
+slot = 2
+icon = ExtResource("icon")
+modifiers = Array[ExtResource("modifier")]([SubResource("SpeedBonus")])

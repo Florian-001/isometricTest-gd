@@ -47,7 +47,7 @@ func _test_resources() -> void:
 	_check(shield.modifiers[0].stat == UnitStat.Type.CONSTITUTION and shield.modifiers[0].operation == StatModifierDefinition.Operation.FLAT and shield.modifiers[0].value == 3.0, "shield grants exactly flat +3 Constitution")
 	_check(shield.get_granted_abilities().is_empty(), "shield grants no weapon attacks")
 	var items := ItemDefinitionCatalog.get_items()
-	_check(items.size() == 23, "recursive item catalog includes all 23 resources")
+	_check(items.size() == 29, "recursive item catalog includes all 29 resources")
 	for item in items:
 		var file := item.resource_path.get_file()
 		_check(item.is_two_handed() == (file.ends_with("_bow.tres") or file in ["mage_staff.tres", "long_sword.tres", "spear.tres"]), "%s handedness" % file)

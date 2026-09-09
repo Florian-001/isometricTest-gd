@@ -40,6 +40,7 @@ func _run() -> void:
 	await process_frame
 	_test_model()
 	_test_equipment_statistics()
+	_test_stat_accessories()
 	await _test_ui()
 	await _test_offhand_ui()
 	await _test_save_flow()
@@ -73,7 +74,7 @@ func _reset() -> void:
 
 func _test_model() -> void:
 	var items := ItemDefinitionCatalog.get_items()
-	_check(items.size() == 23, "recursive item catalog includes all 23 resources")
+	_check(items.size() == 29, "recursive item catalog includes all 29 resources")
 	for item in items:
 		_check(item.icon != null, item.resource_path.get_file() + " has assigned artwork")
 	_reset()
@@ -120,6 +121,77 @@ func _test_model() -> void:
 	character.current_health = 0
 	_check(not inventory.equip_from_slot(0, character, 0), "defeated character rejected")
 	character.current_health = health
+
+
+func _test_stat_accessories() -> void:
+	var cases := {
+		"strength_charm": UnitStat.Type.STRENGTH,
+		"dexterity_charm": UnitStat.Type.DEXTERITY,
+		"intelligence_charm": UnitStat.Type.INTELLIGENCE,
+		"constitution_charm": UnitStat.Type.CONSTITUTION,
+		"speed_charm": UnitStat.Type.SPEED,
+		"movement_charm": UnitStat.Type.MOVEMENT_RANGE,
+	}
+	var actor := _make_character("Stat Accessory Fixture")
+	actor.constitution_override = 25
+	actor.speed_override = 10
+	actor.movement_range_override = 6.0
+	actor.current_health = 95
+	var pack := GeneralInventory.new()
+	root.add_child(pack)
+	var details := (load("res://scenes/inventory_item_details.tscn") as PackedScene).instantiate() as InventoryItemDetails
+	root.add_child(details)
+	var base_stats: Dictionary = {}
+	for stat in cases.values():
+		base_stats[stat] = actor.get_effective_stat(stat)
+	var catalog := ItemDefinitionCatalog.get_items()
+	var developer_catalog := load("res://resources/dev_tool_catalog.tres") as DevToolCatalog
+	for id in cases:
+		var item := load("res://resources/items/accessory/%s.tres" % id) as ItemDefinition
+		_check(item != null, "%s loads as an item" % id)
+		if item == null:
+			continue
+		_check(item.slot == ItemDefinition.EquipmentSlot.ACCESSORY and item.armor == 0 and item.weapon_damage == 0, "%s is a stat-only accessory" % id)
+		_check(item.modifiers.size() == 1 and item.modifiers[0].stat == cases[id] and item.modifiers[0].operation == StatModifierDefinition.Operation.FLAT and item.modifiers[0].value == 1.0, "%s grants exactly one flat +1 bonus" % id)
+		_check(item.icon != null and item.icon.get_size() == Vector2(64, 64), "%s has a 64x64 icon" % id)
+		_check(catalog.has(item) and developer_catalog.items.has(item), "%s appears in both editor catalogs" % id)
+		actor.equip_item(charm)
+		pack.initialize_starting_items([item])
+		_check(pack.equip_from_slot(0, actor, ItemDefinition.EquipmentSlot.ACCESSORY), "%s equips through inventory" % id)
+		_check(actor.get_equipped_item(ItemDefinition.EquipmentSlot.ACCESSORY) == item and pack.get_item_at(0) == charm, "%s replaces Sage Charm and returns it to inventory" % id)
+		_check_accessory_stats(actor, base_stats, cases[id])
+		details.show_item(item, true)
+		_check(details.title.text == id.capitalize() and details.category.text == "Accessory" and details.body.text == "+1 %s" % UnitStat.get_display_name(cases[id]), "%s details describe its exact bonus" % id)
+		var saved: Dictionary = JSON.parse_string(JSON.stringify({"inventory": pack.capture_state(), "unit": actor.capture_runtime_state()}))
+		actor.unequip_item(ItemDefinition.EquipmentSlot.ACCESSORY)
+		pack.initialize_starting_items([])
+		pack.restore_state(saved.inventory)
+		actor.restore_runtime_state(saved.unit, {})
+		_check(actor.get_equipped_item(ItemDefinition.EquipmentSlot.ACCESSORY) == item and pack.capture_state() == saved.inventory, "%s equipment and inventory survive serialized restore" % id)
+		_check_accessory_stats(actor, base_stats, cases[id])
+		_check(pack.unequip_to_slot(actor, ItemDefinition.EquipmentSlot.ACCESSORY, 1) and pack.get_item_at(1) == item, "%s unequips into inventory" % id)
+		_check(actor.get_equipped_item(ItemDefinition.EquipmentSlot.ACCESSORY) == null and pack.get_items().size() == 2, "%s unequip preserves both accessories" % id)
+		_check_accessory_stats(actor, base_stats)
+	actor.movement_range_override = 10.0
+	actor.equip_item(load("res://resources/items/accessory/movement_charm.tres"))
+	_check(actor.get_movement_range() == 10.0, "Movement Charm respects the existing movement cap")
+	actor.unequip_item(ItemDefinition.EquipmentSlot.ACCESSORY)
+	_check(actor.get_movement_range() == 10.0, "removing a capped Movement Charm preserves base movement")
+	details.free()
+	pack.free()
+	actor.free()
+
+
+func _check_accessory_stats(actor: TacticalCharacter, base_stats: Dictionary, bonus_stat: UnitStat.Type = UnitStat.Type.NONE) -> void:
+	for stat in base_stats:
+		var bonus := 1.0 if stat == bonus_stat else 0.0
+		if stat == UnitStat.Type.MOVEMENT_RANGE and bonus_stat == UnitStat.Type.SPEED:
+			bonus = 0.25
+		_check(is_equal_approx(actor.get_effective_stat(stat), base_stats[stat] + bonus), "%s accessory effect on %s" % [UnitStat.get_display_name(bonus_stat), UnitStat.get_display_name(stat)])
+	_check(actor.get_max_health() == (104 if bonus_stat == UnitStat.Type.CONSTITUTION else 100) and actor.current_health == 95, "Constitution accessory adjusts maximum health without healing")
+	_check(actor.get_initiative() == (11 if bonus_stat == UnitStat.Type.SPEED else 10), "Speed accessory adjusts initiative")
+	var movement_bonus := 1.0 if bonus_stat == UnitStat.Type.MOVEMENT_RANGE else (0.25 if bonus_stat == UnitStat.Type.SPEED else 0.0)
+	_check(is_equal_approx(actor.get_movement_range(), 6.0 + movement_bonus), "accessory movement follows existing stat scaling")
 
 
 func _test_ui() -> void:

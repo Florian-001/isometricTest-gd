@@ -12,7 +12,7 @@ Set **Starting Class** on a friendly Character Template. A character inherits th
 
 FriendA and the run Archer start as Archer 1. FriendB and the Vanguard start as Warrior 1. The generic adventurer template starts as Warrior; the spellcaster template starts as Wizard. The default run still has two characters.
 
-Total level is the sum of class levels: **Warrior 2 / Wizard 1 is level 3**, with Strike, Charge, and Ice Shard when equipped with a melee weapon. Class levels do not increase each other. Any combination of classes is allowed, without prerequisites. Level changes grant no stat bonuses or equipment restrictions. Levels beyond the final unlock are valid.
+Total level is the sum of class levels: **Warrior 2 / Wizard 1 is level 3**, with Strike, Charge, Bloodlust, and Ice Shard when equipped with a melee weapon. Class levels do not increase each other. Any combination of classes is allowed, without prerequisites. Level changes grant no stat bonuses or equipment restrictions. Levels beyond the final unlock are valid.
 
 This version uses manual authoring and developer edits. It does not award XP or levels for victories and has no player level-up screen.
 

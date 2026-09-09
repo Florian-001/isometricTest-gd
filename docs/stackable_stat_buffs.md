@@ -8,7 +8,7 @@ Constitution uses the central health scaling rules: at the current settings, eac
 
 ## Authoring
 
-Choose these resources through the existing status dropdown on an ability, weapon, or tile. This change does not assign the buffs to any existing gameplay content. The saved resource IDs are `strength_up`, `dexterity_up`, `constitution_up`, and `intelligence_up`.
+Choose these resources through the existing status dropdown on an ability, weapon, or tile. Bloodlust, unlocked at Warrior level 2, grants the caster two Strength Up stacks when its direct damage defeats a unit. Other abilities can configure the same behavior with `on_kill_status` and `on_kill_status_stacks`. The saved resource IDs are `strength_up`, `dexterity_up`, `constitution_up`, and `intelligence_up`.
 
 `StatusEffectDefinition.stackable` enables one additional stack per application. Stacks multiply stat modifiers; damage ticks, Stun, Taunt, and granted passives do not multiply. Flat and additive percentage modifiers sum once per stack; multiplicative stat modifiers compose once per stack. The shared resource is never modified by active stacks. Nonstacking statuses still refresh their duration and keep a single stack. Timed stackable statuses share a duration, refreshed on application.
 

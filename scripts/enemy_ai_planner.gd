@@ -816,6 +816,7 @@ func _forecast_ability(
 		return score
 
 	var counter_defenders: Array[TacticalCharacter] = []
+	var rewarded_defeats: Dictionary = {}
 	for _hit_index in range(ability.get_hit_count()):
 		if not _can_use_ability_in_snapshot(caster, ability, snapshot):
 			break
@@ -833,6 +834,8 @@ func _forecast_ability(
 					else ability.estimate_primary_effect_for_ai(caster, recipient, snapshot.get_health(recipient), false, snapshot)
 				)
 				score += _score_effect_estimate(caster, recipient, primary_estimate, profile, snapshot)
+				if ability.effect == AbilityDefinition.PrimaryEffect.DAMAGE and not snapshot.is_living(recipient):
+					score += _forecast_kill_reward(caster, recipient, ability, snapshot, profile, rewarded_defeats)
 				if snapshot.is_living(recipient) and ability.status_effect != null:
 					score += _score_effect_estimate(
 						caster,
@@ -880,12 +883,15 @@ func _forecast_ability(
 						before,
 						ability,
 						ability.get_passive_damage_bonus(caster, snapshot) if bonus_pending else 0,
-						snapshot.get_armor(recipient)
+						snapshot.get_armor(recipient),
+						snapshot
 					)
 					bonus_pending = false
 				else:
 					estimate = additional_effect.estimate_with_armor(caster, recipient, before, snapshot.get_armor(recipient))
 				score += _score_effect_estimate(caster, recipient, estimate, profile, snapshot)
+				if additional_effect is DamageEffectDefinition and not snapshot.is_living(recipient):
+					score += _forecast_kill_reward(caster, recipient, ability, snapshot, profile, rewarded_defeats)
 			var weapon_status := ability.get_weapon_status_effect(caster)
 			if snapshot.is_living(recipient) and weapon_status != null:
 				score += _score_effect_estimate(
@@ -903,6 +909,19 @@ func _forecast_ability(
 				var reaction_score := _forecast_ability(defender, CounterAttackSystem.get_ability(defender),
 					snapshot.get_cell(caster), snapshot, targeting, profile, false)
 				score += reaction_score if defender.is_friendly() == caster.is_friendly() else -reaction_score
+	return score
+
+
+func _forecast_kill_reward(caster: TacticalCharacter, recipient: TacticalCharacter,
+	ability: AbilityDefinition, snapshot: AIBoardSnapshot, profile: EnemyAIProfile,
+	rewarded_defeats: Dictionary) -> float:
+	if ability.on_kill_status == null or not snapshot.is_living(caster) or rewarded_defeats.has(recipient):
+		return 0.0
+	rewarded_defeats[recipient] = true
+	var score := 0.0
+	for _application in range(ability.get_on_kill_status_applications()):
+		score += _score_effect_estimate(caster, caster,
+			snapshot.forecast_status_application(caster, caster, ability.on_kill_status), profile, snapshot)
 	return score
 
 

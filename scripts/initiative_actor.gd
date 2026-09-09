@@ -1309,9 +1309,11 @@ func move_along(path: Array[Vector2i], before_step: Callable = Callable()) -> vo
 	movement_finished.emit(self)
 
 
-func apply_damage(amount: int) -> void:
+## True only when this damage actually defeats the unit, including bone-pile destruction.
+## The result remains usable if a defeat listener removes the unit from the battle.
+func apply_damage(amount: int) -> bool:
 	if amount <= 0 or current_health <= 0:
-		return
+		return false
 	var previous_health := current_health
 	var resolved := DamageCalculator.resolve_damage(amount, current_health, current_armor)
 	var armor_taken := -int(resolved.armor_delta)
@@ -1326,7 +1328,7 @@ func apply_damage(amount: int) -> void:
 		if effect != null:
 			_collapse_to_bones(effect)
 			_show_damage_number(damage_taken)
-			return
+			return false
 	if current_health == 0 and is_bone_pile:
 		_reassembly_destroyed = true
 		is_bone_pile = false
@@ -1343,6 +1345,8 @@ func apply_damage(amount: int) -> void:
 		opportunity_reaction_availability_changed.emit(false)
 		_defeat_emitted = true
 		defeated.emit(self)
+		return true
+	return false
 
 
 func _collapse_to_bones(effect: ReassemblePassiveEffect) -> void:

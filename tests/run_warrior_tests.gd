@@ -112,13 +112,13 @@ func _test_resources() -> void:
 	var actor := _unit(true, Vector2i(2, 2))
 	actor.definition.starting_class = warrior
 	actor.override_template_abilities = false
-	var names := ["Strike", "Charge", "Battle Stomp", "Taunt", "Multi Attack"]
+	var names := ["Strike", "Charge", "Bloodlust", "Battle Stomp", "Taunt", "Multi Attack"]
 	for level in range(1, 6):
 		actor.set_class_level(warrior, level)
 		var actual: Array[String] = []
 		for ability in actor.get_abilities():
 			actual.append(ability.display_name)
-		check(actual == names.slice(0, level), "warrior unlocks at level %d" % level)
+		check(actual == names.slice(0, level + 1 if level >= 2 else 1), "warrior unlocks at level %d" % level)
 	actor.set_class_level(warrior, 2)
 	var enemy := _unit(false, Vector2i(3, 2))
 	check(not executor.can_execute(actor, stomp, actor.grid_cell, units, grid, targeting), "locked Stomp cannot execute directly")
@@ -379,7 +379,7 @@ func _test_battle_ui() -> void:
 			actor.set_class_level(entry.character_class, 0)
 	actor.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/weapons/iron_sword.tres"))
 	battle._refresh_ability_bar()
-	check(battle.ability_bar.get_node("Margin/HBox").get_child_count() == 5, "battle bar displays five warrior unlocks")
+	check(battle.ability_bar.get_node("Margin/HBox").get_child_count() == 6, "battle bar displays six warrior abilities")
 	battle._on_ability_selected(stomp)
 	check(battle._ability_target_cells.keys() == [actor.grid_cell], "battle offers only caster confirmation")
 	battle._update_ability_hover(actor.global_position + Vector2(0, -85))

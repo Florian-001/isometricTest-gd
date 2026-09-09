@@ -105,6 +105,13 @@ enum HitTargeting {
 ## Optional reusable status applied after the primary effect if the target survives.
 @export var status_effect: StatusEffectDefinition
 
+@export_category("On Kill")
+## Granted to the caster once per unit defeated by this ability's direct damage.
+## Reassemble collapse, damage over time, and separate reactions do not qualify.
+@export var on_kill_status: StatusEffectDefinition
+## Number of applications; stackable statuses gain this many additional stacks.
+@export_range(1, 99, 1, "or_greater") var on_kill_status_stacks: int = 1
+
 @export_category("Targeting")
 ## Maximum weighted grid distance. Orthogonal steps cost 1 and diagonal steps cost 1.414.
 @warning_ignore("shadowed_global_identifier")
@@ -397,7 +404,7 @@ func calculate_hit_damage(caster: TacticalCharacter, snapshot: AIBoardSnapshot =
 		if additional_effect is DamageEffectDefinition:
 			total += (
 				additional_effect as DamageEffectDefinition
-			).calculate_amount(caster, self)
+			).calculate_amount(caster, self, snapshot)
 	return total + get_passive_damage_bonus(caster, snapshot, origin)
 
 
@@ -481,18 +488,34 @@ func has_primary_effect() -> bool:
 
 
 ## Applies the primary effect through the same calculation used by previews and AI forecasts.
-func apply_primary_effect(caster: TacticalCharacter, target: TacticalCharacter) -> void:
+## Returns whether the primary damage defeated its target.
+func apply_primary_effect(caster: TacticalCharacter, target: TacticalCharacter) -> bool:
 	if not is_instance_valid(target) or target.current_health <= 0:
-		return
+		return false
+	var defeated_target := false
 	match effect:
 		PrimaryEffect.DAMAGE:
-			target.apply_damage(calculate_primary_effect_amount(caster))
+			defeated_target = target.apply_damage(calculate_primary_effect_amount(caster))
 		PrimaryEffect.HEAL:
 			target.heal(calculate_primary_effect_amount(caster))
 		PrimaryEffect.CLEANSE:
 			target.remove_negative_statuses()
 	if status_effect != null and is_instance_valid(target) and target.current_health > 0:
 		target.apply_status(status_effect, self, caster)
+	return defeated_target
+
+
+func get_on_kill_status_applications() -> int:
+	return maxi(1, on_kill_status_stacks)
+
+
+func apply_on_kill_status(caster: Variant) -> void:
+	if on_kill_status == null:
+		return
+	for _application in range(get_on_kill_status_applications()):
+		if not is_instance_valid(caster) or caster.current_health <= 0:
+			break
+		caster.apply_status(on_kill_status, self, caster)
 
 
 ## Side-effect-free primary-effect prediction shared by every tactical AI path.
@@ -600,6 +623,10 @@ func get_description(caster: TacticalCharacter = null) -> String:
 		var weapon_status_description := get_weapon_status_description(caster)
 		if not weapon_status_description.is_empty():
 			effect_descriptions.append(weapon_status_description)
+	if on_kill_status != null:
+		effect_descriptions.append("On kill: caster gains %s ×%d (%s)" % [
+			on_kill_status.display_name, get_on_kill_status_applications(), on_kill_status.get_description()
+		])
 	var delivery := "Cast"
 	match delivery_type:
 		DeliveryType.PROJECTILE:

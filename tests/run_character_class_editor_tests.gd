@@ -67,6 +67,19 @@ func _run() -> void:
 	EditorInterface.edit_resource(strike)
 	await _frames()
 	_check(_property("allow_unarmed_for_friendlies") != null and strike.allow_unarmed_for_friendlies, "Strike Inspector exposes its opt-in unarmed friendly setting")
+	var bloodlust := (load("res://resources/abilities/bloodlust.tres") as AbilityDefinition).duplicate() as AbilityDefinition
+	EditorInterface.edit_resource(bloodlust)
+	await _frames()
+	_check(_property("on_kill_status") != null and _property("on_kill_status_stacks") != null, "Ability Inspector exposes reusable on-kill reward fields")
+	if _property("on_kill_status_stacks") != null:
+		_property("on_kill_status_stacks").emit_changed("on_kill_status_stacks", 3)
+		await _frames()
+		_check(bloodlust.on_kill_status_stacks == 3, "Inspector edits reward stack count")
+	var ability_path := "res://.godot/class_validation/editor_bloodlust_%d.tres" % Time.get_ticks_usec()
+	DirAccess.make_dir_recursive_absolute(ability_path.get_base_dir())
+	_check(ResourceSaver.save(bloodlust, ability_path) == OK, "Inspector reward configuration saves")
+	var restored_ability := ResourceLoader.load(ability_path, "", ResourceLoader.CACHE_MODE_IGNORE) as AbilityDefinition
+	_check(restored_ability.on_kill_status_stacks == 3 and restored_ability.on_kill_status == load("res://resources/statuses/strength_up.tres"), "Inspector reward resource and count survive reload")
 	var path := "res://.godot/class_validation/editor_allocation_%d.tres" % Time.get_ticks_usec()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
 	_check(ResourceSaver.save(allocation, path) == OK, "Allocation and inline class save")

@@ -1,9 +1,10 @@
 # Warrior abilities
 
-Warrior class unlocks are authored in `resources/classes/warrior.tres`. Raise a friendly's Warrior level through the Inspector or the battle developer panel to unlock the abilities. Charge unlocks at level 2. Strike is a basic attack available to every friendly class when unarmed or equipped with a melee weapon; it has no level requirement.
+Warrior class unlocks are authored in `resources/classes/warrior.tres`. Raise a friendly's Warrior level through the Inspector or the battle developer panel to unlock the abilities. Charge and Bloodlust unlock at level 2, in that order. Strike is a basic attack available to every friendly class when unarmed or equipped with a melee weapon; it has no level requirement.
 
 | Level | Ability | Damage and targeting |
 |---|---|---|
+| 2 | Bloodlust | Weapon damage + 100% effective Strength to one adjacent enemy. A kill grants the caster Strength Up ×2 until battle end. |
 | 3 | Battle Stomp | Weapon damage + 100% effective Strength against every enemy within 1.5 grid units of the caster. |
 | 4 | Taunt | Applies Taunted to enemies within 1.5 grid units, through the end of their next turn. Works without a weapon. |
 | 5 | Multi Attack | Two separate melee hits on the same enemy, each dealing weapon damage + 50% effective Strength. Range matches Strike (1.414). |
@@ -14,6 +15,16 @@ Warrior class unlocks are authored in `resources/classes/warrior.tres`. Raise a 
 All three abilities spend one normal ability action and no movement points. Stomp and Multi Attack require a melee weapon. There are no additional cooldowns or resource costs. Stomp does not stun; Taunt causes no damage or stun.
 
 Counter and Swipe also spend one normal ability action, with no movement cost or cooldown. Counter works with any equipment, including unarmed; Swipe requires a melee weapon.
+
+## Bloodlust
+
+Bloodlust requires a melee weapon and spends one ability action, with no movement cost or cooldown. Select one enemy within range 1.414, including diagonals subject to normal wall and corner blocking. Self, allies, and empty cells are invalid. Weapon reach bonuses do not extend it. The hit uses normal weapon damage, effective Strength, passive weapon bonuses, armor, and melee presentation. A surviving target receives weapon statuses and can Counter normally.
+
+An actual defeat from the ability's direct damage grants the living caster two applications of the existing Strength Up status. Each stack adds +1 Strength until battle ends, without a cap; an existing three stacks become five. The reward arrives after damage, before reactions and cast completion. Reassemble collapse is not a defeat; destroying the bone pile qualifies. Later damage over time, knockback collision damage, and separate Counter or opportunity attacks do not inherit Bloodlust's reward.
+
+AI forecasts apply the same stacks to the caster's simulated state and include their utility. Later hits or recipients of another ability configured with this reward use the increased simulated Strength. Runtime and scenario saves preserve the stack count and source. The existing status icon displays the count, Cleanse preserves it, and combat finalization removes all battle-only stacks after resolution, including rewards from killing the final enemy.
+
+The reusable `AbilityDefinition.on_kill_status` property defaults to null; `on_kill_status_stacks` defaults to 1. Set these in the Inspector on any ability to grant a caster status once per directly defeated recipient per cast, including primary and additional `DamageEffectDefinition` damage. Nonstacking statuses use their normal refresh behavior. Ordinary on-hit statuses remain independent. `TacticalCharacter.apply_damage()` and `AbilityDefinition.apply_primary_effect()` now return whether their damage actually caused defeat; callers that do not need the result can continue ignoring it. The executor uses this result even when defeat callbacks remove the target. No save schema changes are required.
 
 ## Counter
 
@@ -70,6 +81,12 @@ Swipe adds the appended `AbilityDefinition.Shape.LINE_IN_FRONT` value. `area_of_
 Statuses now optionally reference `granted_passive` (default null) and set `expires_at_turn_start` (default false). With turn-start expiry enabled, `duration_turns` counts owner turn starts. Existing statuses retain their turn-end behavior. Counter uses `CounterPassiveEffect`; its resource and inline developer-save forms are supported. `AbilityExecutor.execute_counter_attack()` is the resource-free, non-chaining reaction entry point; `resolution_finished` signals completion of the outer cast and all reactions.
 
 ## Verification
+
+Run `godot --headless --path . --script res://tests/run_bloodlust_tests.gd` for Bloodlust unlocks, targeting, equipment, armor, lethal outcomes, stack accumulation, target removal, Reassemble, reusable area/multi-hit rewards, AI agreement, Counter and damage-over-time exclusions, saves, UI, and battle cleanup. For a rendered check, omit `--headless`, add `--rendering-method gl_compatibility`, and append `-- --capture`; the screenshot is saved under `.godot/bloodlust_validation/`.
+
+Bloodlust validation on Godot 4.7.1 passes 198 headless checks and 199 rendered checks. Warrior (81), equipment/ability (498), Counter/Swipe (222), Ram (956), stackable-status (201), Reassemble (78), passive (83), class, active-AI integration, run-state, and class-reference (148) checks pass. The class Inspector verifies editing and saving both reward properties; the workbook exporter and read-only freshness checks pass, and the generated Warrior sheet was visually reviewed.
+
+The armor suite passes all 120 assertions but this working checkout exits with `0xc0000005` afterward. Both an isolated pre-change copy and the same isolated copy with the changed runtime/resources pass and exit normally. The passive suite also had one shutdown crash after passing, then exited normally on a separate rerun. Class Inspector checks retain the previously documented shutdown allocation warnings. These process-exit limitations are separate from the passing assertions.
 
 Run `godot --headless --path . --script res://tests/run_ram_tests.gd` for Ram resources, all four directions, collisions, equipment and damage rules, forced movement, Counter interactions, save round trips, AI forecasts, and real battle UI checks. A rendered run with `-- --capture` saves a preview under `.godot/ram_validation/`.
 

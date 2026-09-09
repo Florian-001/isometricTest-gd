@@ -25,7 +25,8 @@ func _init() -> void:
 
 func calculate_amount(
 	caster: TacticalCharacter,
-	source_ability: AbilityDefinition = null
+	source_ability: AbilityDefinition = null,
+	snapshot: AIBoardSnapshot = null
 ) -> int:
 	var weapon_rule := DamageCalculator.USE_DAMAGE_TYPE_WEAPON_RULE
 	if source_ability != null:
@@ -36,7 +37,8 @@ func calculate_amount(
 		innate_damage,
 		scaling_stat,
 		scaling_percentage,
-		weapon_rule
+		weapon_rule,
+		snapshot.get_effective_stat(caster, scaling_stat) if snapshot != null and scaling_stat != UnitStat.Type.NONE else NAN
 	)
 
 
@@ -74,10 +76,11 @@ func estimate_for_ability(
 	simulated_health: int,
 	source_ability: AbilityDefinition,
 	passive_bonus: int = 0,
-	simulated_armor: int = -1
+	simulated_armor: int = -1,
+	snapshot: AIBoardSnapshot = null
 ) -> Dictionary:
 	var armor := simulated_armor if simulated_armor >= 0 else (target.current_armor if is_instance_valid(target) else 0)
-	var result := DamageCalculator.resolve_damage(calculate_amount(caster, source_ability) + passive_bonus, simulated_health, armor)
+	var result := DamageCalculator.resolve_damage(calculate_amount(caster, source_ability, snapshot) + passive_bonus, simulated_health, armor)
 	result.utility_hint = ai_utility_hint
 	return result
 

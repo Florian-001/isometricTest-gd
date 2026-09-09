@@ -38,7 +38,7 @@ func _run() -> void:
 
 func _test_unlocks_and_isolation() -> void:
 	var expected := {
-		"warrior": ["Strike", "Charge", "Battle Stomp", "Taunt", "Multi Attack", "Counter", "Swipe", "Ram"], "archer": ["Strike", "Focus", "Multiple Arrows", "Dagger Throw"],
+		"warrior": ["Strike", "Charge", "Bloodlust", "Battle Stomp", "Taunt", "Multi Attack", "Counter", "Swipe", "Ram"], "archer": ["Strike", "Focus", "Multiple Arrows", "Dagger Throw"],
 		"wizard": ["Strike", "Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam"],
 		"cleric": ["Strike", "Heal", "Beam", "Focus", "Empower", "Cleanse"],
 	}
@@ -50,6 +50,8 @@ func _test_unlocks_and_isolation() -> void:
 		for level in range(1, expected[id].size() + 1):
 			_check(unit.set_class_level(_classes[id], level), "%s level can be edited" % id)
 			var count: int = mini(level + 2, 6) if id == "cleric" else level + 1 if id == "wizard" else level
+			if id == "warrior" and level >= 2:
+				count += 1
 			_check(_names(unit) == expected[id].slice(0, count), "%s level %d unlock boundary" % [id, level])
 		unit.set_class_level(_classes[id], 150)
 		_check(_names(unit) == expected[id], "levels beyond last unlock remain valid")
@@ -59,7 +61,7 @@ func _test_unlocks_and_isolation() -> void:
 	var second := scene.instantiate() as TacticalCharacter
 	first.set_class_level(_classes.warrior, 2)
 	first.set_class_level(_classes.wizard, 1)
-	_check(first.get_character_level() == 3 and _names(first) == ["Strike", "Charge", "Ice Shard"], "Warrior 2 / Wizard 1 resolves separate class levels")
+	_check(first.get_character_level() == 3 and _names(first) == ["Strike", "Charge", "Bloodlust", "Ice Shard"], "Warrior 2 / Wizard 1 resolves separate class levels")
 	_check(second.get_character_level() == 1 and _names(second) == ["Strike"], "scene instances do not share mutable class levels")
 	var snapshot := first.get_class_levels()
 	snapshot[0].level = 50

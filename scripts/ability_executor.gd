@@ -480,8 +480,10 @@ func _apply_effects(
 			and PassiveAbilityResolver.has_counter(recipient) and not reaction_context.defenders.has(recipient)):
 			reaction_context.defenders.append(recipient)
 		var bonus_pending := ability.effect != AbilityDefinition.PrimaryEffect.DAMAGE
+		var recipient_id := recipient.get_instance_id()
 		if ability.has_primary_effect() and recipient.current_health > 0:
-			ability.apply_primary_effect(caster, recipient)
+			if ability.apply_primary_effect(caster, recipient):
+				_apply_kill_reward(caster, ability, recipient_id, reaction_context, units)
 		for additional_effect in ability.effects:
 			if not is_instance_valid(caster):
 				break
@@ -494,11 +496,24 @@ func _apply_effects(
 				elif additional_effect is DamageEffectDefinition:
 					var bonus := ability.get_passive_damage_bonus(caster) if bonus_pending else 0
 					bonus_pending = false
-					recipient.apply_damage(additional_effect.calculate_amount(caster, ability) + bonus)
+					if recipient.apply_damage(additional_effect.calculate_amount(caster, ability) + bonus):
+						_apply_kill_reward(caster, ability, recipient_id, reaction_context, units)
 				else:
 					await additional_effect.apply(caster, recipient, ability)
 		if is_instance_valid(caster) and is_instance_valid(recipient) and recipient.current_health > 0 and units.has(recipient):
 			ability.apply_weapon_status(caster, recipient)
+
+
+func _apply_kill_reward(caster: Variant, ability: AbilityDefinition, recipient_id: int,
+	context: Dictionary, units: Array[TacticalCharacter]) -> void:
+	if ability.on_kill_status == null or not _is_present_living(caster, units):
+		return
+	if not context.has("rewarded_defeats"):
+		context.rewarded_defeats = {}
+	if context.rewarded_defeats.has(recipient_id):
+		return
+	context.rewarded_defeats[recipient_id] = true
+	ability.apply_on_kill_status(caster)
 
 
 func _is_present_living(unit: Variant, units: Array[TacticalCharacter]) -> bool:

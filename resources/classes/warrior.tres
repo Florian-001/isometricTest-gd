@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="CharacterClassDefinition" format=3 uid="uid://1b2lkaipypt5"]
 
 [ext_resource type="Resource" path="res://resources/abilities/charge.tres" id="ability_1"]
+[ext_resource type="Resource" path="res://resources/abilities/bloodlust.tres" id="bloodlust"]
 [ext_resource type="Resource" path="res://resources/abilities/battle_stomp.tres" id="ability_2"]
 [ext_resource type="Resource" path="res://resources/abilities/taunt.tres" id="ability_3"]
 [ext_resource type="Resource" path="res://resources/abilities/multi_attack.tres" id="ability_4"]
@@ -19,6 +20,11 @@ required_level = 2
 script = ExtResource("unlock")
 ability = ExtResource("ability_2")
 required_level = 3
+
+[sub_resource type="Resource" id="Unlock_Bloodlust"]
+script = ExtResource("unlock")
+ability = ExtResource("bloodlust")
+required_level = 2
 
 [sub_resource type="Resource" id="Unlock_3"]
 script = ExtResource("unlock")
@@ -49,4 +55,4 @@ required_level = 8
 script = ExtResource("class")
 class_id = &"warrior"
 display_name = "Warrior"
-ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("Unlock_3"), SubResource("Unlock_4"), SubResource("Unlock_5"), SubResource("Unlock_6"), SubResource("Unlock_7")])
+ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_1"), SubResource("Unlock_Bloodlust"), SubResource("Unlock_2"), SubResource("Unlock_3"), SubResource("Unlock_4"), SubResource("Unlock_5"), SubResource("Unlock_6"), SubResource("Unlock_7")])

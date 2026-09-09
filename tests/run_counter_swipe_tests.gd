@@ -475,7 +475,7 @@ func _test_battle_ui() -> void:
 			actor.set_class_level(entry.character_class, 0)
 	actor.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/weapons/iron_sword.tres"))
 	battle._refresh_ability_bar()
-	check(battle.ability_bar.get_node("Margin/HBox").get_child_count() == 7, "battle bar shows seven warrior skills")
+	check(battle.ability_bar.get_node("Margin/HBox").get_child_count() == 8, "battle bar shows eight warrior skills")
 	battle._on_ability_selected(counter)
 	check(battle._ability_target_cells.keys() == [actor.grid_cell], "Counter has self confirmation")
 	battle._cancel_ability_targeting()
@@ -492,7 +492,7 @@ func _test_battle_ui() -> void:
 	var cells := battle._ability_targeting.get_affected_cells(actor.grid_cell, Vector2i(5, 4), swipe, battle._get_wall_cells())
 	check(battle.grid._ability_area_cells == cells and cells.size() == 3, "Swipe hover matches runtime geometry")
 	var buttons := battle.ability_bar.get_node("Margin/HBox")
-	check((buttons.get_child(5) as Button).tooltip_text.contains("next turn start") and (buttons.get_child(6) as Button).tooltip_text.contains("3-cell row"), "new tooltips explain timing and geometry")
+	check((buttons.get_child(6) as Button).tooltip_text.contains("next turn start") and (buttons.get_child(7) as Button).tooltip_text.contains("3-cell row"), "new tooltips explain timing and geometry")
 	await _capture("swipe_and_counter")
 	battle._cancel_ability_targeting()
 	# A lethal counter must not start the next turn while the defender returns from its lunge.

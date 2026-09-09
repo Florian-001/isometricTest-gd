@@ -136,7 +136,7 @@ func _test_bite() -> void:
 	field.add_child(target)
 	target.initialize(grid)
 	var bite := load("res://resources/abilities/bite.tres") as AbilityDefinition
-	var teeth := load("res://resources/items/rat_teeth.tres") as ItemDefinition
+	var teeth := load("res://resources/items/weapons/rat_teeth.tres") as ItemDefinition
 	_check(teeth.weapon_damage == 5 and teeth.modifiers.is_empty(), "Rat Teeth provide 5 weapon damage and no stat modifiers")
 	_check(bite.calculate_damage(rat) == 5, "Bite previews exactly 5 damage")
 	rat.set_dev_stat_override(UnitStat.Type.STRENGTH, 99.0)
@@ -172,7 +172,7 @@ func _test_palette_save_and_template() -> void:
 	var rat_scene := load(RAT) as PackedScene
 	_check(catalog.unit_scenes.has(rat_scene), "Developer unit palette contains Rat")
 	_check(catalog.abilities.has(load("res://resources/abilities/bite.tres")), "Developer ability catalog contains Bite")
-	_check(catalog.items.has(load("res://resources/items/rat_teeth.tres")), "Developer item catalog contains Rat Teeth")
+	_check(catalog.items.has(load("res://resources/items/weapons/rat_teeth.tres")), "Developer item catalog contains Rat Teeth")
 	var authored := load("res://resources/maps/goblin_skirmish.tres") as BattleMapDefinition
 	var battle := _battle(authored)
 	_check(battle.initialization_succeeded, "Existing authored battle loads")

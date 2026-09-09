@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/enemy_definition.gd" id="script"]
 [ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="ai"]
 [ext_resource type="Script" path="res://scripts/item_definition.gd" id="item_type"]
-[ext_resource type="Resource" path="res://resources/items/rat_teeth.tres" id="teeth"]
+[ext_resource type="Resource" path="res://resources/items/weapons/rat_teeth.tres" id="teeth"]
 [ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability_type"]
 [ext_resource type="Resource" path="res://resources/abilities/bite.tres" id="bite"]
 

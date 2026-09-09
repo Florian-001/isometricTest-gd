@@ -5,7 +5,7 @@
 [ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="3_ai"]
 [ext_resource type="Resource" uid="uid://ypvhtrfkl6un" path="res://resources/abilities/strike.tres" id="4_strike"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="5_item_type"]
-[ext_resource type="Resource" uid="uid://iugc2d6vvdp6" path="res://resources/items/wolf_claws.tres" id="6_claws"]
+[ext_resource type="Resource" uid="uid://iugc2d6vvdp6" path="res://resources/items/weapons/wolf_claws.tres" id="6_claws"]
 
 [ext_resource type="Script" path="res://scripts/passive_ability_definition.gd" id="passive_type"]
 [ext_resource type="Resource" path="res://resources/passives/pack_tactics.tres" id="pack"]

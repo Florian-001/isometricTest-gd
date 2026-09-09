@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="1_actor"]
 [ext_resource type="Resource" uid="uid://b4os1tck6c5md" path="res://resources/enemies/goblin_warrior.tres" id="2_definition"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
-[ext_resource type="Resource" uid="uid://xt3bbbhxvacu" path="res://resources/items/goblin_club.tres" id="4_club"]
+[ext_resource type="Resource" uid="uid://xt3bbbhxvacu" path="res://resources/items/weapons/goblin_club.tres" id="4_club"]
 [ext_resource type="Texture2D" path="res://assets/characters/goblin_clubber_left.png" id="5_left"]
 [ext_resource type="Texture2D" path="res://assets/characters/goblin_clubber_right.png" id="6_right"]
 [ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="7_name_label"]

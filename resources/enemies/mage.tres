@@ -8,7 +8,7 @@
 [ext_resource type="Resource" uid="uid://fbimwcq8pc21" path="res://resources/abilities/ice_shard.tres" id="6_ice_shard"]
 [ext_resource type="Resource" uid="uid://7wlmmxsy6gcc" path="res://resources/abilities/heal.tres" id="7_heal"]
 [ext_resource type="Resource" uid="uid://opj3rm2mkqq2" path="res://resources/abilities/slow.tres" id="8_slow"]
-[ext_resource type="Resource" uid="uid://rp1xdm4agyqo" path="res://resources/items/mage_staff.tres" id="9_staff"]
+[ext_resource type="Resource" uid="uid://rp1xdm4agyqo" path="res://resources/items/weapons/mage_staff.tres" id="9_staff"]
 
 [resource]
 script = ExtResource("1_enemy")

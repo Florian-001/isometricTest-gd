@@ -48,7 +48,7 @@ func _test_content_and_isolation() -> void:
 	for ability in abilities:
 		check(ability.calculate_damage(a) == 8, "%s previews eight damage" % ability.display_name)
 	var tusks := a.get_equipped_weapon()
-	check(a.get_equipped_items().size() == 1 and tusks == load("res://resources/items/boar_tusks.tres"), "Boar starts with only its Tusks")
+	check(a.get_equipped_items().size() == 1 and tusks == load("res://resources/items/weapons/boar_tusks.tres"), "Boar starts with only its Tusks")
 	check(tusks.weapon_damage == 6 and tusks.weapon_type == ItemDefinition.WeaponType.MELEE and tusks.modifiers.is_empty() and tusks.status_effect == null and tusks.icon != null, "Tusks provide six melee damage and an icon, with no modifiers or statuses")
 	check(a._get_configuration_warnings().is_empty() and a.has_node("UnitNameLabel"), "scene has standard presentation and no configuration warnings")
 	for facing in [TacticalCharacter.Facing.LEFT, TacticalCharacter.Facing.RIGHT]:
@@ -191,7 +191,7 @@ func _dispose(battle: TacticalBattle) -> void:
 func _test_palette_and_saves() -> void:
 	var scene := load(SCENE) as PackedScene
 	var catalog := load("res://resources/dev_tool_catalog.tres") as DevToolCatalog
-	check(catalog.unit_scenes.back() == scene and catalog.items.back() == load("res://resources/items/boar_tusks.tres"), "Boar and Tusks append to their developer catalogs")
+	check(catalog.unit_scenes.back() == scene and catalog.items.back() == load("res://resources/items/weapons/boar_tusks.tres"), "Boar and Tusks append to their developer catalogs")
 	var demo := load("res://resources/maps/spawn_template_demo.tres") as BattleMapTemplateDefinition
 	check(not demo.enemy_pool.has(scene), "Boar is opt-in for existing encounter pools")
 	var battle := _battle()
@@ -223,7 +223,7 @@ func _test_palette_and_saves() -> void:
 		boar = _find(battle, id)
 		check(boar != null and boar.current_health == 19 and boar.max_health == 24, "checkpoint restores current and maximum health")
 		check(boar.grid_cell == Vector2i(0, 0) and boar.current_facing == TacticalCharacter.Facing.RIGHT, "checkpoint restores position and facing")
-		check(boar.get_equipped_weapon() == load("res://resources/items/boar_tusks.tres") and boar.get_abilities().size() == 2 and boar.get_abilities()[0].calculate_damage(boar) == 8, "checkpoint restores equipment and both attacks")
+		check(boar.get_equipped_weapon() == load("res://resources/items/weapons/boar_tusks.tres") and boar.get_abilities().size() == 2 and boar.get_abilities()[0].calculate_damage(boar) == 8, "checkpoint restores equipment and both attacks")
 		check(not boar.override_template_abilities and not boar.override_template_passives and boar.get_passive_abilities().is_empty(), "checkpoint preserves inherited loadouts")
 		_dispose(battle)
 		await process_frame

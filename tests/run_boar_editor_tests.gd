@@ -52,7 +52,7 @@ func _run() -> void:
 	check(ResourceSaver.save(edited, path) == OK, "Inspector-edited definition saves")
 	var reloaded := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as EnemyDefinition
 	check(reloaded.max_health == 24 and reloaded.abilities == original.abilities and reloaded.starting_equipment == original.starting_equipment, "Inspector resource reload preserves stats and shared loadout references")
-	var tusks := (load("res://resources/items/boar_tusks.tres") as ItemDefinition).duplicate() as ItemDefinition
+	var tusks := (load("res://resources/items/weapons/boar_tusks.tres") as ItemDefinition).duplicate() as ItemDefinition
 	EditorInterface.edit_resource(tusks)
 	await _frames(6)
 	for field in inspector.find_children("*", "EditorProperty", true, false):

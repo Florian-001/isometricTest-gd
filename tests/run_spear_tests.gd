@@ -1,10 +1,10 @@
 extends SceneTree
 
 const CAPTURE_DIR := "res://.godot/spear_validation"
-var spear: ItemDefinition = load("res://resources/items/spear.tres")
-var long_sword: ItemDefinition = load("res://resources/items/long_sword.tres")
-var sword: ItemDefinition = load("res://resources/items/iron_sword.tres")
-var shield: ItemDefinition = load("res://resources/items/wooden_shield.tres")
+var spear: ItemDefinition = load("res://resources/items/weapons/spear.tres")
+var long_sword: ItemDefinition = load("res://resources/items/weapons/long_sword.tres")
+var sword: ItemDefinition = load("res://resources/items/weapons/iron_sword.tres")
+var shield: ItemDefinition = load("res://resources/items/offhand/wooden_shield.tres")
 var strike: AbilityDefinition = load("res://resources/abilities/strike.tres")
 var arena: Node2D
 var grid: IsometricGrid
@@ -109,7 +109,7 @@ func _test_range_resolution() -> void:
 	caster.equip_item(spear)
 	caster.equip_item(shield)
 	check(caster.get_equipped_weapon() == null and is_equal_approx(strike.get_effective_range(caster), 1.414), "offhand conflict removes spear bonus")
-	caster.equip_item(load("res://resources/items/ranger_bow.tres"))
+	caster.equip_item(load("res://resources/items/weapons/ranger_bow.tres"))
 	check(strike.get_weapon_range_bonus(caster) == 0.0, "incompatible weapon gives no range bonus")
 	caster.equip_item(spear)
 	var pack := GeneralInventory.new()

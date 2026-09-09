@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://jl3xsuuvv3c0" path="res://scripts/initiative_actor.gd" id="1_actor"]
 [ext_resource type="Resource" uid="uid://clbeyhlog2wbi" path="res://resources/friendly_spellcaster.tres" id="2_definition"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
-[ext_resource type="Resource" path="res://resources/items/frost_bow.tres" id="4_frost_bow"]
+[ext_resource type="Resource" path="res://resources/items/weapons/frost_bow.tres" id="4_frost_bow"]
 [ext_resource type="Texture2D" uid="uid://c082bqueuw1he" path="res://assets/characters/friendly_frost_archer_left.png" id="5_left"]
 [ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="5_sr6f5"]
 [ext_resource type="Texture2D" uid="uid://btndwhb2nhu80" path="res://assets/characters/friendly_frost_archer_right.png" id="6_right"]

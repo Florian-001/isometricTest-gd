@@ -114,7 +114,7 @@ func _run() -> void:
 	check(friendly.current_health == 48, "interrupted battle restores entry health")
 	friendly.apply_damage(7)
 	# Equip a reward through the existing inventory API, then keep it across rooms.
-	var armor := load("res://resources/items/ranger_armor.tres") as ItemDefinition
+	var armor := load("res://resources/items/armor/ranger_armor.tres") as ItemDefinition
 	battle.general_inventory.add_item(armor)
 	battle.inventory_button.button_pressed = true
 	await frames(2)

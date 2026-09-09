@@ -334,7 +334,7 @@ func _test_ranged_taunt() -> void:
 	var shot := load("res://resources/abilities/arrow.tres") as AbilityDefinition
 	var enemy := _unit(false, Vector2i(2, 3), [shot])
 	_unit(true, Vector2i(2, 4)).current_health = 1
-	enemy.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/goblin_bow.tres"))
+	enemy.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/weapons/goblin_bow.tres"))
 	enemy.apply_status(taunted, taunt, source)
 	var plan := _plan(enemy)
 	check(plan.ability == shot and plan.target_cell == source.grid_cell, "ranged enemy attacks taunter instead of adjacent decoy")
@@ -377,7 +377,7 @@ func _test_battle_ui() -> void:
 	for entry in actor.get_class_levels():
 		if entry.character_class.class_id != &"warrior":
 			actor.set_class_level(entry.character_class, 0)
-	actor.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/iron_sword.tres"))
+	actor.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/weapons/iron_sword.tres"))
 	battle._refresh_ability_bar()
 	check(battle.ability_bar.get_node("Margin/HBox").get_child_count() == 5, "battle bar displays five warrior unlocks")
 	battle._on_ability_selected(stomp)

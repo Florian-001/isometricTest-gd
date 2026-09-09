@@ -151,7 +151,7 @@ func _test_execution() -> void:
 	caster.starting_grid_cell = Vector2i(1, 1)
 	world.add_child(caster)
 	caster.initialize(grid)
-	caster.equip_item(load("res://resources/items/iron_sword.tres"))
+	caster.equip_item(load("res://resources/items/weapons/iron_sword.tres"))
 	var enemy := (load("res://scenes/enemies/goblin_warrior.tscn") as PackedScene).instantiate() as TacticalCharacter
 	enemy.starting_grid_cell = Vector2i(3, 1)
 	world.add_child(enemy)
@@ -169,7 +169,7 @@ func _test_execution() -> void:
 	_check(OpportunityAttackSystem.get_opportunity_attack_ability(caster).display_name == "Strike", "equipment-derived Strike enables opportunity attacks")
 	caster.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
 	_check(not executor.can_execute(caster, charge, enemy.grid_cell, units, grid, targeting), "class unlocks still require matching equipment")
-	caster.equip_item(load("res://resources/items/iron_sword.tres"))
+	caster.equip_item(load("res://resources/items/weapons/iron_sword.tres"))
 	caster.set_class_level(_classes.warrior, 1)
 	caster.set_dev_ability_loadout([charge])
 	_check(await executor.execute(caster, charge, enemy.grid_cell, units, grid, targeting), "explicit developer bypass executes locked class ability")

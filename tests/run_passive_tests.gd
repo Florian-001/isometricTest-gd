@@ -113,7 +113,7 @@ func _unit(friendly: bool, cell: Vector2i, passives: Array[PassiveAbilityDefinit
 	unit.starting_grid_cell = cell
 	unit.movement_animation_speed = 10000
 	unit.use_complete_equipment_override = true
-	unit.complete_equipment_overrides = [load("res://resources/items/bat_fangs.tres")]
+	unit.complete_equipment_overrides = [load("res://resources/items/weapons/bat_fangs.tres")]
 	unit.override_template_abilities = true
 	arena.add_child(unit)
 	unit.initialize(grid)
@@ -194,7 +194,7 @@ func _test_damage() -> void:
 	check(target.current_health - snapshot.get_health(target) == 11, "AI multi-effect forecast matches runtime")
 	var ranged := bite.duplicate(true) as AbilityDefinition
 	ranged.ability_type = AbilityDefinition.AbilityType.RANGED
-	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/goblin_bow.tres"))
+	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/weapons/goblin_bow.tres"))
 	check(ranged.calculate_damage(caster) == caster.get_weapon_damage() + 1, "ranged weapon damage includes pack")
 	caster.ability_overrides = [ranged]
 	snapshot = AIBoardSnapshot.from_battle(units, grid.grid_size)
@@ -211,7 +211,7 @@ func _test_damage() -> void:
 	spell.effect = AbilityDefinition.PrimaryEffect.HEAL
 	spell.effect_amount = 7
 	check(spell.calculate_primary_effect_amount(caster) == 7, "healing receives no pack bonus")
-	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/bat_fangs.tres"))
+	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/weapons/bat_fangs.tres"))
 	var charge := (load("res://resources/abilities/charge.tres") as AbilityDefinition).duplicate(true) as AbilityDefinition
 	charge.delivery_type = AbilityDefinition.DeliveryType.CAST_ON_TARGET
 	caster.ability_overrides = [charge]

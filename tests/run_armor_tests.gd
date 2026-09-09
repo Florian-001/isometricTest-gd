@@ -5,7 +5,7 @@ var checks := 0
 var failures: Array[String] = []
 var arena: Node2D
 var grid: IsometricGrid
-var shield: ItemDefinition = load("res://resources/items/wooden_shield.tres")
+var shield: ItemDefinition = load("res://resources/items/offhand/wooden_shield.tres")
 
 
 func _init() -> void:
@@ -231,7 +231,7 @@ func _test_ai() -> void:
 	check(snapshot.get_health(target) == target.current_health and snapshot.get_armor(target) == 0 and target.current_armor == 0, "healing estimates and runtime restore only HP")
 	# A normal weapon attack forecast also underlies opportunity reactions.
 	var strike := load("res://resources/abilities/strike.tres") as AbilityDefinition
-	var sword := load("res://resources/items/iron_sword.tres") as ItemDefinition
+	var sword := load("res://resources/items/weapons/iron_sword.tres") as ItemDefinition
 	caster.equip_item(sword)
 	caster.set_dev_ability_loadout([strike])
 	caster.reset_opportunity_reaction()

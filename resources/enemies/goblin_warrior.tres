@@ -5,7 +5,7 @@
 [ext_resource type="Resource" uid="uid://ypvhtrfkl6un" path="res://resources/abilities/strike.tres" id="2_fah5j"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="3_item_type"]
 [ext_resource type="Resource" uid="uid://c04280vi2qtp2" path="res://resources/ai/general_ai.tres" id="4_ai"]
-[ext_resource type="Resource" uid="uid://ctxelkvrg6cmy" path="res://resources/items/goblin_sword.tres" id="6_sword"]
+[ext_resource type="Resource" uid="uid://ctxelkvrg6cmy" path="res://resources/items/weapons/goblin_sword.tres" id="6_sword"]
 
 [resource]
 script = ExtResource("1_enemy")

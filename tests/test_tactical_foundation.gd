@@ -611,12 +611,12 @@ func test_inline_item_modifier_inspector_model_and_resources() -> void:
 	assert_true(property_source.contains("add_do_property") and property_source.contains("add_undo_property"), "inline field edits should participate in Inspector undo/redo")
 	assert_true(plugin_source.contains("ItemModifierInspector"), "the enabled editor plugin should register the modifier Inspector")
 
-	var iron_sword := load("res://resources/items/iron_sword.tres") as ItemDefinition
+	var iron_sword := load("res://resources/items/weapons/iron_sword.tres") as ItemDefinition
 	assert_eq(iron_sword.modifiers.size(), 1, "existing item modifier arrays should remain intact")
 	assert_eq(iron_sword.modifiers[0].stat, UnitStat.Type.STRENGTH, "Iron Sword should retain its Strength modifier")
 	assert_eq(iron_sword.modifiers[0].operation, StatModifierDefinition.Operation.FLAT, "Iron Sword should retain its Flat operation")
 	assert_true(is_equal_approx(iron_sword.modifiers[0].value, 2.0), "Iron Sword should retain its +2 value")
-	var goblin_club := load("res://resources/items/goblin_club.tres") as ItemDefinition
+	var goblin_club := load("res://resources/items/weapons/goblin_club.tres") as ItemDefinition
 	assert_eq(goblin_club.modifiers[0].stat, UnitStat.Type.SPEED, "Goblin Club should retain its Speed modifier")
 	assert_true(is_equal_approx(goblin_club.modifiers[0].value, -1.0), "Goblin Club should retain its negative value")
 
@@ -750,18 +750,18 @@ func test_sample_weapon_and_ability_type_migration() -> void:
 
 	var weapon_paths := {
 		ItemDefinition.WeaponType.MELEE: [
-			"res://resources/items/iron_sword.tres",
-			"res://resources/items/wooden_sword.tres",
-			"res://resources/items/goblin_sword.tres",
-			"res://resources/items/goblin_club.tres",
-			"res://resources/items/mage_staff.tres",
-			"res://resources/items/raider_weapon.tres",
-			"res://resources/items/wolf_claws.tres",
+			"res://resources/items/weapons/iron_sword.tres",
+			"res://resources/items/weapons/wooden_sword.tres",
+			"res://resources/items/weapons/goblin_sword.tres",
+			"res://resources/items/weapons/goblin_club.tres",
+			"res://resources/items/weapons/mage_staff.tres",
+			"res://resources/items/weapons/raider_weapon.tres",
+			"res://resources/items/weapons/wolf_claws.tres",
 		],
 		ItemDefinition.WeaponType.RANGED: [
-			"res://resources/items/ranger_bow.tres",
-			"res://resources/items/goblin_bow.tres",
-			"res://resources/items/frost_bow.tres",
+			"res://resources/items/weapons/ranger_bow.tres",
+			"res://resources/items/weapons/goblin_bow.tres",
+			"res://resources/items/weapons/frost_bow.tres",
 		],
 	}
 	for expected_type in weapon_paths:
@@ -796,9 +796,9 @@ func test_automatic_item_catalog_and_typed_array_editor_model() -> void:
 	external.display_name = "External Relic"
 	assert_eq(ItemCatalogScript.get_external_label(external), "External Relic (external)", "out-of-catalog selections should remain visible")
 
-	var iron_sword := load("res://resources/items/iron_sword.tres") as ItemDefinition
-	var frost_bow := load("res://resources/items/frost_bow.tres") as ItemDefinition
-	var ranger_bow := load("res://resources/items/ranger_bow.tres") as ItemDefinition
+	var iron_sword := load("res://resources/items/weapons/iron_sword.tres") as ItemDefinition
+	var frost_bow := load("res://resources/items/weapons/frost_bow.tres") as ItemDefinition
+	var ranger_bow := load("res://resources/items/weapons/ranger_bow.tres") as ItemDefinition
 	var initial: Array[ItemDefinition] = [iron_sword, null, frost_bow, frost_bow]
 	var selected := ItemArrayModelScript.replace_entry(initial, 1, ranger_bow)
 	assert_true(selected.is_typed(), "selector edits should preserve a typed array")
@@ -823,7 +823,7 @@ func test_automatic_item_catalog_and_typed_array_editor_model() -> void:
 
 
 func test_weapon_status_applies_to_every_surviving_weapon_damage_target() -> void:
-	var frost_bow := load("res://resources/items/frost_bow.tres") as ItemDefinition
+	var frost_bow := load("res://resources/items/weapons/frost_bow.tres") as ItemDefinition
 	var slow := load("res://resources/statuses/slow.tres") as StatusEffectDefinition
 	assert_eq(frost_bow.display_name, "Frost Bow", "Frost Bow should be reusable")
 	assert_eq(frost_bow.weapon_type, ItemDefinition.WeaponType.RANGED, "Frost Bow should be Ranged")
@@ -1535,7 +1535,7 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	bar.rebuild(unit, true)
 	assert_true(entries.get_child(0).disabled and entries.get_child(1).disabled, "developer overrides still require weapons")
 	assert_true(entries.get_child(0).tooltip_text.contains("Requires a Ranged weapon"), "disabled abilities explain equipment requirements")
-	unit.equip_item(load("res://resources/items/ranger_bow.tres"))
+	unit.equip_item(load("res://resources/items/weapons/ranger_bow.tres"))
 	bar.rebuild(unit, true)
 	assert_false(entries.get_child(0).disabled, "a matching Ranged weapon enables Arrow")
 	assert_true(entries.get_child(1).disabled, "a Ranged weapon leaves Strike unavailable")
@@ -1556,7 +1556,7 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	half_weapon_unit.definition = half_weapon_definition
 	half_weapon_unit.set_dev_ability_loadout(half_weapon_abilities)
 	half_weapon_unit._ready()
-	half_weapon_unit.equip_item(load("res://resources/items/frost_bow.tres") as ItemDefinition)
+	half_weapon_unit.equip_item(load("res://resources/items/weapons/frost_bow.tres") as ItemDefinition)
 	var half_weapon_bar = track(AbilityBarScene.instantiate())
 	half_weapon_bar.rebuild(half_weapon_unit, true)
 	var half_weapon_entries: HBoxContainer = half_weapon_bar.get_node("Margin/HBox")

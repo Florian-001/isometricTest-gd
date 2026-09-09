@@ -468,7 +468,7 @@ func _test_enemy_removal_and_save_round_trip() -> void:
 		button_active._set_runtime_grid_cell_immediate(Vector2i(0, 0))
 		button_active.apply_status(burning, null, button_enemy)
 		button_source.general_inventory.add_item(
-			load("res://resources/items/goblin_club.tres") as ItemDefinition
+			load("res://resources/items/weapons/goblin_club.tres") as ItemDefinition
 		)
 		button_source.turn_manager.round_number = 6
 		var button_enemy_id := button_enemy.scenario_unit_id
@@ -543,7 +543,7 @@ func _test_atomic_cross_map_load() -> void:
 		status_source
 	)
 	exact_source.general_inventory.add_item(
-		load("res://resources/items/goblin_club.tres") as ItemDefinition
+		load("res://resources/items/weapons/goblin_club.tres") as ItemDefinition
 	)
 	exact_source.turn_manager.round_number = 3
 	var active_id := active.scenario_unit_id

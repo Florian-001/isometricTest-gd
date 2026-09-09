@@ -212,7 +212,7 @@ func _test_multiple_arrows() -> void:
 	var ability := (load("res://resources/abilities/multiple_arrows.tres") as AbilityDefinition).duplicate(true)
 	ability.projectile_speed = 10000.0
 	caster.set_dev_ability_loadout([ability])
-	caster.equip_item(load("res://resources/items/ranger_bow.tres"))
+	caster.equip_item(load("res://resources/items/weapons/ranger_bow.tres"))
 	caster.reset_ability_action()
 	unit.apply_damage(unit.current_health - 1)
 	var executor := AbilityExecutor.new()

@@ -5,11 +5,11 @@ var inventory: GeneralInventory
 var screen: InventoryScreen
 var character: TacticalCharacter
 var other: TacticalCharacter
-var sword: ItemDefinition = load("res://resources/items/iron_sword.tres")
-var bow: ItemDefinition = load("res://resources/items/frost_bow.tres")
-var armor: ItemDefinition = load("res://resources/items/ranger_armor.tres")
-var charm: ItemDefinition = load("res://resources/items/sage_charm.tres")
-var shield: ItemDefinition = load("res://resources/items/wooden_shield.tres")
+var sword: ItemDefinition = load("res://resources/items/weapons/iron_sword.tres")
+var bow: ItemDefinition = load("res://resources/items/weapons/frost_bow.tres")
+var armor: ItemDefinition = load("res://resources/items/armor/ranger_armor.tres")
+var charm: ItemDefinition = load("res://resources/items/accessory/sage_charm.tres")
+var shield: ItemDefinition = load("res://resources/items/offhand/wooden_shield.tres")
 var _capture_directory: String = ""
 var _mouse_position := Vector2.ZERO
 var _mouse_down: bool = false
@@ -72,10 +72,10 @@ func _reset() -> void:
 
 
 func _test_model() -> void:
-	for file_name in DirAccess.get_files_at("res://resources/items"):
-		if file_name.ends_with(".tres"):
-			var item := load("res://resources/items/" + file_name) as ItemDefinition
-			_check(item != null and item.icon != null, file_name + " has assigned artwork")
+	var items := ItemDefinitionCatalog.get_items()
+	_check(items.size() == 20, "recursive item catalog includes all 20 resources")
+	for item in items:
+		_check(item.icon != null, item.resource_path.get_file() + " has assigned artwork")
 	_reset()
 	var config: Array[ItemDefinition] = [sword, null, sword]
 	inventory.initialize_starting_items(config)

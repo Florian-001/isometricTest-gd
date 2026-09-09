@@ -5,7 +5,7 @@
 [ext_resource type="Resource" uid="uid://ctr35lcl31o04" path="res://resources/abilities/enemy_slash.tres" id="3_slash"]
 [ext_resource type="Resource" uid="uid://b0ygs6jbuindl" path="res://resources/abilities/enemy_shot.tres" id="4_shot"]
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="5_item_type"]
-[ext_resource type="Resource" path="res://resources/items/raider_weapon.tres" id="6_weapon"]
+[ext_resource type="Resource" path="res://resources/items/weapons/raider_weapon.tres" id="6_weapon"]
 
 [resource]
 script = ExtResource("1_definition")

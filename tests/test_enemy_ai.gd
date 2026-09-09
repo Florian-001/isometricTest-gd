@@ -148,7 +148,7 @@ func test_planner_forecasts_primary_heal_and_slow_from_the_ability_api() -> void
 	assert_eq(lethal_estimate.health_delta, -27, "lethal Ice Shard forecasting should clamp damage to remaining health")
 	assert_true(is_zero_approx(lethal_estimate.utility_hint), "lethal damage should not forecast applying Slow afterward")
 
-	var frost_bow := load("res://resources/items/frost_bow.tres") as ItemDefinition
+	var frost_bow := load("res://resources/items/weapons/frost_bow.tres") as ItemDefinition
 	caster.equip_item(frost_bow)
 	var frost_arrow := AbilityDefinitionScript.new() as AbilityDefinition
 	frost_arrow.ability_type = AbilityDefinition.AbilityType.RANGED
@@ -1144,7 +1144,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 
 	var ranger_variant := track(TacticalCharacterScript.new()) as TacticalCharacter
 	ranger_variant.definition = ranger
-	var club := load("res://resources/items/goblin_club.tres") as ItemDefinition
+	var club := load("res://resources/items/weapons/goblin_club.tres") as ItemDefinition
 	var equipment_overrides: Array[ItemDefinition] = [club]
 	ranger_variant.starting_equipment_overrides = equipment_overrides
 	ranger_variant._ready()

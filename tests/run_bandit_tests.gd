@@ -66,7 +66,7 @@ func _test_enemy(entry: Dictionary) -> void:
 			var artwork := texture.get_image()
 			_check(artwork.detect_alpha() != Image.ALPHA_NONE and artwork.get_pixel(0, 0).a < 0.05, "%s artwork has a transparent background" % entry.id)
 	var weapon := actor.get_equipped_weapon()
-	_check(weapon == load("res://resources/items/%s.tres" % entry.weapon), "%s equips its authored weapon" % entry.id)
+	_check(weapon == load("res://resources/items/weapons/%s.tres" % entry.weapon), "%s equips its authored weapon" % entry.id)
 	_check(weapon.weapon_damage == entry.damage - 1 and weapon.weapon_type == entry.type and weapon.modifiers.is_empty() and weapon.status_effect == null, "%s weapon adds only its intended damage" % entry.id)
 	var attack := load("res://resources/abilities/%s.tres" % entry.attack) as AbilityDefinition
 	_check(actor.get_abilities() == [attack], "%s reuses its existing attack resource" % entry.id)
@@ -163,7 +163,7 @@ func _test_palette_and_scenarios() -> void:
 	for index in range(ENEMIES.size()):
 		var entry: Dictionary = ENEMIES[index]
 		_check(battle.dev_tool_catalog.unit_scenes.has(_scene(entry)), "Palette includes %s" % entry.id)
-		_check(battle.dev_tool_catalog.items.has(load("res://resources/items/%s.tres" % entry.weapon)), "Item catalog includes %s" % entry.weapon)
+		_check(battle.dev_tool_catalog.items.has(load("res://resources/items/weapons/%s.tres" % entry.weapon)), "Item catalog includes %s" % entry.weapon)
 		battle._add_dev_unit(_scene(entry), Vector2i(index, 0))
 		var actor := battle.dev_mode_panel.get_selected_unit()
 		_check(actor.scene_file_path == _scene(entry).resource_path and actor.current_health == entry.hp, "Palette spawns %s at full health" % entry.id)

@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/enemy_definition.gd" id="definition"]
 [ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="ai"]
 [ext_resource type="Script" path="res://scripts/item_definition.gd" id="item_type"]
-[ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="weapon"]
+[ext_resource type="Resource" path="res://resources/items/weapons/iron_sword.tres" id="weapon"]
 [ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability_type"]
 [ext_resource type="Resource" path="res://resources/abilities/strike.tres" id="attack"]
 

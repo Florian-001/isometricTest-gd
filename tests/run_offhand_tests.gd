@@ -2,11 +2,11 @@ extends SceneTree
 
 const WEAPON = ItemDefinition.EquipmentSlot.WEAPON
 const OFFHAND = ItemDefinition.EquipmentSlot.OFFHAND
-var sword: ItemDefinition = load("res://resources/items/iron_sword.tres")
-var shield: ItemDefinition = load("res://resources/items/wooden_shield.tres")
-var bow: ItemDefinition = load("res://resources/items/frost_bow.tres")
-var staff: ItemDefinition = load("res://resources/items/mage_staff.tres")
-var armor: ItemDefinition = load("res://resources/items/ranger_armor.tres")
+var sword: ItemDefinition = load("res://resources/items/weapons/iron_sword.tres")
+var shield: ItemDefinition = load("res://resources/items/offhand/wooden_shield.tres")
+var bow: ItemDefinition = load("res://resources/items/weapons/frost_bow.tres")
+var staff: ItemDefinition = load("res://resources/items/weapons/mage_staff.tres")
+var armor: ItemDefinition = load("res://resources/items/armor/ranger_armor.tres")
 var failures: Array[String] = []
 var checks := 0
 
@@ -46,10 +46,10 @@ func _test_resources() -> void:
 	_check(shield.slot == OFFHAND and shield.icon != null and shield.modifiers.size() == 1, "shield has offhand slot, artwork, and one modifier")
 	_check(shield.modifiers[0].stat == UnitStat.Type.CONSTITUTION and shield.modifiers[0].operation == StatModifierDefinition.Operation.FLAT and shield.modifiers[0].value == 3.0, "shield grants exactly flat +3 Constitution")
 	_check(shield.get_granted_abilities().is_empty(), "shield grants no weapon attacks")
-	for file in DirAccess.get_files_at("res://resources/items"):
-		if not file.ends_with(".tres"):
-			continue
-		var item := load("res://resources/items/" + file) as ItemDefinition
+	var items := ItemDefinitionCatalog.get_items()
+	_check(items.size() == 20, "recursive item catalog includes all 20 resources")
+	for item in items:
+		var file := item.resource_path.get_file()
 		_check(item.is_two_handed() == (file.ends_with("_bow.tres") or file in ["mage_staff.tres", "long_sword.tres", "spear.tres"]), "%s handedness" % file)
 	_check((load("res://resources/dev_tool_catalog.tres") as DevToolCatalog).items.has(shield), "shield available in developer catalog")
 	_check((load("res://resources/run/default_run.tres") as RunConfig).equipment_pool.has(shield), "shield available in merchant/reward pool")

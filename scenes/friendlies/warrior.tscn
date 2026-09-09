@@ -1,6 +1,6 @@
 [gd_scene format=3]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="base"]
-[ext_resource type="Resource" path="res://resources/items/iron_sword.tres" id="weapon"]
+[ext_resource type="Resource" path="res://resources/items/weapons/iron_sword.tres" id="weapon"]
 [ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
 [node name="Warrior" instance=ExtResource("base")]
 scenario_unit_id = "vanguard"

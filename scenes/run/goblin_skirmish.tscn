@@ -7,11 +7,11 @@
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="5_friend_a"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="6_friend_b"]
 [ext_resource type="Script"  path="res://scripts/ability_definition.gd" id="6_yfbn5"]
-[ext_resource type="Resource"  path="res://resources/items/goblin_bow.tres" id="7_04l5s"]
+[ext_resource type="Resource"  path="res://resources/items/weapons/goblin_bow.tres" id="7_04l5s"]
 [ext_resource type="Resource"  path="res://resources/abilities/arrow.tres" id="7_7gw14"]
 [ext_resource type="Script"  path="res://scripts/item_definition.gd" id="7_t7vv0"]
 [ext_resource type="PackedScene"  path="res://scenes/enemies/goblin_warrior.tscn" id="7_warrior"]
-[ext_resource type="Resource"  path="res://resources/items/iron_sword.tres" id="8_04l5s"]
+[ext_resource type="Resource"  path="res://resources/items/weapons/iron_sword.tres" id="8_04l5s"]
 [ext_resource type="Resource"  path="res://resources/abilities/strike.tres" id="11_6q8p0"]
 
 [ext_resource type="Script" path="res://scripts/run_spawn_point.gd" id="run_spawn"]

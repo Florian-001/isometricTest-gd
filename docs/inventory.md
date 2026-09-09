@@ -14,8 +14,15 @@ timer, the detail card, and the existing character stats and abilities panels.
   to 0.2 seconds.
 - `resources/ui/inventory_theme.tres` contains the shared panel, cell, focus,
   valid-drop, and invalid-drop styles.
-- Each resource in `resources/items` has an editable **Icon** assignment.
+- Item resources are grouped under `resources/items/weapons`, `resources/items/armor`,
+  `resources/items/offhand`, and `resources/items/accessory` by equipment slot.
+  The Inspector item catalog searches all four folders recursively.
+  Each resource has an editable **Icon** assignment.
   Unassigned icons use the five fallback texture fields on the inventory root.
+
+Saved runs and developer scenarios store item resource paths. Saves created before
+this folder reorganization are not migrated and may fail to load; start a new run
+or create a new scenario save to use the updated paths.
 
 Single-click selects a cell. Double-click or Enter equips or unequips its item.
 Dragging moves or swaps cells. Equipment accepts only matching Weapon, Offhand,

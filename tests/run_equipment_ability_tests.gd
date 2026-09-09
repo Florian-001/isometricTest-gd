@@ -9,8 +9,8 @@ var executor: AbilityExecutor
 var units: Array[TacticalCharacter] = []
 var strike: AbilityDefinition = load("res://resources/abilities/strike.tres")
 var shoot: AbilityDefinition = load("res://resources/abilities/arrow.tres")
-var sword: ItemDefinition = load("res://resources/items/iron_sword.tres")
-var bow: ItemDefinition = load("res://resources/items/frost_bow.tres")
+var sword: ItemDefinition = load("res://resources/items/weapons/iron_sword.tres")
+var bow: ItemDefinition = load("res://resources/items/weapons/frost_bow.tres")
 var impacts := 0
 var launches := 0
 const CAPTURE_DIR := "res://.godot/equipment_ability_validation"
@@ -74,7 +74,7 @@ func _test_loadouts() -> void:
 	check(strike.allow_unarmed_for_friendlies and strike.requires_weapon and not AbilityDefinition.new().allow_unarmed_for_friendlies, "only Strike opts into unarmed friendly use")
 	check(strike.get_targeting_configuration_error().is_empty() and strike.hit_count == 1, "normalized Strike configuration validates")
 	check(sword.get_granted_abilities() == [strike] and bow.get_granted_abilities() == [shoot], "weapon types grant canonical basic attacks")
-	for item in [load("res://resources/items/ranger_armor.tres"), load("res://resources/items/sage_charm.tres")]:
+	for item in [load("res://resources/items/armor/ranger_armor.tres"), load("res://resources/items/accessory/sage_charm.tres")]:
 		check(item.get_granted_abilities().is_empty(), "non-weapons grant no attack")
 	var inline := ItemDefinition.new()
 	check(inline.get_granted_abilities() == [strike], "new inline melee weapons grant Strike automatically")
@@ -169,7 +169,7 @@ func _test_damage_and_reactions() -> void:
 	check(not caster.get_abilities().has(strike) and not strike.can_be_used_by(caster), "ranged weapon replaces Strike and prevents unarmed fallback")
 	check(OpportunityAttackSystem.get_opportunity_attack_ability(caster) == null, "Shoot grants no melee reaction")
 	target.set_grid_cell_immediate(Vector2i(6, 1))
-	caster.equip_item(load("res://resources/items/ranger_armor.tres"))
+	caster.equip_item(load("res://resources/items/armor/ranger_armor.tres"))
 	check(caster.get_abilities() == [shoot], "armor preserves the weapon attack")
 	var expected := roundi(bow.weapon_damage + caster.get_effective_stat(UnitStat.Type.DEXTERITY) * 0.6) + shoot.get_passive_damage_bonus(caster)
 	await _cast_and_compare(caster, target, shoot, expected)
@@ -274,7 +274,7 @@ func _test_battle_ui() -> void:
 		check(details.body.text.contains("Grants while equipped: Strike"), "bag and equipped sword descriptions show Strike")
 		details.show_item(bow, equipped)
 		check(details.body.text.contains("Grants while equipped: Shoot"), "bag and equipped bow descriptions show Shoot")
-	details.show_item(load("res://resources/items/ranger_armor.tres"), false)
+	details.show_item(load("res://resources/items/armor/ranger_armor.tres"), false)
 	check(not details.body.text.contains("Grants while equipped"), "non-weapon descriptions show no ability grant")
 	screen.request_details(screen.equipment_entries.get_child(0).get_node("Slot"))
 	screen._on_hover_timeout()

@@ -6,8 +6,8 @@
 [ext_resource type="Resource" path="res://resources/ai/general_ai.tres" id="4_ai"]
 [ext_resource type="Resource" uid="uid://b0ygs6jbuindl" path="res://resources/abilities/enemy_shot.tres" id="5_shot"]
 [ext_resource type="Resource" uid="uid://coxj05o5g75fi" path="res://resources/abilities/focus.tres" id="6_focus"]
-[ext_resource type="Resource" uid="uid://cgq7lrwo26syh" path="res://resources/items/ranger_bow.tres" id="7_bow"]
-[ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/ranger_armor.tres" id="8_armor"]
+[ext_resource type="Resource" uid="uid://cgq7lrwo26syh" path="res://resources/items/weapons/ranger_bow.tres" id="7_bow"]
+[ext_resource type="Resource" uid="uid://8rwwvm5dey3y" path="res://resources/items/armor/ranger_armor.tres" id="8_armor"]
 
 [resource]
 script = ExtResource("1_enemy")

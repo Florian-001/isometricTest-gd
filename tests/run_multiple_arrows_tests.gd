@@ -294,7 +294,7 @@ func _test_battle_ui() -> void:
 	check(battle.initialization_succeeded, "real battle initializes")
 	var caster := battle._characters[0]
 	caster.set_class_level(load("res://resources/classes/archer.tres"), 3)
-	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/ranger_bow.tres"))
+	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, load("res://resources/items/weapons/ranger_bow.tres"))
 	ability = load("res://resources/abilities/multiple_arrows.tres")
 	battle.turn_manager.current_unit = caster
 	battle.turn_manager.current_index = battle.turn_manager.turn_order.find(caster)

@@ -86,7 +86,7 @@ func _run() -> void:
 		await _check_cast(caster, target, 10)
 		check(target.get_active_statuses().is_empty(), "projectile applies no weapon status")
 
-	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.ARMOR, load("res://resources/items/ranger_armor.tres"))
+	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.ARMOR, load("res://resources/items/armor/ranger_armor.tres"))
 	check(ability.calculate_damage(caster) == 12, "equipment Dexterity modifier contributes")
 	var buff := StatusEffectDefinition.new()
 	buff.status_id = &"dagger_dex_test"

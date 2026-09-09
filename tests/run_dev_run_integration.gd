@@ -141,10 +141,10 @@ func _test_reload_flow(label: String) -> void:
 	actor.spend_movement(1.0)
 	enemy.apply_damage(3)
 	enemy.set_dev_stat_override(UnitStat.Type.STRENGTH, 27)
-	var inventory_item := load("res://resources/items/sage_charm.tres") as ItemDefinition
+	var inventory_item := load("res://resources/items/accessory/sage_charm.tres") as ItemDefinition
 	battle.general_inventory.add_item(inventory_item)
 	# Ordinary inventory equipment also survives a developer restart.
-	actor.equip_item(load("res://resources/items/ranger_armor.tres"))
+	actor.equip_item(load("res://resources/items/armor/ranger_armor.tres"))
 	var expected_health := mini(actor.current_health, actor.get_max_health_without_statuses())
 	var expected_inventory := battle.general_inventory.capture_state()
 	var expected_setup: Array = battle.capture_save_payload(true).setup.units
@@ -166,7 +166,7 @@ func _test_reload_flow(label: String) -> void:
 	check(actor.current_health == expected_health and actor.permanent_defeat, "restart retains party health and permanent defeat")
 	check(actor.get_active_statuses().is_empty() and actor.ability_available and is_equal_approx(actor.remaining_movement, actor.get_movement_range()), "restart resets statuses and current turn actions")
 	check(battle.turn_manager.round_number == 1 and battle.general_inventory.capture_state() == expected_inventory, "restart resets round but preserves inventory")
-	check(actor.get_equipped_items().has(load("res://resources/items/ranger_armor.tres")), "runtime equipment survives alongside the inventory")
+	check(actor.get_equipped_items().has(load("res://resources/items/armor/ranger_armor.tres")), "runtime equipment survives alongside the inventory")
 	check(enemy.current_health == enemy_max and enemy.constitution_override == enemy_constitution and enemy.strength_override == 27, "enemy health resets without applying elite or boss scaling again")
 	check(FileAccess.get_file_as_string(run.save_path) == checkpoint_text, "developer restart leaves encounter entry checkpoint unchanged")
 

@@ -668,7 +668,7 @@ func test_sample_items_scaling_mappings_and_unassigned_status_abilities() -> voi
 	assert_false(unit.get_abilities()[1].can_be_used_by(unit), "Arrow should be unavailable with the starting Melee sword")
 	assert_true(unit.get_abilities()[4].can_be_used_by(unit), "Strike should be available with the starting Melee sword")
 	assert_true(unit.get_abilities()[6].can_be_used_by(unit), "Charge should be available with the starting Melee sword")
-	var ranger_bow := load("res://resources/items/ranger_bow.tres") as ItemDefinition
+	var ranger_bow := load("res://resources/items/weapons/ranger_bow.tres") as ItemDefinition
 	unit.equip_item(ranger_bow)
 	assert_eq(unit.get_abilities()[1].calculate_damage(unit), 17, "Arrow should deal Ranger Bow 10 plus 60% of Dexterity 12")
 	assert_true(unit.get_abilities()[1].can_be_used_by(unit), "Arrow should become available with a Ranged weapon")

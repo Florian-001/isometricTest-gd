@@ -9,6 +9,8 @@ enum Facing {
 
 const STATUS_ICON_SIZE := 18.0
 const STATUS_ICON_GAP := 3.0
+const STATUS_STACK_FONT_SIZE := 10
+const STATUS_STACK_BADGE_HEIGHT := 12.0
 const FALLBACK_STATUS_ICON_TOP := -79.0
 const ARTWORK_STATUS_ICON_TOP := -139.0
 const CHARACTER_ART_RECT := Rect2(-56.0, -104.0, 112.0, 112.0)
@@ -439,11 +441,11 @@ func _calculate_effective_stat(stat: UnitStat.Type, include_equipment: bool, inc
 
 
 ## Evaluate a simulated status loadout without changing this unit or shared resources.
-func calculate_stat_with_statuses(stat: UnitStat.Type, statuses: Array[StatusEffectDefinition]) -> float:
+func calculate_stat_with_statuses(stat: UnitStat.Type, statuses: Array[StatusEffectDefinition], stack_counts: Dictionary = {}) -> float:
 	var modifiers := _get_all_modifiers(true, false)
 	for status in statuses:
 		if status != null:
-			modifiers.append_array(status.get_stat_modifiers())
+			modifiers.append_array(status.get_stat_modifiers(int(stack_counts.get(status.status_id, 1))))
 	return _calculate_stat_with_modifiers(stat, modifiers, true)
 
 
@@ -675,6 +677,7 @@ func apply_status(
 			if active_status.source_unit == null and source is TacticalCharacter:
 				active_status.source_unit = source as TacticalCharacter
 			active_status.remaining_turns = status_definition.duration_turns
+			active_status.stack_count = maxi(1, active_status.stack_count) + 1 if status_definition.stackable else 1
 			active_status.processed_this_turn = false
 			_notify_statuses_changed(previous_state)
 			return true
@@ -693,6 +696,21 @@ func remove_status(status_id: StringName) -> bool:
 			_notify_statuses_changed(previous_state)
 			return true
 	return false
+
+
+## Clear encounter-only buffs atomically before publishing combat results.
+func remove_battle_end_statuses() -> int:
+	_initialize_runtime_stats()
+	var previous_state := _capture_status_state()
+	var removed := 0
+	for index in range(_active_statuses.size() - 1, -1, -1):
+		var definition := _active_statuses[index].definition
+		if definition != null and definition.lasts_until_battle_end:
+			_active_statuses.remove_at(index)
+			removed += 1
+	if removed > 0:
+		_notify_statuses_changed(previous_state)
+	return removed
 
 
 func get_active_statuses() -> Array[ActiveStatus]:
@@ -741,7 +759,7 @@ func advance_status_durations() -> void:
 	var changed := false
 	for index in range(_active_statuses.size() - 1, -1, -1):
 		var active_status := _active_statuses[index]
-		if active_status.definition != null and active_status.definition.expires_at_turn_start:
+		if active_status.definition != null and (active_status.definition.expires_at_turn_start or active_status.definition.lasts_until_battle_end):
 			continue
 		if not active_status.processed_this_turn:
 			continue
@@ -761,7 +779,7 @@ func expire_turn_start_statuses() -> void:
 	var changed := false
 	for index in range(_active_statuses.size() - 1, -1, -1):
 		var active_status := _active_statuses[index]
-		if active_status.definition == null or not active_status.definition.expires_at_turn_start:
+		if active_status.definition == null or not active_status.definition.expires_at_turn_start or active_status.definition.lasts_until_battle_end:
 			continue
 		active_status.remaining_turns -= 1
 		changed = true
@@ -1125,6 +1143,7 @@ func capture_runtime_state() -> Dictionary:
 		statuses.append({
 			"definition": active_status.definition.resource_path,
 			"remaining_turns": active_status.remaining_turns,
+			"stack_count": active_status.stack_count,
 			"processed_this_turn": active_status.processed_this_turn,
 			"source_kind": source_kind,
 			"source_resource": source_resource,
@@ -1185,6 +1204,7 @@ func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
 			source = source_unit
 		var restored := ActiveStatus.new(status_definition, source, source_unit)
 		restored.remaining_turns = int(status.get("remaining_turns", status_definition.duration_turns))
+		restored.stack_count = maxi(1, int(status.get("stack_count", 1))) if status_definition.stackable else 1
 		restored.processed_this_turn = bool(status.get("processed_this_turn", false))
 		_active_statuses.append(restored)
 	current_health = clampi(saved_health, 0, get_max_health())
@@ -1500,7 +1520,7 @@ func _get_all_modifiers(include_equipment: bool = true, include_statuses: bool =
 	for active_status in _active_statuses:
 		if active_status.definition == null:
 			continue
-		for modifier in active_status.definition.get_stat_modifiers():
+		for modifier in active_status.definition.get_stat_modifiers(active_status.stack_count):
 			if modifier != null:
 				result.append(modifier)
 	return result
@@ -1690,44 +1710,65 @@ func _draw_status_icons() -> void:
 		draw_rect(icon_rect, accent, false, 1.5)
 		if status.icon != null:
 			draw_texture_rect(status.icon, icon_rect.grow(-2.0), false)
-			continue
-		var fallback_name := status.display_name
-		if fallback_name.strip_edges().is_empty():
-			fallback_name = String(status.status_id)
-		var fallback_text := fallback_name.left(1).to_upper()
-		draw_string(
-			ThemeDB.fallback_font,
-			Vector2(icon_rect.position.x, icon_rect.position.y + 13.0),
-			fallback_text,
-			HORIZONTAL_ALIGNMENT_CENTER,
-			icon_rect.size.x,
-			11,
-			Color.WHITE
-		)
+		else:
+			var fallback_name := status.display_name
+			if fallback_name.strip_edges().is_empty():
+				fallback_name = String(status.status_id)
+			draw_string(
+				ThemeDB.fallback_font,
+				Vector2(icon_rect.position.x, icon_rect.position.y + 13.0),
+				fallback_name.left(1).to_upper(),
+				HORIZONTAL_ALIGNMENT_CENTER, icon_rect.size.x, 11, Color.WHITE
+			)
+		if status.stackable:
+			var count_text := str(entry.stack_count)
+			var font := ThemeDB.fallback_font
+			var badge_rect := entry.stack_badge_rect as Rect2
+			draw_rect(badge_rect, Color(0.025, 0.035, 0.05, 0.98))
+			draw_string(font, badge_rect.position + Vector2(2, 10), count_text, HORIZONTAL_ALIGNMENT_LEFT, -1, STATUS_STACK_FONT_SIZE, Color.WHITE)
 
 
 func _get_status_icon_entries() -> Array[Dictionary]:
-	var definitions: Array[StatusEffectDefinition] = []
+	var statuses: Array[ActiveStatus] = []
+	var widths: Array[float] = []
+	var badge_widths: Array[float] = []
+	var has_stacks := false
+	var total_width := 0.0
 	for active_status in _active_statuses:
 		if active_status.definition != null:
-			definitions.append(active_status.definition)
+			statuses.append(active_status)
+			var badge_width := 0.0
+			if active_status.definition.stackable:
+				has_stacks = true
+				badge_width = ThemeDB.fallback_font.get_string_size(str(active_status.stack_count), HORIZONTAL_ALIGNMENT_LEFT, -1, STATUS_STACK_FONT_SIZE).x + 4.0
+			badge_widths.append(badge_width)
+			var width := maxf(STATUS_ICON_SIZE, badge_width)
+			widths.append(width)
+			total_width += width
 	var result: Array[Dictionary] = []
-	if definitions.is_empty():
+	if statuses.is_empty():
 		return result
-	var total_width := (
-		float(definitions.size()) * STATUS_ICON_SIZE
-		+ float(definitions.size() - 1) * STATUS_ICON_GAP
-	)
-	var start_x := -total_width * 0.5
+	total_width += float(statuses.size() - 1) * STATUS_ICON_GAP
+	var cursor_x := -total_width * 0.5
 	var status_icon_top := ARTWORK_STATUS_ICON_TOP if has_directional_artwork() else FALLBACK_STATUS_ICON_TOP
-	for index in range(definitions.size()):
+	if has_stacks:
+		# Keep count badges clear of the health bar and health text below the row.
+		status_icon_top -= STATUS_STACK_BADGE_HEIGHT - 2.0
+	for index in range(statuses.size()):
+		var center_x := cursor_x + widths[index] * 0.5
 		result.append({
-			"definition": definitions[index],
+			"definition": statuses[index].definition,
+			"stack_count": statuses[index].stack_count,
 			"rect": Rect2(
-				start_x + float(index) * (STATUS_ICON_SIZE + STATUS_ICON_GAP),
+				center_x - STATUS_ICON_SIZE * 0.5,
 				status_icon_top,
 				STATUS_ICON_SIZE,
 				STATUS_ICON_SIZE
 			),
+			"stack_badge_rect": Rect2(
+				center_x - badge_widths[index] * 0.5, status_icon_top + STATUS_ICON_SIZE - 3.0,
+				badge_widths[index], STATUS_STACK_BADGE_HEIGHT
+			),
 		})
+		cursor_x += widths[index] + STATUS_ICON_GAP
 	return result

@@ -2116,6 +2116,8 @@ func _finalize_combat() -> void:
 				return
 		_combat_finalized = true
 		for character in _characters:
+			if is_instance_valid(character):
+				character.remove_battle_end_statuses()
 			if is_instance_valid(character) and character.current_health > 0:
 				character.restore_armor()
 		if _dev_open_pending:

@@ -115,7 +115,7 @@ func _test_resources() -> void:
 	check(empower.get_description().contains("3 turns") and empower.get_description().contains("Positive status"), "Empower describes duration and polarity")
 	for status in negatives:
 		check(status.is_negative() and status.get_description().contains("Negative status"), "every debuff is explicitly negative")
-	check(StatusCatalog.get_labels(StatusCatalog.get_statuses()) == ["Burning", "Counter", "Empowered", "Focus", "Slow", "Stun", "Taunted"], "status catalog discovers and sorts all definitions")
+	check(StatusCatalog.get_labels(StatusCatalog.get_statuses()) == ["Burning", "Constitution Up", "Counter", "Dexterity Up", "Empowered", "Focus", "Intelligence Up", "Slow", "Strength Up", "Stun", "Taunted"], "status catalog discovers and sorts all definitions")
 	var catalog := load("res://resources/dev_tool_catalog.tres") as DevToolCatalog
 	check(catalog.abilities.count(empower) == 1 and catalog.abilities.count(cleanse) == 1, "developer catalog includes both spells once")
 	var cleric := load("res://resources/classes/cleric.tres") as CharacterClassDefinition

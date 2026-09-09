@@ -48,6 +48,7 @@ static func from_battle(
 			statuses[active_status.definition.status_id] = {
 				"definition": active_status.definition,
 				"remaining_turns": active_status.remaining_turns,
+				"stack_count": active_status.stack_count,
 				"processed_this_turn": active_status.processed_this_turn,
 				"source_unit": active_status.source_unit,
 			}
@@ -231,7 +232,7 @@ func expire_turn_start_statuses(unit: TacticalCharacter) -> void:
 	for status_id in get_status_ids(unit):
 		var status := statuses[status_id] as Dictionary
 		var definition := status.get("definition") as StatusEffectDefinition
-		if definition == null or not definition.expires_at_turn_start:
+		if definition == null or not definition.expires_at_turn_start or definition.lasts_until_battle_end:
 			continue
 		status.remaining_turns = int(status.remaining_turns) - 1
 		changed = true
@@ -247,7 +248,14 @@ func get_effective_stat(unit: TacticalCharacter, stat: int) -> float:
 		var definition := get_status_state(unit, status_id).get("definition") as StatusEffectDefinition
 		if definition != null and get_status_remaining(unit, status_id) > 0:
 			definitions.append(definition)
-	return unit.calculate_stat_with_statuses(stat, definitions)
+	return unit.calculate_stat_with_statuses(stat, definitions, _get_status_stack_counts(unit))
+
+
+func _get_status_stack_counts(unit: TacticalCharacter) -> Dictionary:
+	var counts: Dictionary = {}
+	for status_id in get_status_ids(unit):
+		counts[status_id] = maxi(1, int(get_status_state(unit, status_id).get("stack_count", 1)))
+	return counts
 
 
 func get_status_state(unit: TacticalCharacter, status_id: StringName) -> Dictionary:
@@ -292,9 +300,18 @@ func forecast_status_application(
 	if status_effect == null or not is_living(target):
 		return {"health_delta": 0, "utility_hint": base_utility, "added_turns": 0}
 	var duration := maxi(1, status_effect.duration_turns)
+	var existing_status := get_status_state(target, status_effect.status_id)
+	var stack_count := 1
+	if status_effect.stackable and not existing_status.is_empty():
+		stack_count = maxi(1, int(existing_status.get("stack_count", 1))) + 1
 	var existing_turns := get_status_remaining(target, status_effect.status_id)
 	var added_turns := maxi(0, duration - existing_turns)
 	var duration_fraction := float(added_turns) / float(duration)
+	if status_effect.stackable:
+		# A new stack has value even when an existing status has its full duration.
+		duration_fraction = 1.0
+	elif status_effect.lasts_until_battle_end:
+		duration_fraction = 1.0 if existing_status.is_empty() else 0.0
 	var estimate := status_effect.estimate_for_ai(
 		caster,
 		target,
@@ -307,6 +324,7 @@ func forecast_status_application(
 	statuses[status_effect.status_id] = {
 		"definition": status_effect,
 		"remaining_turns": duration,
+		"stack_count": stack_count,
 		"processed_this_turn": false,
 		"source_unit": caster,
 	}
@@ -341,7 +359,8 @@ func estimate_cleanse(caster: TacticalCharacter, target: TacticalCharacter) -> D
 			var pending_ticks := maxi(0, turns - (1 if bool(status.get("processed_this_turn", false)) else 0))
 			var estimate := definition.estimate_for_ai(target, target, get_health(target), pending_ticks, get_armor(target))
 			var fraction := float(turns) / float(maxi(1, definition.duration_turns))
-			utility += maxf(0.0, -float(estimate.get("utility_hint", 0.0))) * fraction
+			var stacks := maxi(1, int(status.get("stack_count", 1))) if definition.stackable else 1
+			utility += maxf(0.0, -float(estimate.get("utility_hint", 0.0))) * fraction * stacks
 			utility -= float(estimate.get("health_delta", 0)) + float(estimate.get("armor_delta", 0))
 	if is_instance_valid(caster) and is_instance_valid(target) and caster.is_friendly() != target.is_friendly():
 		utility = -utility
@@ -373,12 +392,13 @@ func _recompute_status_stats(unit: TacticalCharacter) -> void:
 			definitions.append(definition)
 			stunned = stunned or definition.blocks_actions()
 	unit_stunned[unit] = stunned
-	var constitution := unit.calculate_stat_with_statuses(UnitStat.Type.CONSTITUTION, definitions)
+	var stack_counts := _get_status_stack_counts(unit)
+	var constitution := unit.calculate_stat_with_statuses(UnitStat.Type.CONSTITUTION, definitions, stack_counts)
 	unit_constitutions[unit] = constitution
 	if not is_bone_pile(unit):
 		unit_max_health[unit] = unit.calculate_max_health_for_constitution(constitution)
 	unit_movement_ranges[unit] = UnitStat.get_scaling_rules().clamp_effective_movement_range(
-		unit.calculate_stat_with_statuses(UnitStat.Type.MOVEMENT_RANGE, definitions)
+		unit.calculate_stat_with_statuses(UnitStat.Type.MOVEMENT_RANGE, definitions, stack_counts)
 	)
 	# Stun suppresses access to movement/reactions; it does not spend the stored resources.
 	unit_remaining_movement[unit] = minf(float(unit_remaining_movement.get(unit, 0.0)), get_movement_range(unit))

@@ -63,6 +63,20 @@ func _run() -> void:
 	EditorInterface.edit_resource(load("res://resources/abilities/empower.tres"))
 	await _frames()
 	check(_property("status_effect") != null, "Empower retains the reusable status picker")
+	var buff := (load("res://resources/statuses/strength_up.tres") as StatusEffectDefinition).duplicate() as StatusEffectDefinition
+	EditorInterface.edit_resource(buff)
+	await _frames()
+	for name in ["stackable", "lasts_until_battle_end", "flat_amount", "affected_stat", "affected_unit_ai_utility"]:
+		check(_property(name) != null, "stat buff Inspector exposes " + name)
+	check(_property("duration_turns") == null and _property("expires_at_turn_start") == null, "battle buffs hide unused duration settings")
+	if _property("lasts_until_battle_end") != null:
+		_property("lasts_until_battle_end").emit_changed("lasts_until_battle_end", false)
+		await _frames()
+	check(_property("duration_turns") != null and _property("expires_at_turn_start") != null, "disabling battle lifetime reveals duration settings")
+	var buff_path := DIRECTORY + "/editor_stat_buff.tres"
+	check(ResourceSaver.save(buff, buff_path) == OK, "edited stack settings save")
+	var restored_buff := ResourceLoader.load(buff_path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP) as StatusEffectDefinition
+	check(restored_buff.stackable and not restored_buff.lasts_until_battle_end and restored_buff.flat_amount == 1, "stack settings survive Inspector round trip")
 	for failure in failures:
 		push_error(failure)
 	print("EMPOWER_CLEANSE_EDITOR_%s: %d checks, %d failures" % ["OK" if failures.is_empty() else "FAILED", checks, failures.size()])

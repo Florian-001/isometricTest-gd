@@ -81,7 +81,7 @@ func test_tile_status_inspector_defaults_visibility_and_catalog() -> void:
 	var names: Array[String] = []
 	for status in statuses:
 		names.append(status.display_name)
-	assert_eq(names, ["Burning", "Counter", "Empowered", "Focus", "Slow", "Stun", "Taunted"], "saved status choices should be discovered recursively and sorted")
+	assert_eq(names, ["Burning", "Constitution Up", "Counter", "Dexterity Up", "Empowered", "Focus", "Intelligence Up", "Slow", "Strength Up", "Stun", "Taunted"], "saved status choices should be discovered recursively and sorted")
 	for path in [
 		"res://resources/statuses/burning.tres",
 		"res://resources/statuses/focus.tres",
@@ -94,7 +94,7 @@ func test_tile_status_inspector_defaults_visibility_and_catalog() -> void:
 		)
 	assert_eq(
 		StatusCatalogScript.get_labels(statuses),
-		["Burning", "Counter", "Empowered", "Focus", "Slow", "Stun", "Taunted"],
+		["Burning", "Constitution Up", "Counter", "Dexterity Up", "Empowered", "Focus", "Intelligence Up", "Slow", "Strength Up", "Stun", "Taunted"],
 		"unique status choices should use their display names"
 	)
 

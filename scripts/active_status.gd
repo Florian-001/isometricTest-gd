@@ -5,6 +5,7 @@ var definition: StatusEffectDefinition
 var source: Object
 var source_unit: TacticalCharacter
 var remaining_turns: int
+var stack_count: int = 1
 var processed_this_turn: bool = false
 
 

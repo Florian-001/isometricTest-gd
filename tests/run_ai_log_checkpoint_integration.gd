@@ -142,6 +142,9 @@ func _test_checkpoint_restore_and_branching() -> void:
 	var burning := load("res://resources/statuses/burning.tres") as StatusEffectDefinition
 	var fireball := load("res://resources/abilities/fireball.tres") as AbilityDefinition
 	enemy.apply_status(burning, fireball, friendly)
+	var strength_up := load("res://resources/statuses/strength_up.tres") as StatusEffectDefinition
+	for stack in range(3):
+		enemy.apply_status(strength_up, fireball, friendly)
 	var removed_inventory_item := battle.general_inventory.get_items()[0]
 	battle.general_inventory.take_item(removed_inventory_item)
 	battle.turn_manager.round_number = 2
@@ -225,7 +228,9 @@ func _test_checkpoint_restore_and_branching() -> void:
 		_check(restored_enemy.grid_cell == target_cell, "checkpoint restoration restores position")
 		_check(is_equal_approx(restored_enemy.remaining_movement, target_movement), "checkpoint restoration restores remaining movement")
 		_check(not restored_enemy.ability_available, "checkpoint restoration restores spent actions")
-		_check(restored_enemy.get_active_statuses().size() == 1, "checkpoint restoration restores statuses")
+		_check(restored_enemy.get_active_statuses().size() == 2, "checkpoint restoration restores statuses")
+		var restored_buff := restored_enemy.get_active_statuses().filter(func(active: ActiveStatus): return active.definition.status_id == &"strength_up")
+		_check(restored_buff.size() == 1 and restored_buff[0].stack_count == 3, "AI rewind restores exact stack counts")
 		_check(restored_enemy.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON) == target_weapon, "checkpoint restoration restores runtime equipment")
 	_check(restored.general_inventory.get_items().size() == target_inventory_count, "checkpoint restoration restores inventory")
 	_check(restored.turn_manager.round_number == 2, "checkpoint restoration restores the round")

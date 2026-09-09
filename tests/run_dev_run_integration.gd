@@ -137,6 +137,9 @@ func _test_reload_flow(label: String) -> void:
 		await _capture("run_dev_editor")
 	actor.apply_damage(7)
 	actor.apply_status(load("res://resources/statuses/slow.tres"))
+	for stack in range(3):
+		actor.apply_status(load("res://resources/statuses/strength_up.tres"))
+		actor.apply_status(load("res://resources/statuses/constitution_up.tres"))
 	actor.spend_ability_action()
 	actor.spend_movement(1.0)
 	enemy.apply_damage(3)

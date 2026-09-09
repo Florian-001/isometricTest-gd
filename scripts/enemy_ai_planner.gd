@@ -2168,9 +2168,10 @@ func _get_snapshot_key(snapshot: AIBoardSnapshot) -> String:
 		for status_id in snapshot.get_status_ids(unit):
 			var status_state := snapshot.get_status_state(unit, status_id)
 			var source = status_state.get("source_unit")
-			status_parts.append("%s:%d:%d:%d" % [
+			status_parts.append("%s:%d:%d:%d:%d" % [
 				status_id,
 				int(status_state.get("remaining_turns", 0)),
+				int(status_state.get("stack_count", 1)),
 				int(bool(status_state.get("processed_this_turn", false))),
 				source.get_instance_id() if is_instance_valid(source) else 0,
 			])

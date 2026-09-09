@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="status"]
+[ext_resource type="Texture2D" path="res://assets/status_icons/dexterity_up.svg" id="icon"]
+
+[resource]
+script = ExtResource("status")
+status_id = &"dexterity_up"
+display_name = "Dexterity Up"
+polarity = 0
+stackable = true
+lasts_until_battle_end = true
+effect = 2
+affected_stat = 2
+modifier_direction = 0
+modifier_value_type = 0
+flat_amount = 1.0
+affected_unit_ai_utility = 2.0
+icon = ExtResource("icon")
+color = Color(0.49, 0.89, 0.61, 1)

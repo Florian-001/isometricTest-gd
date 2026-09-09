@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="status"]
+[ext_resource type="Texture2D" path="res://assets/status_icons/constitution_up.svg" id="icon"]
+
+[resource]
+script = ExtResource("status")
+status_id = &"constitution_up"
+display_name = "Constitution Up"
+polarity = 0
+stackable = true
+lasts_until_battle_end = true
+effect = 2
+affected_stat = 7
+modifier_direction = 0
+modifier_value_type = 0
+flat_amount = 1.0
+affected_unit_ai_utility = 2.0
+icon = ExtResource("icon")
+color = Color(0.4, 0.73, 1, 1)

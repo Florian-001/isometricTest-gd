@@ -26,11 +26,19 @@ enum ModifierValueType {
 }
 
 @export_category("Status")
-## Stable identifier used to refresh an existing status instead of stacking another copy.
+## Stable identifier used to combine applications into one active status.
 @export var status_id: StringName = &"new_status"
 @export var display_name: String = "New Status"
 ## Cleanse removes negative statuses, regardless of their source or effect.
 @export var polarity: Polarity = Polarity.NEGATIVE
+## Reapplication adds one stack. Each stack contributes the status's stat modifiers.
+@export var stackable: bool = false
+## No turn countdown; removed when combat finishes, before run results are captured.
+@export var lasts_until_battle_end: bool = false:
+	set(value):
+		lasts_until_battle_end = value
+		if Engine.is_editor_hint():
+			notify_property_list_changed()
 @export_range(1, 99, 1, "or_greater") var duration_turns: int = 1
 ## Count down at the owner's turn start instead of the existing turn-end duration tick.
 @export var expires_at_turn_start: bool = false
@@ -75,7 +83,9 @@ enum ModifierValueType {
 func _validate_property(property: Dictionary) -> void:
 	var property_name: StringName = property.name
 	var should_hide := false
-	if property_name in [&"damage_type", &"damage_per_turn"]:
+	if property_name in [&"duration_turns", &"expires_at_turn_start"]:
+		should_hide = lasts_until_battle_end
+	elif property_name in [&"damage_type", &"damage_per_turn"]:
 		should_hide = effect != Effect.DAMAGE_EACH_TURN
 	elif property_name == &"affected_unit_ai_utility":
 		should_hide = effect not in [Effect.STAT_MODIFIER, Effect.STUN, Effect.TAUNT] and modifiers.is_empty() and granted_passive == null
@@ -107,7 +117,7 @@ func is_negative() -> bool:
 	return polarity == Polarity.NEGATIVE
 
 
-func get_stat_modifiers() -> Array[StatModifierDefinition]:
+func get_stat_modifiers(stack_count: int = 1) -> Array[StatModifierDefinition]:
 	var result: Array[StatModifierDefinition] = []
 	if effect == Effect.STAT_MODIFIER and affected_stat != UnitStat.Type.NONE:
 		var primary_modifier := StatModifierDefinition.new()
@@ -123,6 +133,17 @@ func get_stat_modifiers() -> Array[StatModifierDefinition]:
 	for additional_modifier in modifiers:
 		if additional_modifier != null:
 			result.append(additional_modifier)
+	var count := maxi(1, stack_count) if stackable else 1
+	if count > 1:
+		# Fold repeated modifiers without allocating one resource per stack or editing
+		# shared definitions. Multiplicative modifiers compose once per stack.
+		for index in range(result.size()):
+			var scaled := result[index].duplicate() as StatModifierDefinition
+			if scaled.operation == StatModifierDefinition.Operation.PERCENT_MULTIPLY:
+				scaled.value = pow(maxf(0.0, 1.0 + scaled.value), count) - 1.0
+			else:
+				scaled.value *= count
+			result[index] = scaled
 	return result
 
 
@@ -167,7 +188,7 @@ func get_description(turns_override: int = -1) -> String:
 	var description := _get_primary_description(turns_override)
 	if granted_passive != null:
 		description += " | " + granted_passive.get_description()
-	if expires_at_turn_start:
+	if expires_at_turn_start and not lasts_until_battle_end:
 		var turns := duration_turns if turns_override < 0 else turns_override
 		description += " | Expires at next turn start" if turns == 1 else " | Expires in %d owner turn starts" % turns
 	var modifier_descriptions: Array[String] = []
@@ -179,15 +200,18 @@ func get_description(turns_override: int = -1) -> String:
 			amount = ("+" if modifier.value >= 0.0 else "") + _format_amount(modifier.value * 100.0) + "%"
 		elif modifier.operation == StatModifierDefinition.Operation.PERCENT_MULTIPLY:
 			amount = "×" + _format_amount(maxf(0.0, 1.0 + modifier.value))
-		modifier_descriptions.append("%s %s" % [amount, UnitStat.get_display_name(modifier.stat)])
+		modifier_descriptions.append("%s %s%s" % [amount, UnitStat.get_display_name(modifier.stat), " per stack" if stackable else ""])
 	if not modifier_descriptions.is_empty():
 		description += " | " + ", ".join(modifier_descriptions)
+	if lasts_until_battle_end:
+		description += " | Until battle ends"
 	return description + (" | Negative status" if is_negative() else " | Positive status")
 
 
 func _get_primary_description(turns_override: int = -1) -> String:
 	var turns := duration_turns if turns_override < 0 else turns_override
 	var turn_text := "%d turn%s" % [turns, "" if turns == 1 else "s"]
+	var duration_text := "" if lasts_until_battle_end else " for " + turn_text
 	match effect:
 		Effect.DAMAGE_EACH_TURN:
 			var type_name := (
@@ -195,13 +219,19 @@ func _get_primary_description(turns_override: int = -1) -> String:
 				if damage_type == DamageCalculator.Type.PHYSICAL
 				else "magical"
 			)
-			return "%s: %d %s damage at turn start for %s" % [
+			return "%s: %d %s damage at turn start%s" % [
 				display_name,
 				maxi(0, damage_per_turn),
 				type_name,
-				turn_text,
+				duration_text,
 			]
 		Effect.STAT_MODIFIER:
+			if stackable:
+				var amount := _format_amount(maxf(0.0, flat_amount)) if modifier_value_type == ModifierValueType.FLAT else _format_amount(maxf(0.0, percentage_amount)) + "%"
+				return "%s: %s%s %s per stack%s" % [
+					display_name, "+" if modifier_direction == ModifierDirection.INCREASE else "-",
+					amount, UnitStat.get_display_name(affected_stat), duration_text,
+				]
 			var direction_name := (
 				"Reduce"
 				if modifier_direction == ModifierDirection.REDUCE
@@ -212,22 +242,22 @@ func _get_primary_description(turns_override: int = -1) -> String:
 				if modifier_value_type == ModifierValueType.PERCENTAGE
 				else "%.2f" % maxf(0.0, flat_amount)
 			)
-			return "%s: %s %s by %s for %s" % [
+			return "%s: %s %s by %s%s" % [
 				display_name,
 				direction_name,
 				UnitStat.get_display_name(affected_stat),
 				amount_text,
-				turn_text,
+				duration_text,
 			]
 		Effect.STUN:
-			return "%s: Cannot move, use abilities, or make opportunity attacks for %s" % [
+			return "%s: Cannot move, use abilities, or make opportunity attacks%s" % [
 				display_name,
-				turn_text,
+				duration_text,
 			]
 		Effect.TAUNT:
-			return "%s: Attack the caster if possible; otherwise pursue them for %s" % [display_name, turn_text]
+			return "%s: Attack the caster if possible; otherwise pursue them%s" % [display_name, duration_text]
 		_:
-			return "%s for %s" % [display_name, turn_text]
+			return "%s%s" % [display_name, duration_text]
 
 
 func _format_amount(value: float) -> String:

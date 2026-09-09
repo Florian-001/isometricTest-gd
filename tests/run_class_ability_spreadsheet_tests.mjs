@@ -15,9 +15,10 @@ const data = { rows: [
   { class_id: null, class: 'All classes', level: null, ability: 'Strike', description: 'Basic attack.' },
   { class_id: null, class: 'All classes', level: null, ability: 'Shoot', description: 'Ranged basic attack.' },
   { class_id: 'second', class: '=Literal <&>', level: 3, ability: 'Different unlock', description: 'Same display name, different class.' },
+  { class_id: 'empty', class: 'Empty class', level: null, ability: '—', description: 'No class unlocks; basic attacks are still available.' },
 ] };
 const groups = classSheets(data);
-assert.deepEqual(groups.map(group => group.name), ['=Literal <&>', '=Literal <&> (2)']);
+assert.deepEqual(groups.map(group => group.name), ['=Literal <&>', '=Literal <&> (2)', 'Empty class']);
 const names = classSheets({ rows: ['Mage/Fire', 'mage:fire', 'A'.repeat(50), 'A'.repeat(51), 'History', "'[]'", 'All classes'].map((name, index) => ({ ...data.rows[0], class_id: String(index), class: name })) }).map(group => group.name);
 assert.equal(new Set(names.map(name => name.toLowerCase())).size, names.length);
 assert.ok(names.every(name => name.length > 0 && name.length <= 31 && !/[\\/?*:[\]]/.test(name) && !name.startsWith("'") && !name.endsWith("'") && name.toLowerCase() !== 'history'));
@@ -34,19 +35,37 @@ assert.deepEqual(await fs.readFile(output), before);
 const { SpreadsheetFile, FileBlob } = runtime.artifact;
 const reopened = await SpreadsheetFile.importXlsx(await FileBlob.load(output));
 for (const group of groups) {
-  const values = reopened.worksheets.getItem(group.name).getRange('A6:D8').values;
-  assert.deepEqual(values, group.rows.map(row => [row.class, row.level, row.ability, row.description]));
-  assert.equal(typeof values[2][1], 'number');
-  assert.equal(values[0][1], null);
+  const sheet = reopened.worksheets.getItem(group.name);
+  assert.deepEqual(sheet.getRange('A5:E5').values, [['Index', 'Class', 'Unlock Level', 'Ability', 'Description']]);
+  const values = sheet.getRange('A6:E8').values;
+  assert.deepEqual(values, group.rows.map((row, index) => [row.level === null && row.class_id !== null ? null : index + 1, row.class, row.level, row.ability, row.description]));
+  assert.deepEqual(values.slice(0, 2).map(row => [row[0], row[3]]), [[1, 'Strike'], [2, 'Shoot']]);
+  if (group.name === 'Empty class') assert.equal(values[2][0], null);
+  else {
+    assert.equal(typeof values[2][0], 'number');
+    assert.equal(typeof values[2][2], 'number');
+  }
+  assert.equal(values[0][2], null);
 }
 const zip = await runtime.JSZip.loadAsync(before);
-assert.equal(Object.keys(zip.files).filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)).length, 2);
+assert.equal(Object.keys(zip.files).filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)).length, 3);
 for (let index = 1; index <= groups.length; index++) {
   const sheetXml = await zip.file(`xl/worksheets/sheet${index}.xml`).async('string');
   assert.match(sheetXml, /ySplit="5"[^>]*state="frozen"/);
+  assert.match(sheetXml, /min="1" max="1" width="8"/); // 64px index column.
   assert.doesNotMatch(sheetXml, /<(?:x:)?f[ >]/);
-  assert.match(await zip.file(`xl/tables/table${index}.xml`).async('string'), /autoFilter ref="A5:D8"/);
+  assert.match(await zip.file(`xl/tables/table${index}.xml`).async('string'), /autoFilter ref="A5:E8"/);
 }
+
+// Inserting an unlock ahead of another at the same level shifts its reference index.
+const added = { rows: [{ ...data.rows[0], ability: 'New first unlock' }, ...data.rows] };
+assert.equal((await exportReference(runtime, added, output)).changed, true);
+const withAdded = await SpreadsheetFile.importXlsx(await FileBlob.load(output));
+assert.deepEqual(withAdded.worksheets.getItem(groups[0].name).getRange('A8:E9').values.map(row => [row[0], row[3]]), [[3, 'New first unlock'], [4, data.rows[0].ability]]);
+assert.deepEqual(withAdded.worksheets.getItem(groups[1].name).getRange('A6:A8').values, [[1], [2], [3]]);
+assert.equal((await exportReference(runtime, data, output)).changed, true);
+const afterRemoval = await SpreadsheetFile.importXlsx(await FileBlob.load(output));
+assert.deepEqual(afterRemoval.worksheets.getItem(groups[0].name).getRange('A8:E8').values.map(row => [row[0], row[3]]), [[3, data.rows[0].ability]]);
 
 // A changed required layout is stale even when the resource records still match.
 const changedLayout = buildWorkbook(runtime.artifact, data);
@@ -70,14 +89,14 @@ if (review) {
   assert.equal(Object.keys(shippedZip.files).filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)).length, shippedGroups.length);
   for (const [sheetIndex, group] of shippedGroups.entries()) {
     const lastRow = group.rows.length + 5;
-    const matrix = workbook.worksheets.getItem(group.name).getRange(`A6:D${lastRow}`).values;
-    assert.deepEqual(matrix, group.rows.map(row => [row.class, row.level, row.ability, row.description]));
-    const inspection = await workbook.inspect({ kind: 'table', range: `'${group.name.replaceAll("'", "''")}'!A5:D${lastRow}`, include: 'values,formulas', tableMaxRows: group.rows.length + 1, tableMaxCols: 4 });
+    const matrix = workbook.worksheets.getItem(group.name).getRange(`A6:E${lastRow}`).values;
+    assert.deepEqual(matrix, group.rows.map((row, index) => [row.level === null && row.class_id !== null ? null : index + 1, row.class, row.level, row.ability, row.description]));
+    const inspection = await workbook.inspect({ kind: 'table', range: `'${group.name.replaceAll("'", "''")}'!A5:E${lastRow}`, include: 'values,formulas', tableMaxRows: group.rows.length + 1, tableMaxCols: 5 });
     await fs.writeFile(path.join(directory, `class-${sheetIndex + 1}-inspection.ndjson`), inspection.ndjson);
-    const image = await workbook.render({ sheetName: group.name, range: `A1:D${lastRow}`, scale: 1, format: 'png' });
+    const image = await workbook.render({ sheetName: group.name, range: `A1:E${lastRow}`, scale: 1, format: 'png' });
     await fs.writeFile(path.join(directory, `class-${sheetIndex + 1}.png`), new Uint8Array(await image.arrayBuffer()));
   }
-  const image = await reopened.render({ sheetName: groups[0].name, range: 'A1:D8', scale: 1, format: 'png' });
+  const image = await reopened.render({ sheetName: groups[0].name, range: 'A1:E8', scale: 1, format: 'png' });
   await fs.writeFile(path.join(directory, 'long-description.png'), new Uint8Array(await image.arrayBuffer()));
 }
-console.log('CLASS_ABILITY_SPREADSHEET_TESTS_OK (separate class sheets, duplicate/long names, shared attacks, round-trip values, filters, frozen headers, unchanged output, read-only checks, layout drift, invalid data)');
+console.log('CLASS_ABILITY_SPREADSHEET_TESTS_OK (per-sheet numeric indices, additions/removals, empty classes, separate sheets, shared attacks, round-trip values, filters, frozen headers, unchanged output, read-only checks, layout drift, invalid data)');

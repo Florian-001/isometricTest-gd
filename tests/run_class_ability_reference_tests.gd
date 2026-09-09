@@ -174,7 +174,8 @@ func _test_writes_and_checks() -> void:
 		for index in sheet_rows.size():
 			var row: Dictionary = sheet_rows[index]
 			var number := index + 6
-			_check(cells.get("A%d" % number) == row.class and cells.get("B%d" % number) == row.level and cells.get("C%d" % number) == row.ability and cells.get("D%d" % number) == row.description, "each class sheet contains its own unlocks and both shared attacks with numeric levels")
+			_check(cells.get("A%d" % number) == index + 1 and cells.get("A%d" % number) is int, "ability indices are numeric and restart at one on each sheet")
+			_check(cells.get("B%d" % number) == row.class and cells.get("C%d" % number) == row.level and cells.get("D%d" % number) == row.ability and cells.get("E%d" % number) == row.description, "each class sheet contains its own unlocks and both shared attacks with numeric levels")
 	var sheet := Xlsx.part(_output, "xl/worksheets/sheet1.xml")
 	var table := Xlsx.part(_output, "xl/tables/table1.xml")
 	_check(sheet.contains('ySplit="5"') and sheet.contains('state="frozen"'), "headers and guidance are frozen")

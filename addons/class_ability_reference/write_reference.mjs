@@ -5,8 +5,8 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
 export const HEADER_ROW = 5;
-const HEADERS = ['Class', 'Unlock Level', 'Ability', 'Description'];
-const WIDTHS = [150, 112, 182, 720];
+const HEADERS = ['Index', 'Class', 'Unlock Level', 'Ability', 'Description'];
+const WIDTHS = [64, 150, 112, 182, 720];
 
 export async function loadRuntime(modules) {
   const require = createRequire(path.join(path.resolve(modules), '__class_reference__.cjs'));
@@ -62,30 +62,36 @@ export function buildWorkbook(artifact, data) {
 function addClassSheet(workbook, data, index) {
   const sheet = workbook.worksheets.add(data.name);
   const lastRow = HEADER_ROW + data.rows.length;
-  const body = sheet.getRange(`A1:D${lastRow}`);
+  const body = sheet.getRange(`A1:E${lastRow}`);
   body.format.font = { name: 'Arial', size: 11, color: '#253246' };
   body.format.verticalAlignment = 'center';
   sheet.showGridLines = false;
   sheet.tabColor = '#243B53';
-  sheet.getRange('A2:D2').merge();
+  sheet.getRange('A2:E2').merge();
   sheet.getRange('A2').values = [[text(`${data.title} abilities`)]];
-  sheet.getRange('A2:D2').format.borders = { bottom: { style: 'thin', color: '#C7D0DB' } };
+  sheet.getRange('A2:E2').format.borders = { bottom: { style: 'thin', color: '#C7D0DB' } };
   sheet.getRange('A2').format.font = { name: 'Arial', size: 16, bold: true, color: '#243B53' };
-  sheet.getRange('A2:D2').format.wrapText = true;
-  sheet.getRange('A2:D2').format.rowHeight = Math.max(28, Math.ceil((data.title.length + 10) / 95) * 24);
-  sheet.getRange('A3:D3').values = [[
-    'Generated reference', 'Class levels', 'All classes = basic attacks',
-    'Edit resources in Godot. Saved changes update this file. Close and reopen Excel to see updates. Blank level = no class-level requirement.',
+  sheet.getRange('A2:E2').format.wrapText = true;
+  sheet.getRange('A2:E2').format.rowHeight = Math.max(28, Math.ceil((data.title.length + 10) / 95) * 24);
+  sheet.getRange('A3:E3').values = [[
+    'Per sheet', 'Generated reference', 'Class levels', 'All classes = basic attacks',
+    'Edit resources in Godot. Saved changes update this file. Close and reopen Excel to see updates. Indices show reference order, not permanent IDs. Blank unlock level = no class-level requirement.',
   ]];
-  sheet.getRange('A3:D3').format.font = { name: 'Arial', size: 10, color: '#526276' };
-  sheet.getRange('A3:D3').format.wrapText = true;
-  sheet.getRange('A3:D3').format.rowHeight = 42;
-  sheet.getRange('A4:D4').format.rowHeight = 8;
-  sheet.getRange(`A${HEADER_ROW}:D${lastRow}`).values = [HEADERS, ...data.rows.map(row => [text(row.class), row.level, text(row.ability), text(row.description)])];
-  const table = sheet.tables.add(`A${HEADER_ROW}:D${lastRow}`, true, `ClassAbilities${index + 1}`);
+  sheet.getRange('A3:E3').format.font = { name: 'Arial', size: 10, color: '#526276' };
+  sheet.getRange('A3:E3').format.wrapText = true;
+  sheet.getRange('A3:E3').format.rowHeight = 42;
+  sheet.getRange('A4:E4').format.rowHeight = 8;
+  let abilityIndex = 0;
+  const values = data.rows.map(row => [
+    // A class row with no unlock level is the informational empty-class row.
+    row.class_id !== null && row.level === null ? null : ++abilityIndex,
+    text(row.class), row.level, text(row.ability), text(row.description),
+  ]);
+  sheet.getRange(`A${HEADER_ROW}:E${lastRow}`).values = [HEADERS, ...values];
+  const table = sheet.tables.add(`A${HEADER_ROW}:E${lastRow}`, true, `ClassAbilities${index + 1}`);
   table.style = 'TableStyleMedium2';
   table.showFilterButton = true;
-  const header = sheet.getRange(`A${HEADER_ROW}:D${HEADER_ROW}`);
+  const header = sheet.getRange(`A${HEADER_ROW}:E${HEADER_ROW}`);
   header.format.fill = '#243B53';
   header.format.font = { name: 'Arial', size: 11, bold: true, color: '#FFFFFF' };
   header.format.horizontalAlignment = 'center';
@@ -93,17 +99,19 @@ function addClassSheet(workbook, data, index) {
   for (let col = 0; col < WIDTHS.length; col++) {
     sheet.getRangeByIndexes(0, col, lastRow, 1).format.columnWidthPx = WIDTHS[col];
   }
-  const rows = sheet.getRange(`A${HEADER_ROW + 1}:D${lastRow}`);
+  const rows = sheet.getRange(`A${HEADER_ROW + 1}:E${lastRow}`);
   rows.format.wrapText = true;
   rows.format.verticalAlignment = 'top';
-  sheet.getRange(`B${HEADER_ROW + 1}:B${lastRow}`).setNumberFormat('0');
-  sheet.getRange(`B${HEADER_ROW + 1}:B${lastRow}`).format.horizontalAlignment = 'center';
+  for (const column of ['A', 'C']) {
+    sheet.getRange(`${column}${HEADER_ROW + 1}:${column}${lastRow}`).setNumberFormat('0');
+    sheet.getRange(`${column}${HEADER_ROW + 1}:${column}${lastRow}`).format.horizontalAlignment = 'center';
+  }
   data.rows.forEach((row, index) => {
-    const range = sheet.getRangeByIndexes(HEADER_ROW + index, 0, 1, 4);
+    const range = sheet.getRangeByIndexes(HEADER_ROW + index, 0, 1, HEADERS.length);
     range.format.fill = index % 2 === 0 ? '#F0F3F7' : '#FFFFFF';
     range.format.borders = { bottom: { style: 'thin', color: '#DCE3EB' } };
     // Estimate conservatively at Arial 11, preserving explicit line breaks.
-    const lines = Math.max(...[row.class, '', row.ability, row.description].map((value, col) =>
+    const lines = Math.max(...['', row.class, '', row.ability, row.description].map((value, col) =>
       value.split('\n').reduce((total, line) => total + Math.max(1, Math.ceil(line.length / ((WIDTHS[col] - 20) / 7.2))), 0)));
     range.format.rowHeight = Math.max(32, lines * 15 + 12);
   });

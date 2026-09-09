@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/robe.svg" id="icon"]
+
+[sub_resource type="Resource" id="IntelligenceBonus"]
+script = ExtResource("modifier")
+stat = 3
+operation = 0
+value = 3.0
+
+[resource]
+script = ExtResource("item")
+display_name = "Robe"
+slot = 1
+armor = 3
+icon = ExtResource("icon")
+modifiers = Array[ExtResource("modifier")]([SubResource("IntelligenceBonus")])

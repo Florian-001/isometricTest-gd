@@ -19,6 +19,18 @@ derive the next encounter's full armor from equipped items.
 
 ## Equipment and saves
 
+The following Armor-slot resources are available under `resources/items/armor/`:
+
+| Item | Armor | Flat stat bonuses |
+|---|---:|---|
+| Leather Armor | 5 | +1 Strength, +1 Dexterity |
+| Plate Armor | 10 | None |
+| Robe | 3 | +3 Intelligence |
+
+Each has its own inventory icon and can be assigned through the Inspector item
+selector or the developer item catalog. These three items are editor-only additions;
+they are not included in shop/reward pools, sample inventory, or starting equipment.
+
 The unit remembers armor damage spent during the encounter, even with no armor
 equipped. Current armor is max(0, equipped armor minus spent armor damage).
 After absorbing 6 damage, removing and re-equipping a 10-armor shield leaves

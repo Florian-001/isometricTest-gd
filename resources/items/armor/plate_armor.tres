@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Texture2D" path="res://assets/item_icons/plate_armor.svg" id="icon"]
+
+[resource]
+script = ExtResource("item")
+display_name = "Plate Armor"
+slot = 1
+armor = 10
+icon = ExtResource("icon")

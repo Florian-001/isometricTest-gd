@@ -73,7 +73,7 @@ func _reset() -> void:
 
 func _test_model() -> void:
 	var items := ItemDefinitionCatalog.get_items()
-	_check(items.size() == 20, "recursive item catalog includes all 20 resources")
+	_check(items.size() == 23, "recursive item catalog includes all 23 resources")
 	for item in items:
 		_check(item.icon != null, item.resource_path.get_file() + " has assigned artwork")
 	_reset()

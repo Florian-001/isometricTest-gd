@@ -778,17 +778,28 @@ func test_automatic_item_catalog_and_typed_array_editor_model() -> void:
 		names.append(item.display_name)
 		assert_true(item.resource_path.begins_with("res://resources/items/"), "the item catalog should include only saved item resources")
 	assert_eq(names, [
+		"Bat Fangs",
+		"Boar Tusks",
 		"Frost Bow",
 		"Goblin Bow",
 		"Goblin Club",
 		"Goblin Sword",
 		"Iron Sword",
+		"Leather Armor",
+		"Long Sword",
 		"Mage Staff",
+		"Plate Armor",
 		"Raider Weapon",
 		"Ranger Armor",
 		"Ranger Bow",
+		"Rat Teeth",
+		"Robe",
+		"Rusty Sword",
 		"Sage Charm",
+		"Spear",
+		"Weathered Bow",
 		"Wolf Claws",
+		"Wooden Shield",
 		"Wooden Sword",
 	], "the automatic item catalog should discover and sort every saved item deterministically")
 	assert_eq(ItemCatalogScript.get_labels(catalog), names, "unique item names should appear directly in selector rows")

@@ -33,6 +33,7 @@ func _run() -> void:
 	grid = IsometricGrid.new()
 	grid.grid_size = Vector2i(12, 12)
 	arena.add_child(grid)
+	_test_authored_armor()
 	_test_pools_and_equipment()
 	await _test_ai()
 	arena.free()
@@ -64,6 +65,43 @@ func spell(amount: int) -> AbilityDefinition:
 	ability.scaling_amount = 0.0
 	ability.range = 20.0
 	return ability
+
+
+func _test_authored_armor() -> void:
+	var cases := [
+		{"id": "leather_armor", "armor": 5, "bonuses": {UnitStat.Type.STRENGTH: 1.0, UnitStat.Type.DEXTERITY: 1.0}, "details": "+5 Armor\n\n+1 Strength\n\n+1 Dexterity"},
+		{"id": "plate_armor", "armor": 10, "bonuses": {}, "details": "+10 Armor"},
+		{"id": "robe", "armor": 3, "bonuses": {UnitStat.Type.INTELLIGENCE: 3.0}, "details": "+3 Armor\n\n+3 Intelligence"},
+	]
+	var catalog := ItemDefinitionCatalog.get_items()
+	var developer_catalog := load("res://resources/dev_tool_catalog.tres") as DevToolCatalog
+	var details := (load("res://scenes/inventory_item_details.tscn") as PackedScene).instantiate() as InventoryItemDetails
+	root.add_child(details)
+	for entry in cases:
+		var item := load("res://resources/items/armor/%s.tres" % entry.id) as ItemDefinition
+		check(item != null, "%s loads as an item" % entry.id)
+		if item == null:
+			continue
+		check(item.slot == ItemDefinition.EquipmentSlot.ARMOR, "%s uses the Armor slot" % entry.id)
+		check(item.icon != null and item.icon.get_size() == Vector2(64, 64), "%s has a 64x64 icon" % entry.id)
+		check(catalog.has(item) and developer_catalog.items.has(item), "%s is available in both editor catalogs" % entry.id)
+		var actor := unit()
+		var base_stats: Dictionary = {}
+		for stat in [UnitStat.Type.STRENGTH, UnitStat.Type.DEXTERITY, UnitStat.Type.INTELLIGENCE]:
+			base_stats[stat] = actor.get_effective_stat(stat)
+		actor.equip_item(item)
+		check(actor.get_equipped_item(ItemDefinition.EquipmentSlot.ARMOR) == item, "%s equips into Armor" % entry.id)
+		check(actor.get_max_armor() == entry.armor and actor.current_armor == entry.armor, "%s applies its armor contribution" % entry.id)
+		for stat in base_stats:
+			check(is_equal_approx(actor.get_effective_stat(stat), base_stats[stat] + float(entry.bonuses.get(stat, 0.0))), "%s applies the exact %s bonus" % [entry.id, UnitStat.get_display_name(stat)])
+		details.show_item(item, true)
+		check(details.title.text == item.display_name and details.category.text == "Armor" and details.body.text == entry.details, "%s item details show its exact bonuses" % entry.id)
+		actor.unequip_item(ItemDefinition.EquipmentSlot.ARMOR)
+		check(actor.get_max_armor() == 0 and actor.current_armor == 0, "%s unequip removes its armor contribution" % entry.id)
+		for stat in base_stats:
+			check(is_equal_approx(actor.get_effective_stat(stat), base_stats[stat]), "%s unequip restores %s" % [entry.id, UnitStat.get_display_name(stat)])
+		actor.free()
+	details.free()
 
 
 func _test_pools_and_equipment() -> void:

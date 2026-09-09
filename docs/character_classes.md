@@ -1,5 +1,7 @@
 # Friendly character classes
 
+For an automatically updated overview of every class, unlock level, and ability description, open [Class abilities](../CLASS_ABILITIES.md).
+
 Friendly characters get a basic attack from equipment, plus abilities from **Warrior**, **Archer**, **Wizard**, and **Cleric** resources in `resources/classes/`. Enemies continue using their existing template or unit ability loadouts.
 
 Every friendly class has **Strike** when unarmed (100% effective Strength) or equipped with a melee weapon (weapon damage + 100% effective Strength). A ranged weapon replaces that basic attack with **Shoot** (weapon damage + 60% effective Dexterity). These attacks have no class or level requirement and occupy the first ability slot. Shoot retains Arrow's `resources/abilities/arrow.tres` path and UID for save compatibility. Item descriptions list the attack granted while equipped.
@@ -18,12 +20,7 @@ This version uses manual authoring and developer edits. It does not award XP or 
 
 Open a class `.tres` resource in the Inspector. Edit its unique **Class ID**, **Display Name**, and **Ability Unlocks**. Each unlock contains an existing `AbilityDefinition` and a positive **Required Level**. The **Validate Class** action reports invalid entries. Class IDs must be unique within an allocation; save classes as resources before using them in runs or developer saves.
 
-| Class | Unlocks by class level |
-|---|---|
-| Warrior | 2: Charge; 3: Battle Stomp; 4: Taunt; 5: Multi Attack |
-| Archer | 2: Focus; 3: Multiple Arrows; 4: Dagger Throw |
-| Wizard | 1: Ice Shard; 2: Searing Dagger; 3: Slow; 4: Fireball; 5: Beam |
-| Cleric | 1: Heal and Beam; 2: Focus; 3: Empower; 4: Cleanse |
+The current unlock tables and ability descriptions are generated in [Class abilities](../CLASS_ABILITIES.md). Edit the class, ability, or status resources to change that reference.
 
 After the basic attack, abilities follow the character's class order, then ascending required level. Ties retain their authored order. Shared ability resources appear only once in the combat loadout. Existing weapon requirements, action availability, and opportunity-attack rules still apply, including unarmed Strike reactions. Locked abilities cannot execute through direct executor calls. Equipping or unequipping updates the loadout and damage previews immediately, cancels removed or unavailable targeting, and never restores spent actions or reactions.
 
@@ -50,6 +47,19 @@ Character setup snapshots store resolved `class_levels` entries with a class res
 Legacy snapshots without class data use the instantiated scene's starting class allocation at level 1. Existing saved ability overrides remain explicit developer overrides. Invalid resource references, duplicate class IDs, empty friendly allocations, and invalid levels are rejected. New runs validate their starting party before writing a checkpoint. Save schema versions remain unchanged because class data is an optional addition when reading older saves.
 
 ## Verification
+
+The **Class Ability Reference** editor plugin refreshes the reference after saved resource changes and external changes detected by Godot, including referenced status resources and description scripts. It also refreshes when the project opens. If the plugin was added while Godot was already open, reopen the project once to load it. **Project → Tools → Regenerate Class Abilities** provides a manual refresh. Generation reads saved data in a short-lived headless Godot process, preserves unsaved Inspector edits, and writes only when content changes. Invalid resources or script errors leave the previous reference intact and report an editor error; worker details are under `.godot/class_ability_reference/`.
+
+Generate or check the reference from the project root (use your Godot executable path if `godot` is not on PATH):
+
+```text
+godot --headless --path . --script res://addons/class_ability_reference/generate_reference.gd
+godot --headless --path . --script res://addons/class_ability_reference/generate_reference.gd -- --check
+godot --headless --path . --script res://tests/run_class_ability_reference_tests.gd
+godot --headless --editor --path . --script res://tests/run_class_ability_reference_editor_tests.gd
+```
+
+`--check` exits 0 when the reference matches, and 1 when it is missing, stale, or cannot be generated; it never writes the reference. The runner also accepts `--classes-dir=...` and `--output=...` for isolated checks. The generator suite uses `.godot/class_ability_reference_validation/`. The editor suite creates and removes disposable resources under `tests/class_ability_reference_validation_*`, exercises the real Inspector Save action and filesystem notifications, and verifies startup refresh, description script changes, failure recovery, and read-only CLI checks. Both suites deliberately test an invalid input and label the expected error. As with other project editor tests, headless editor shutdown may report Godot allocation warnings after the assertions pass.
 
 Run `godot --headless --path . --script res://tests/run_equipment_ability_tests.gd` for basic attacks across all classes and levels, equipment changes, effective-stat damage, passive/status exclusions, runtime/AI agreement, reactions, saves, and UI sources. Run without `--headless` and append `-- --capture` for screenshots under `.godot/equipment_ability_validation/`. The rendered suite passes 452 checks. Class, inventory, developer, starting-hub, melee, Charge, opportunity integration, passive, Warrior, Multiple Arrows, Dagger Throw, and active-AI integration regressions pass; the active-AI and opportunity unit runners retain only the known shared disengagement assertion failure.
 

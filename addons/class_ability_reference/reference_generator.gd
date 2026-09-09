@@ -73,14 +73,14 @@ static func _build(classes_directory: String) -> Dictionary:
 	for entry in classes:
 		var unlocks: Array[ClassAbilityUnlock] = entry.definition.get_sorted_unlocks()
 		if unlocks.is_empty():
-			rows.append({"class": entry.definition.display_name, "level": null, "ability": "—", "description": "No class unlocks; basic attacks are still available."})
+			rows.append({"class_id": String(entry.definition.class_id), "class": entry.definition.display_name, "level": null, "ability": "—", "description": "No class unlocks; basic attacks are still available."})
 		for unlock in unlocks:
-			rows.append(_row(entry.definition.display_name, unlock.required_level, unlock.ability, errors))
+			rows.append(_row(entry.definition.display_name, unlock.required_level, unlock.ability, errors, entry.definition.class_id))
 	return {"ok": true, "rows": rows, "errors": errors} if errors.is_empty() else _failure(errors)
 
 
-static func _row(class_name_text: String, level: Variant, ability: AbilityDefinition, errors: Array[String]) -> Dictionary:
-	return {"class": class_name_text, "level": level, "ability": ability.display_name, "description": _describe(ability, errors)}
+static func _row(class_name_text: String, level: Variant, ability: AbilityDefinition, errors: Array[String], class_id: StringName = &"") -> Dictionary:
+	return {"class_id": null if class_id.is_empty() else String(class_id), "class": class_name_text, "level": level, "ability": ability.display_name, "description": _describe(ability, errors)}
 
 
 static func update(output_path: String = OUTPUT_PATH, classes_directory: String = CLASSES_DIRECTORY, check_only: bool = false) -> Dictionary:

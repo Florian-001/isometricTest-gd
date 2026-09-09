@@ -4,7 +4,6 @@ import os from 'node:os';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
-export const SHEET = 'Class Abilities';
 export const HEADER_ROW = 5;
 const HEADERS = ['Class', 'Unlock Level', 'Ability', 'Description'];
 const WIDTHS = [150, 112, 182, 720];
@@ -20,26 +19,60 @@ export async function loadRuntime(modules) {
 // Resource labels remain literal text, including names beginning with '='.
 const text = value => value.startsWith('=') ? `'${value}` : value;
 
-export function buildWorkbook(artifact, data) {
+export function classSheets(data) {
   if (!Array.isArray(data.rows) || !data.rows.length) throw new Error('No class ability records supplied.');
+  const shared = [];
+  const classes = new Map();
   for (const row of data.rows) {
     if (![row.class, row.ability, row.description].every(value => typeof value === 'string') ||
+        !(row.class_id === null || (typeof row.class_id === 'string' && row.class_id.length > 0)) ||
         !(row.level === null || (Number.isInteger(row.level) && row.level > 0))) {
       throw new Error('Invalid class ability record.');
     }
+    if (row.class_id === null) shared.push(row);
+    else {
+      if (!classes.has(row.class_id)) classes.set(row.class_id, { title: row.class, rows: [] });
+      const group = classes.get(row.class_id);
+      if (group.title !== row.class) throw new Error(`Inconsistent class name for ${row.class_id}.`);
+      group.rows.push(row);
+    }
   }
+  if (!classes.size) throw new Error('No classes supplied.');
+  const used = new Set(['history']); // Excel reserves History for change tracking.
+  const truncate = (value, length) => value.slice(0, length).replace(/[\uD800-\uDBFF]$/, '').replace(/'+$/, '');
+  return [...classes.values()].map(group => {
+    const base = group.title.replace(/[\u0000-\u001f\u007f\\/?*:[\]]/g, ' ').trim().replace(/^'+|'+$/g, '').trim() || 'Class';
+    let name = truncate(base, 31);
+    for (let suffix = 2; used.has(name.toLowerCase()); suffix++) {
+      const ending = ` (${suffix})`;
+      name = truncate(base, 31 - ending.length) + ending;
+    }
+    used.add(name.toLowerCase());
+    return { name, title: group.title, rows: [...shared, ...group.rows] };
+  });
+}
+
+export function buildWorkbook(artifact, data) {
   const workbook = artifact.Workbook.create();
-  const sheet = workbook.worksheets.add(SHEET);
+  classSheets(data).forEach((group, index) => addClassSheet(workbook, group, index));
+  workbook.recalculate();
+  return workbook;
+}
+
+function addClassSheet(workbook, data, index) {
+  const sheet = workbook.worksheets.add(data.name);
   const lastRow = HEADER_ROW + data.rows.length;
   const body = sheet.getRange(`A1:D${lastRow}`);
   body.format.font = { name: 'Arial', size: 11, color: '#253246' };
   body.format.verticalAlignment = 'center';
   sheet.showGridLines = false;
   sheet.tabColor = '#243B53';
-  sheet.getRange('A2').values = [['Class abilities']];
+  sheet.getRange('A2:D2').merge();
+  sheet.getRange('A2').values = [[text(`${data.title} abilities`)]];
   sheet.getRange('A2:D2').format.borders = { bottom: { style: 'thin', color: '#C7D0DB' } };
   sheet.getRange('A2').format.font = { name: 'Arial', size: 16, bold: true, color: '#243B53' };
-  sheet.getRange('A2:D2').format.rowHeight = 28;
+  sheet.getRange('A2:D2').format.wrapText = true;
+  sheet.getRange('A2:D2').format.rowHeight = Math.max(28, Math.ceil((data.title.length + 10) / 95) * 24);
   sheet.getRange('A3:D3').values = [[
     'Generated reference', 'Class levels', 'All classes = basic attacks',
     'Edit resources in Godot. Saved changes update this file. Close and reopen Excel to see updates. Blank level = no class-level requirement.',
@@ -49,7 +82,7 @@ export function buildWorkbook(artifact, data) {
   sheet.getRange('A3:D3').format.rowHeight = 42;
   sheet.getRange('A4:D4').format.rowHeight = 8;
   sheet.getRange(`A${HEADER_ROW}:D${lastRow}`).values = [HEADERS, ...data.rows.map(row => [text(row.class), row.level, text(row.ability), text(row.description)])];
-  const table = sheet.tables.add(`A${HEADER_ROW}:D${lastRow}`, true, 'ClassAbilities');
+  const table = sheet.tables.add(`A${HEADER_ROW}:D${lastRow}`, true, `ClassAbilities${index + 1}`);
   table.style = 'TableStyleMedium2';
   table.showFilterButton = true;
   const header = sheet.getRange(`A${HEADER_ROW}:D${HEADER_ROW}`);
@@ -75,8 +108,6 @@ export function buildWorkbook(artifact, data) {
     range.format.rowHeight = Math.max(32, lines * 15 + 12);
   });
   sheet.freezePanes.freezeRows(HEADER_ROW);
-  workbook.recalculate();
-  return workbook;
 }
 
 // Compare the actual cells, table and layout XML. ZIP times and document timestamps

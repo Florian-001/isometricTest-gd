@@ -165,16 +165,20 @@ func _test_writes_and_checks() -> void:
 	_write(_output, "Old document\n")
 	_check(not Generator.update(_output, _classes, true).ok and FileAccess.get_file_as_string(_output) == "Old document\n", "--check rejects stale content without writing")
 	_check(Generator.update(_output, _classes).ok, "existing output can be replaced atomically on this platform")
-	var cells := Xlsx.cells(_output)
 	var records: Array = Generator.build(_classes).rows
-	for index in records.size():
-		var row: Dictionary = records[index]
-		var number := index + 6
-		_check(cells.get("A%d" % number) == row.class and cells.get("B%d" % number) == row.level and cells.get("C%d" % number) == row.ability and cells.get("D%d" % number) == row.description, "reopened workbook matches all four resource fields, including numeric levels")
+	_check(Xlsx.sheet_names(_output) == ["Alpha", "Zulu"], "each class gets its own alphabetical worksheet")
+	for sheet_index in 2:
+		var cells := Xlsx.cells(_output, sheet_index + 1)
+		var class_id: String = ["alpha", "zulu"][sheet_index]
+		var sheet_rows := records.filter(func(row: Dictionary) -> bool: return row.class_id == null or row.class_id == class_id)
+		for index in sheet_rows.size():
+			var row: Dictionary = sheet_rows[index]
+			var number := index + 6
+			_check(cells.get("A%d" % number) == row.class and cells.get("B%d" % number) == row.level and cells.get("C%d" % number) == row.ability and cells.get("D%d" % number) == row.description, "each class sheet contains its own unlocks and both shared attacks with numeric levels")
 	var sheet := Xlsx.part(_output, "xl/worksheets/sheet1.xml")
 	var table := Xlsx.part(_output, "xl/tables/table1.xml")
 	_check(sheet.contains('ySplit="5"') and sheet.contains('state="frozen"'), "headers and guidance are frozen")
-	_check(table.contains("autoFilter") and table.contains('name="ClassAbilities"'), "native filterable table is present")
+	_check(table.contains("autoFilter") and table.contains('name="ClassAbilities1"'), "native filterable table is present")
 	_check(Xlsx.part(_output, "xl/styles.xml").contains('wrapText="1"'), "long descriptions are wrapped")
 	var previous := FileAccess.get_sha256(_output)
 	var had_override := OS.has_environment("CLASS_ABILITIES_NODE")

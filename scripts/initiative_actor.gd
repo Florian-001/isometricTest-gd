@@ -943,6 +943,12 @@ func set_grid_cell_immediate(cell: Vector2i) -> void:
 	_set_runtime_grid_cell_immediate(cell)
 
 
+## Forced movement changes live position without editing setup, facing, budgets,
+## or firing the voluntary movement's terrain-entry signal.
+func set_forced_grid_cell(cell: Vector2i) -> void:
+	_set_runtime_grid_cell_immediate(cell)
+
+
 func _set_runtime_grid_cell_immediate(cell: Vector2i) -> void:
 	grid_cell = cell
 	_notify_passive_context_changed()

@@ -29,7 +29,7 @@ func test_editor_authored_drawer_and_catalog_are_complete() -> void:
 	var catalog := load("res://resources/dev_tool_catalog.tres") as DevToolCatalog
 	assert_true(catalog != null, "the Battle Inspector catalog should load")
 	assert_eq(catalog.unit_scenes.size(), 15, "the unit palette includes both bandits alongside the thirteen existing scenes")
-	assert_eq(catalog.abilities.size(), 22, "the ability editor includes Counter and Swipe alongside the existing abilities")
+	assert_eq(catalog.abilities.size(), 23, "the ability editor includes Ram alongside the existing abilities")
 	assert_eq(catalog.items.size(), 20, "the equipment editor includes Long Sword and Spear alongside the eighteen existing items")
 	assert_eq(catalog.wall_styles.size(), 2, "the terrain editor should contain both configured wall styles")
 	for unit_scene in catalog.unit_scenes:

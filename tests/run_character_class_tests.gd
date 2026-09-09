@@ -38,7 +38,7 @@ func _run() -> void:
 
 func _test_unlocks_and_isolation() -> void:
 	var expected := {
-		"warrior": ["Strike", "Charge", "Battle Stomp", "Taunt", "Multi Attack", "Counter", "Swipe"], "archer": ["Strike", "Focus", "Multiple Arrows", "Dagger Throw"],
+		"warrior": ["Strike", "Charge", "Battle Stomp", "Taunt", "Multi Attack", "Counter", "Swipe", "Ram"], "archer": ["Strike", "Focus", "Multiple Arrows", "Dagger Throw"],
 		"wizard": ["Strike", "Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam"],
 		"cleric": ["Strike", "Heal", "Beam", "Focus", "Empower", "Cleanse"],
 	}

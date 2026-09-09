@@ -82,7 +82,12 @@ func perform(
 	grid.get_parent().add_child(slash)
 	melee_impact.emit(caster, ability, target_cell)
 	if impact_callback.is_valid():
-		impact_callback.call()
+		await impact_callback.call()
+	if not is_instance_valid(caster):
+		if is_instance_valid(slash):
+			slash.queue_free()
+		melee_cancelled.emit(null, ability, target_cell, &"caster_removed")
+		return false
 
 	var return_tween := caster.create_tween()
 	return_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)

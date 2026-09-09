@@ -9,6 +9,7 @@ Warrior class unlocks are authored in `resources/classes/warrior.tres`. Raise a 
 | 5 | Multi Attack | Two separate melee hits on the same enemy, each dealing weapon damage + 50% effective Strength. Range matches Strike (1.414). |
 | 6 | Counter | Grants the Counter passive until the start of the caster's next turn. Click the caster to activate. |
 | 7 | Swipe | Weapon damage + 100% effective Strength to each enemy in a three-cell row immediately in front of the caster. |
+| 8 | Ram | 100% effective Strength to one orthogonally adjacent enemy, followed by up to 2 tiles of knockback. |
 
 All three abilities spend one normal ability action and no movement points. Stomp and Multi Attack require a melee weapon. There are no additional cooldowns or resource costs. Stomp does not stun; Taunt causes no damage or stun.
 
@@ -29,6 +30,16 @@ The temporary status expires before the owner's next turn-start terrain and stat
 Click one of the four orthogonally adjacent cells to aim. The selected cell is the middle of a three-cell row perpendicular to that direction. For a caster at `(x, y)` aiming at `(x, y-1)`, the row is `(x-1, y-1)`, `(x, y-1)`, `(x+1, y-1)`. Self and diagonal aiming are invalid. The row rotates with the chosen direction, independently of sprite facing.
 
 Each enemy in the row takes one Strike-strength hit. Allies and the caster are excluded. The center may be empty, and an entirely empty cast still spends the action. Board edges clip the row; wall cells and blocked diagonal corners cannot be hit. Weapon range bonuses do not extend Swipe. Hover previews, AI forecasts, and execution share this geometry; the slash spans the affected row.
+
+## Ram and knockback
+
+Ram spends one ability action, no movement, and has no cooldown. It works unarmed or with any equipment. Only effective Strength contributes damage: weapons do not add damage, passive weapon bonuses, weapon statuses, or reach. Select an enemy exactly one tile north, south, east, or west; allies, empty cells, diagonals, and self are invalid. The caster stays in place.
+
+Damage applies at melee impact, then the surviving target is pushed up to two tiles directly away. A wall or board edge stops the push in the last valid cell and deals 1 damage to the target. Another unit stops it before the occupied cell and both units take 1 damage, regardless of faction. Armor absorbs collision damage normally. Each push has at most one collision; there is no chain push or continuation if the blocker dies. Defeated friendlies remain obstacles under the existing occupancy rules, but cannot take additional damage.
+
+Knockback preserves facing and action, movement, and reaction budgets. It moves living stunned units and bone piles. It ignores terrain costs and triggers neither tile-entry effects nor opportunity attacks; terrain effects on later turns apply normally. Death or removal stops displacement. Collision damage does not trigger Counter; the original Ram target can counter once after the complete push only if still alive, able to attack, and within basic-attack reach.
+
+`KnockbackEffectDefinition` is a reusable additional ability effect with `distance` (default 2) and `collision_damage` (default 1). The executor owns board-aware animated delivery; `KnockbackSystem` supplies shared collision geometry for execution, AI, and hover previews. The preview shows the path, landing tile, and colliding unit after accounting for the initial damage. Displacement and collision resolution finish before Counter, turn advancement, battle finalization, or saving. Existing runtime save fields retain the resulting position, health, and armor.
 
 ## Targeting and damage
 
@@ -59,6 +70,12 @@ Swipe adds the appended `AbilityDefinition.Shape.LINE_IN_FRONT` value. `area_of_
 Statuses now optionally reference `granted_passive` (default null) and set `expires_at_turn_start` (default false). With turn-start expiry enabled, `duration_turns` counts owner turn starts. Existing statuses retain their turn-end behavior. Counter uses `CounterPassiveEffect`; its resource and inline developer-save forms are supported. `AbilityExecutor.execute_counter_attack()` is the resource-free, non-chaining reaction entry point; `resolution_finished` signals completion of the outer cast and all reactions.
 
 ## Verification
+
+Run `godot --headless --path . --script res://tests/run_ram_tests.gd` for Ram resources, all four directions, collisions, equipment and damage rules, forced movement, Counter interactions, save round trips, AI forecasts, and real battle UI checks. A rendered run with `-- --capture` saves a preview under `.godot/ram_validation/`.
+
+Ram validation on Godot 4.7 passes 956 headless checks and 957 rendered checks. Warrior (81), Counter/Swipe (222), passive (83), equipment/ability (482), spear (695), Multiple Arrows (100), and Empower/Cleanse (121) checks pass, along with class, melee, Charge, terrain, opportunity integration, active-AI integration, and run-state suites. Class Inspector assertions also pass; that editor runner reports leaked rendering resources on shutdown.
+
+The broad headless runner reports the same 12 errors as a clean checkout of `85384e1`, covering existing fixtures, item expectations, and AI assertions (timing values vary). Developer-mode unit coverage retains its existing equipment-count failure, and the opportunity/active-AI unit suites retain the disengagement assertion. Armor still passes all 120 assertions; the working checkout exited with `0xc0000005` afterward while the isolated baseline exited normally, consistent with the intermittent shutdown limitation below.
 
 Run `godot --headless --path . --script res://tests/run_warrior_tests.gd` for resource, class, radius, damage, status lifetime, save metadata, AI, reaction, and real battle UI checks. Run without `--headless` and append `-- --capture` to save battle screenshots under `.godot/warrior_validation/`.
 

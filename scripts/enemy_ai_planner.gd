@@ -745,6 +745,15 @@ func _finalize_plan(
 	}
 
 
+## Hover presentation uses the same effect order and survival rules as AI.
+func get_knockback_preview(caster: TacticalCharacter, ability: AbilityDefinition,
+	target_cell: Vector2i, snapshot: AIBoardSnapshot, targeting: AbilityTargeting) -> Array[Dictionary]:
+	var preview := {"knockbacks": [] as Array[Dictionary]}
+	_forecast_ability(caster, ability, target_cell, snapshot.duplicate_state(), targeting,
+		EnemyAIProfile.new(), true, preview)
+	return preview.knockbacks
+
+
 func _forecast_ability(
 	caster: TacticalCharacter,
 	ability: AbilityDefinition,
@@ -752,7 +761,8 @@ func _forecast_ability(
 	snapshot: AIBoardSnapshot,
 	targeting: AbilityTargeting,
 	profile: EnemyAIProfile,
-	allow_counters: bool = true
+	allow_counters: bool = true,
+	preview: Dictionary = {}
 ) -> float:
 	if not _can_use_ability_in_snapshot(caster, ability, snapshot):
 		return 0.0
@@ -810,6 +820,8 @@ func _forecast_ability(
 		if not _can_use_ability_in_snapshot(caster, ability, snapshot):
 			break
 		for recipient in recipients:
+			if not snapshot.is_living(recipient) or not affected_cells.has(snapshot.get_cell(recipient)):
+				continue
 			if (allow_counters and ability.has_damage() and snapshot.is_living(recipient)
 				and PassiveAbilityResolver.has_counter(recipient, snapshot) and not counter_defenders.has(recipient)):
 				counter_defenders.append(recipient)
@@ -838,6 +850,18 @@ func _forecast_ability(
 					not snapshot.is_living(recipient)
 					or not ability.should_apply_additional_effect(additional_effect)
 				):
+					continue
+				if additional_effect is KnockbackEffectDefinition:
+					var knockback := additional_effect as KnockbackEffectDefinition
+					var push := KnockbackSystem.snapshot_trace(caster, recipient, knockback, snapshot)
+					if preview.has("knockbacks"):
+						preview.knockbacks.append(push)
+					snapshot.set_cell(recipient, push.landing)
+					for victim in KnockbackSystem.collision_recipients(recipient, push):
+						var collision := DamageCalculator.resolve_damage(knockback.collision_damage,
+							snapshot.get_health(victim), snapshot.get_armor(victim))
+						score += _score_effect_estimate(caster, victim, collision, profile, snapshot)
+					score += knockback.ai_utility_hint
 					continue
 				var before := snapshot.get_health(recipient)
 				var estimate: Dictionary

@@ -934,6 +934,18 @@ func _update_ability_hover(global_mouse: Vector2) -> void:
 				trajectory_cells.append(projectile_path[index])
 	if is_valid:
 		ability_bar.set_damage_preview(_selected_character, _selected_ability, effect_origin)
+		for effect in _selected_ability.effects:
+			if effect is KnockbackEffectDefinition:
+				var snapshot := AIBoardSnapshot.from_battle(_characters, grid.grid_size, wall_cells)
+				var pushes := EnemyAIPlanner.new().get_knockback_preview(_selected_character,
+					_selected_ability, cell, snapshot, _ability_targeting)
+				for push in pushes:
+					trajectory_cells.append_array(push.path)
+					if not affected_cells.has(push.landing):
+						affected_cells.append(push.landing)
+					if is_instance_valid(push.collision_unit) and not affected_cells.has(push.collision_cell):
+						affected_cells.append(push.collision_cell)
+				break
 	grid.show_ability_preview(cell, affected_cells, trajectory_cells, is_valid)
 
 

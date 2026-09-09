@@ -302,7 +302,7 @@ func _deliver_hit(
 			)
 			if not projectile_arrived:
 				return false
-			impact_callback.call()
+			await impact_callback.call()
 		AbilityDefinition.DeliveryType.MELEE:
 			var area_cells: Array[Vector2i] = []
 			if ability.shape == AbilityDefinition.Shape.LINE_IN_FRONT:
@@ -319,7 +319,7 @@ func _deliver_hit(
 			if not melee_finished:
 				return false
 		_:
-			impact_callback.call()
+			await impact_callback.call()
 	return true
 
 
@@ -350,7 +350,7 @@ func _apply_delivered_effects(
 			or not can_select_hit_target(caster, ability, target, units, grid, targeting, wall_cells)
 			or target.grid_cell != selected_cell):
 			return
-	_apply_effects(caster, selected_cell, ability, units, targeting, wall_cells, locked_recipients, reaction_context)
+	await _apply_effects(caster, selected_cell, ability, units, targeting, wall_cells, locked_recipients, reaction_context, grid)
 
 
 func can_execute(
@@ -459,7 +459,8 @@ func _apply_effects(
 	targeting: AbilityTargeting,
 	wall_cells: Dictionary,
 	locked_recipients: Array[TacticalCharacter] = [],
-	reaction_context: Dictionary = {}
+	reaction_context: Dictionary = {},
+	grid: IsometricGrid = null
 ) -> void:
 	var recipients := targeting.get_affected_units(
 		caster,
@@ -469,6 +470,8 @@ func _apply_effects(
 		wall_cells
 	)
 	for recipient in recipients:
+		if not is_instance_valid(caster):
+			break
 		if not is_instance_valid(recipient) or recipient.current_health <= 0 or not units.has(recipient):
 			continue
 		if not locked_recipients.is_empty() and not locked_recipients.has(recipient):
@@ -480,15 +483,68 @@ func _apply_effects(
 		if ability.has_primary_effect() and recipient.current_health > 0:
 			ability.apply_primary_effect(caster, recipient)
 		for additional_effect in ability.effects:
+			if not is_instance_valid(caster):
+				break
 			if (
 				is_instance_valid(recipient) and recipient.current_health > 0
 				and ability.should_apply_additional_effect(additional_effect)
 			):
-				if additional_effect is DamageEffectDefinition:
+				if additional_effect is KnockbackEffectDefinition:
+					await _apply_knockback(caster, recipient, additional_effect, units, grid, wall_cells)
+				elif additional_effect is DamageEffectDefinition:
 					var bonus := ability.get_passive_damage_bonus(caster) if bonus_pending else 0
 					bonus_pending = false
 					recipient.apply_damage(additional_effect.calculate_amount(caster, ability) + bonus)
 				else:
-					additional_effect.apply(caster, recipient, ability)
-		if is_instance_valid(recipient) and recipient.current_health > 0:
+					await additional_effect.apply(caster, recipient, ability)
+		if is_instance_valid(caster) and is_instance_valid(recipient) and recipient.current_health > 0 and units.has(recipient):
 			ability.apply_weapon_status(caster, recipient)
+
+
+func _is_present_living(unit: Variant, units: Array[TacticalCharacter]) -> bool:
+	return is_instance_valid(unit) and unit.current_health > 0 and unit.is_inside_tree() and units.has(unit)
+
+
+## The executor owns the animation wait so removing the target cannot strand a
+## coroutine waiting on that target's tween.finished signal.
+func _apply_knockback(caster: Variant, target: Variant, effect: KnockbackEffectDefinition,
+	units: Array[TacticalCharacter], grid: IsometricGrid, walls: Dictionary) -> void:
+	if grid == null or not is_instance_valid(caster) or not _is_present_living(target, units) or target.is_moving:
+		return
+	var direction: Vector2i = (target.grid_cell - caster.grid_cell).sign()
+	if direction == Vector2i.ZERO or effect.distance <= 0:
+		return
+	target.is_moving = true
+	target.movement_started.emit(target)
+	for _step in range(effect.distance):
+		if not _is_present_living(target, units):
+			break
+		var result := KnockbackSystem.trace(target.grid_cell, direction, 1, grid.grid_size,
+			walls, KnockbackSystem.live_occupants(units, target))
+		if not result.collided:
+			var origin: Vector2 = target.global_position
+			var destination := grid.grid_to_global(result.landing)
+			var duration := maxf(0.04, origin.distance_to(destination) / target.movement_animation_speed)
+			var began := Time.get_ticks_msec()
+			while _is_present_living(target, units):
+				var progress := minf(1.0, (Time.get_ticks_msec() - began) / (duration * 1000.0))
+				target.global_position = origin.lerp(destination, smoothstep(0.0, 1.0, progress))
+				if progress >= 1.0:
+					break
+				await get_tree().process_frame
+			if not _is_present_living(target, units):
+				break
+			# Signals or scene edits may have changed occupancy during the animation.
+			result = KnockbackSystem.trace(target.grid_cell, direction, 1, grid.grid_size,
+				walls, KnockbackSystem.live_occupants(units, target))
+			target.set_forced_grid_cell(result.landing)
+		if result.collided:
+			var victims := KnockbackSystem.collision_recipients(target, result)
+			for victim in victims:
+				if _is_present_living(victim, units):
+					victim.apply_damage(effect.collision_damage)
+			break
+	if is_instance_valid(target):
+		target.set_forced_grid_cell(target.grid_cell)
+		target.is_moving = false
+		target.movement_finished.emit(target)

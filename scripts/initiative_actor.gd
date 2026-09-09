@@ -435,13 +435,26 @@ func get_effective_stat_without_equipment(stat: UnitStat.Type) -> float:
 
 
 func _calculate_effective_stat(stat: UnitStat.Type, include_equipment: bool, include_statuses: bool = true) -> float:
+	return _calculate_stat_with_modifiers(stat, _get_all_modifiers(include_equipment, include_statuses), include_equipment)
+
+
+## Evaluate a simulated status loadout without changing this unit or shared resources.
+func calculate_stat_with_statuses(stat: UnitStat.Type, statuses: Array[StatusEffectDefinition]) -> float:
+	var modifiers := _get_all_modifiers(true, false)
+	for status in statuses:
+		if status != null:
+			modifiers.append_array(status.get_stat_modifiers())
+	return _calculate_stat_with_modifiers(stat, modifiers, true)
+
+
+func _calculate_stat_with_modifiers(stat: UnitStat.Type, modifiers: Array[StatModifierDefinition], include_equipment: bool) -> float:
 	if stat == UnitStat.Type.NONE:
 		return 0.0
 	_initialize_runtime_stats()
 	var flat_total := 0.0
 	var percent_add_total := 0.0
 	var percent_multiplier := 1.0
-	for modifier in _get_all_modifiers(include_equipment, include_statuses):
+	for modifier in modifiers:
 		if modifier == null or modifier.stat != stat:
 			continue
 		match modifier.operation:
@@ -451,7 +464,15 @@ func _calculate_effective_stat(stat: UnitStat.Type, include_equipment: bool, inc
 				percent_add_total += modifier.value
 			StatModifierDefinition.Operation.PERCENT_MULTIPLY:
 				percent_multiplier *= maxf(0.0, 1.0 + modifier.value)
-	var subtotal := _get_base_stat_for_sources(stat, include_equipment) + flat_total
+	var base := (
+		UnitStat.get_scaling_rules().calculate_speed_adjusted_base_movement(
+			_get_base_movement_range(),
+			_calculate_stat_with_modifiers(UnitStat.Type.SPEED, modifiers, include_equipment)
+		)
+		if stat == UnitStat.Type.MOVEMENT_RANGE
+		else _get_base_stat_for_sources(stat, include_equipment)
+	)
+	var subtotal := base + flat_total
 	var percent_add_multiplier := maxf(0.0, 1.0 + percent_add_total)
 	return maxf(0.0, subtotal * percent_add_multiplier * percent_multiplier)
 
@@ -679,6 +700,23 @@ func get_active_statuses() -> Array[ActiveStatus]:
 	var result: Array[ActiveStatus] = []
 	result.assign(_active_statuses)
 	return result
+
+
+## Remove all negative statuses atomically, preserving buffs and spent resources.
+func remove_negative_statuses() -> int:
+	_initialize_runtime_stats()
+	if current_health <= 0:
+		return 0
+	var previous_state := _capture_status_state()
+	var removed := 0
+	for index in range(_active_statuses.size() - 1, -1, -1):
+		var definition := _active_statuses[index].definition
+		if definition != null and definition.is_negative():
+			_active_statuses.remove_at(index)
+			removed += 1
+	if removed > 0:
+		_notify_statuses_changed(previous_state)
+	return removed
 
 
 func process_status_turn_start() -> void:

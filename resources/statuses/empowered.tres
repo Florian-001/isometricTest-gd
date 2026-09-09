@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="status"]
+[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
+[ext_resource type="Texture2D" path="res://assets/status_icons/empowered.svg" id="icon"]
+
+[sub_resource type="Resource" id="Strength"]
+script = ExtResource("modifier")
+stat = 1
+value = 1.0
+
+[sub_resource type="Resource" id="Dexterity"]
+script = ExtResource("modifier")
+stat = 2
+value = 1.0
+
+[sub_resource type="Resource" id="Intelligence"]
+script = ExtResource("modifier")
+stat = 3
+value = 1.0
+
+[sub_resource type="Resource" id="Constitution"]
+script = ExtResource("modifier")
+stat = 7
+value = 1.0
+
+[sub_resource type="Resource" id="Speed"]
+script = ExtResource("modifier")
+stat = 4
+value = 1.0
+
+[sub_resource type="Resource" id="Movement"]
+script = ExtResource("modifier")
+stat = 5
+value = 1.0
+
+[resource]
+script = ExtResource("status")
+status_id = &"empowered"
+display_name = "Empowered"
+polarity = 0
+duration_turns = 3
+affected_unit_ai_utility = 12.0
+icon = ExtResource("icon")
+color = Color(1, 0.78, 0.3, 1)
+modifiers = Array[ExtResource("modifier")]([SubResource("Strength"), SubResource("Dexterity"), SubResource("Intelligence"), SubResource("Constitution"), SubResource("Speed"), SubResource("Movement")])

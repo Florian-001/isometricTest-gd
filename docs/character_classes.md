@@ -23,7 +23,7 @@ Open a class `.tres` resource in the Inspector. Edit its unique **Class ID**, **
 | Warrior | 2: Charge; 3: Battle Stomp; 4: Taunt; 5: Multi Attack |
 | Archer | 2: Focus; 3: Multiple Arrows; 4: Dagger Throw |
 | Wizard | 1: Ice Shard; 2: Searing Dagger; 3: Slow; 4: Fireball; 5: Beam |
-| Cleric | 1: Heal and Beam; 2: Focus |
+| Cleric | 1: Heal and Beam; 2: Focus; 3: Empower; 4: Cleanse |
 
 After the basic attack, abilities follow the character's class order, then ascending required level. Ties retain their authored order. Shared ability resources appear only once in the combat loadout. Existing weapon requirements, action availability, and opportunity-attack rules still apply, including unarmed Strike reactions. Locked abilities cannot execute through direct executor calls. Equipping or unequipping updates the loadout and damage previews immediately, cancels removed or unavailable targeting, and never restores spent actions or reactions.
 
@@ -32,6 +32,8 @@ See [Warrior abilities](warrior_abilities.md) for Stomp targeting, Taunt pursuit
 See [Multiple Arrows](multiple_arrows.md) for ordered target selection, repeated targets, and per-hit Inspector settings.
 
 Dagger Throw launches one projectile at an enemy within range 5 for physical damage equal to 100% effective Dexterity. It spends one ability action and no movement, requires no weapon, and adds no weapon damage, weapon statuses, or passive weapon-damage bonuses. Equipment and statuses that modify Dexterity still affect its damage. It is available at Archer level 4 and in the developer catalog. The Ranger enemy retains its existing loadout. Run `godot --headless --path . --script res://tests/run_dagger_throw_tests.gd` for focused validation.
+
+See [Empower and Cleanse](empower_and_cleanse.md) for status polarity, duration, cleansing, and validation.
 
 ## Developer controls and runtime API
 

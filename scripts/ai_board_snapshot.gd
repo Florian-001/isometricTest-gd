@@ -39,8 +39,8 @@ static func from_battle(
 		snapshot.unit_max_health[unit] = unit.get_max_health()
 		snapshot.unit_constitutions[unit] = unit.get_effective_stat(UnitStat.Type.CONSTITUTION)
 		snapshot.unit_movement_ranges[unit] = unit.get_movement_range()
-		snapshot.unit_remaining_movement[unit] = unit.remaining_movement
-		snapshot.unit_opportunity_reactions[unit] = unit.opportunity_reaction_available
+		snapshot.unit_remaining_movement[unit] = unit._remaining_movement
+		snapshot.unit_opportunity_reactions[unit] = unit._opportunity_reaction_available
 		var statuses: Dictionary = {}
 		for active_status in unit.get_active_statuses():
 			if active_status.definition == null or active_status.definition.status_id == &"":
@@ -262,9 +262,6 @@ func forecast_status_application(
 	)
 	var statuses := unit_statuses.get(target, {}) as Dictionary
 	var health_before_constitution_change := get_health(target)
-	if existing_turns <= 0:
-		_apply_new_status_movement_modifiers(target, status_effect)
-		_apply_new_status_constitution_modifiers(target, status_effect)
 	statuses[status_effect.status_id] = {
 		"definition": status_effect,
 		"remaining_turns": duration,
@@ -272,9 +269,7 @@ func forecast_status_application(
 		"source_unit": caster,
 	}
 	unit_statuses[target] = statuses
-	if status_effect.blocks_actions():
-		unit_stunned[target] = true
-		unit_remaining_movement[target] = 0.0
+	_recompute_status_stats(target)
 	return {
 		"health_delta": (
 			int(estimate.get("health_delta", 0))
@@ -288,70 +283,63 @@ func forecast_status_application(
 	}
 
 
-func _apply_new_status_movement_modifiers(
-	unit: TacticalCharacter,
-	status_effect: StatusEffectDefinition
-) -> void:
-	var movement := get_movement_range(unit)
-	var flat_total := 0.0
-	var percent_add_total := 0.0
-	var percent_multiplier := 1.0
-	for modifier in status_effect.get_stat_modifiers():
-		if modifier == null or modifier.stat != UnitStat.Type.MOVEMENT_RANGE:
-			continue
-		match modifier.operation:
-			StatModifierDefinition.Operation.FLAT:
-				flat_total += modifier.value
-			StatModifierDefinition.Operation.PERCENT_ADD:
-				percent_add_total += modifier.value
-			StatModifierDefinition.Operation.PERCENT_MULTIPLY:
-				percent_multiplier *= maxf(0.0, 1.0 + modifier.value)
-	var adjusted := (
-		(movement + flat_total)
-		* maxf(0.0, 1.0 + percent_add_total)
-		* percent_multiplier
-	)
-	unit_movement_ranges[unit] = (
-		UnitStat.get_scaling_rules().clamp_effective_movement_range(adjusted)
-	)
-	unit_remaining_movement[unit] = minf(
-		get_remaining_movement(unit),
-		get_movement_range(unit)
-	)
+## Evaluate the benefit of removing debuffs without restoring damage already taken.
+func estimate_cleanse(caster: TacticalCharacter, target: TacticalCharacter) -> Dictionary:
+	var utility := 0.0
+	var removed := 0
+	if is_living(target):
+		for status_id in get_status_ids(target):
+			var status := get_status_state(target, status_id)
+			var definition := status.get("definition") as StatusEffectDefinition
+			if definition == null or not definition.is_negative():
+				continue
+			removed += 1
+			var turns := get_status_remaining(target, status_id)
+			# A turn-start damage tick that already happened cannot be prevented by Cleanse.
+			var pending_ticks := maxi(0, turns - (1 if bool(status.get("processed_this_turn", false)) else 0))
+			var estimate := definition.estimate_for_ai(target, target, get_health(target), pending_ticks, get_armor(target))
+			var fraction := float(turns) / float(maxi(1, definition.duration_turns))
+			utility += maxf(0.0, -float(estimate.get("utility_hint", 0.0))) * fraction
+			utility -= float(estimate.get("health_delta", 0)) + float(estimate.get("armor_delta", 0))
+	if is_instance_valid(caster) and is_instance_valid(target) and caster.is_friendly() != target.is_friendly():
+		utility = -utility
+	return {"health_delta": 0, "armor_delta": 0, "utility_hint": utility, "removed_count": removed}
 
 
-func _apply_new_status_constitution_modifiers(
-	unit: TacticalCharacter,
-	status_effect: StatusEffectDefinition
-) -> void:
-	var constitution := float(unit_constitutions.get(
-		unit,
-		unit.get_effective_stat(UnitStat.Type.CONSTITUTION)
-		if is_instance_valid(unit)
-		else 0.0
-	))
-	var flat_total := 0.0
-	var percent_add_total := 0.0
-	var percent_multiplier := 1.0
-	for modifier in status_effect.get_stat_modifiers():
-		if modifier == null or modifier.stat != UnitStat.Type.CONSTITUTION:
-			continue
-		match modifier.operation:
-			StatModifierDefinition.Operation.FLAT:
-				flat_total += modifier.value
-			StatModifierDefinition.Operation.PERCENT_ADD:
-				percent_add_total += modifier.value
-			StatModifierDefinition.Operation.PERCENT_MULTIPLY:
-				percent_multiplier *= maxf(0.0, 1.0 + modifier.value)
-	var adjusted := maxf(
-		0.0,
-		(constitution + flat_total)
-		* maxf(0.0, 1.0 + percent_add_total)
-		* percent_multiplier
-	)
-	unit_constitutions[unit] = adjusted
+## Updates only this snapshot; callers apply the returned health delta as with other forecasts.
+func forecast_cleanse(caster: TacticalCharacter, target: TacticalCharacter) -> Dictionary:
+	var estimate := estimate_cleanse(caster, target)
+	if int(estimate.removed_count) == 0:
+		return estimate
+	var statuses := unit_statuses.get(target, {}) as Dictionary
+	for status_id in get_status_ids(target):
+		var definition := (statuses[status_id] as Dictionary).get("definition") as StatusEffectDefinition
+		if definition != null and definition.is_negative():
+			statuses.erase(status_id)
+	unit_statuses[target] = statuses
+	_recompute_status_stats(target)
+	estimate.health_delta = mini(0, get_max_health(target) - get_health(target))
+	return estimate
+
+
+func _recompute_status_stats(unit: TacticalCharacter) -> void:
+	var definitions: Array[StatusEffectDefinition] = []
+	var stunned := false
+	for status_id in get_status_ids(unit):
+		var definition := get_status_state(unit, status_id).get("definition") as StatusEffectDefinition
+		if definition != null:
+			definitions.append(definition)
+			stunned = stunned or definition.blocks_actions()
+	unit_stunned[unit] = stunned
+	var constitution := unit.calculate_stat_with_statuses(UnitStat.Type.CONSTITUTION, definitions)
+	unit_constitutions[unit] = constitution
 	if not is_bone_pile(unit):
-		unit_max_health[unit] = unit.calculate_max_health_for_constitution(adjusted)
+		unit_max_health[unit] = unit.calculate_max_health_for_constitution(constitution)
+	unit_movement_ranges[unit] = UnitStat.get_scaling_rules().clamp_effective_movement_range(
+		unit.calculate_stat_with_statuses(UnitStat.Type.MOVEMENT_RANGE, definitions)
+	)
+	# Stun suppresses access to movement/reactions; it does not spend the stored resources.
+	unit_remaining_movement[unit] = minf(float(unit_remaining_movement.get(unit, 0.0)), get_movement_range(unit))
 
 
 func get_terrain(cell: Vector2i) -> TileDefinition:

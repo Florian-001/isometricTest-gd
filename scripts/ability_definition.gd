@@ -31,6 +31,7 @@ enum PrimaryEffect {
 	DAMAGE,
 	HEAL,
 	STATUS,
+	CLEANSE,
 }
 
 enum AbilityType {
@@ -481,6 +482,8 @@ func apply_primary_effect(caster: TacticalCharacter, target: TacticalCharacter) 
 			target.apply_damage(calculate_primary_effect_amount(caster))
 		PrimaryEffect.HEAL:
 			target.heal(calculate_primary_effect_amount(caster))
+		PrimaryEffect.CLEANSE:
+			target.remove_negative_statuses()
 	if status_effect != null and target.current_health > 0:
 		target.apply_status(status_effect, self, caster)
 
@@ -513,6 +516,14 @@ func estimate_primary_effect_for_ai(
 			armor += int(damage.armor_delta)
 		PrimaryEffect.HEAL:
 			health = mini(maximum, health + calculate_primary_effect_amount(caster, snapshot))
+		PrimaryEffect.CLEANSE:
+			if is_instance_valid(target) and health > 0:
+				var preview := snapshot.duplicate_state() if snapshot != null else AIBoardSnapshot.from_battle([target], Vector2i.ONE)
+				preview.set_health(target, health)
+				var estimate := preview.forecast_cleanse(caster, target)
+				health += int(estimate.get("health_delta", 0))
+				maximum = preview.get_max_health(target)
+				utility += float(estimate.get("utility_hint", 0.0))
 	if include_status and status_effect != null and health > 0:
 		var status_estimate := status_effect.estimate_for_ai(caster, target, health, -1, armor)
 		health = clampi(health + int(status_estimate.get("health_delta", 0)), 0, maximum)
@@ -625,6 +636,8 @@ func get_primary_effect_description(caster: TacticalCharacter = null) -> String:
 			descriptions.append(_get_damage_description(caster))
 		PrimaryEffect.HEAL:
 			descriptions.append(_get_heal_description(caster))
+		PrimaryEffect.CLEANSE:
+			descriptions.append("Remove all negative statuses; preserve positive statuses")
 	if status_effect != null:
 		descriptions.append(status_effect.get_description())
 	elif effect == PrimaryEffect.STATUS:

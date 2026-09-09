@@ -10,6 +10,11 @@ enum Effect {
 	TAUNT,
 }
 
+enum Polarity {
+	POSITIVE,
+	NEGATIVE,
+}
+
 enum ModifierDirection {
 	INCREASE,
 	REDUCE,
@@ -24,6 +29,8 @@ enum ModifierValueType {
 ## Stable identifier used to refresh an existing status instead of stacking another copy.
 @export var status_id: StringName = &"new_status"
 @export var display_name: String = "New Status"
+## Cleanse removes negative statuses, regardless of their source or effect.
+@export var polarity: Polarity = Polarity.NEGATIVE
 @export_range(1, 99, 1, "or_greater") var duration_turns: int = 1
 
 @export_category("Primary Effect")
@@ -54,7 +61,11 @@ enum ModifierValueType {
 @export var color: Color = Color.WHITE
 
 @export_category("Additional Modifiers")
-@export var modifiers: Array[StatModifierDefinition] = []
+@export var modifiers: Array[StatModifierDefinition] = []:
+	set(value):
+		modifiers = value
+		if Engine.is_editor_hint():
+			notify_property_list_changed()
 
 
 func _validate_property(property: Dictionary) -> void:
@@ -63,7 +74,7 @@ func _validate_property(property: Dictionary) -> void:
 	if property_name in [&"damage_type", &"damage_per_turn"]:
 		should_hide = effect != Effect.DAMAGE_EACH_TURN
 	elif property_name == &"affected_unit_ai_utility":
-		should_hide = effect not in [Effect.STAT_MODIFIER, Effect.STUN, Effect.TAUNT]
+		should_hide = effect not in [Effect.STAT_MODIFIER, Effect.STUN, Effect.TAUNT] and modifiers.is_empty()
 	elif property_name in [
 		&"affected_stat",
 		&"modifier_direction",
@@ -86,6 +97,10 @@ func _validate_property(property: Dictionary) -> void:
 
 func blocks_actions() -> bool:
 	return effect == Effect.STUN
+
+
+func is_negative() -> bool:
+	return polarity == Polarity.NEGATIVE
 
 
 func get_stat_modifiers() -> Array[StatModifierDefinition]:
@@ -145,6 +160,23 @@ func estimate_for_ai(
 
 
 func get_description(turns_override: int = -1) -> String:
+	var description := _get_primary_description(turns_override)
+	var modifier_descriptions: Array[String] = []
+	for modifier in modifiers:
+		if modifier == null or modifier.stat == UnitStat.Type.NONE:
+			continue
+		var amount := ("+" if modifier.value >= 0.0 else "") + _format_amount(modifier.value)
+		if modifier.operation == StatModifierDefinition.Operation.PERCENT_ADD:
+			amount = ("+" if modifier.value >= 0.0 else "") + _format_amount(modifier.value * 100.0) + "%"
+		elif modifier.operation == StatModifierDefinition.Operation.PERCENT_MULTIPLY:
+			amount = "×" + _format_amount(maxf(0.0, 1.0 + modifier.value))
+		modifier_descriptions.append("%s %s" % [amount, UnitStat.get_display_name(modifier.stat)])
+	if not modifier_descriptions.is_empty():
+		description += " | " + ", ".join(modifier_descriptions)
+	return description + (" | Negative status" if is_negative() else " | Positive status")
+
+
+func _get_primary_description(turns_override: int = -1) -> String:
 	var turns := duration_turns if turns_override < 0 else turns_override
 	var turn_text := "%d turn%s" % [turns, "" if turns == 1 else "s"]
 	match effect:
@@ -187,3 +219,7 @@ func get_description(turns_override: int = -1) -> String:
 			return "%s: Attack the caster if possible; otherwise pursue them for %s" % [display_name, turn_text]
 		_:
 			return "%s for %s" % [display_name, turn_text]
+
+
+func _format_amount(value: float) -> String:
+	return ("%.2f" % value).trim_suffix("0").trim_suffix("0").trim_suffix(".")

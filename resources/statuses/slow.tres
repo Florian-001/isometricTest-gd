@@ -8,6 +8,7 @@
 script = ExtResource("1_status")
 status_id = &"slow"
 display_name = "Slow"
+polarity = 1
 duration_turns = 2
 effect = 2
 percentage_amount = 30.0

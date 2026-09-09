@@ -810,19 +810,12 @@ func _forecast_ability(
 		for recipient in recipients:
 			var bonus_pending := ability.effect != AbilityDefinition.PrimaryEffect.DAMAGE
 			if ability.has_primary_effect() and snapshot.is_living(recipient):
-				score += _score_effect_estimate(
-					caster,
-					recipient,
-					ability.estimate_primary_effect_for_ai(
-						caster,
-						recipient,
-						snapshot.get_health(recipient),
-						false,
-						snapshot
-					),
-					profile,
-					snapshot
+				var primary_estimate := (
+					snapshot.forecast_cleanse(caster, recipient)
+					if ability.effect == AbilityDefinition.PrimaryEffect.CLEANSE
+					else ability.estimate_primary_effect_for_ai(caster, recipient, snapshot.get_health(recipient), false, snapshot)
 				)
+				score += _score_effect_estimate(caster, recipient, primary_estimate, profile, snapshot)
 				if snapshot.is_living(recipient) and ability.status_effect != null:
 					score += _score_effect_estimate(
 						caster,
@@ -1653,6 +1646,8 @@ func _rough_unit_priority(
 			/ float(maxi(1, snapshot.get_max_health(target)))
 		)
 		score += healing * missing_ratio
+	if ability.effect == AbilityDefinition.PrimaryEffect.CLEANSE:
+		score += float(snapshot.estimate_cleanse(caster, target).utility_hint)
 	if ability.status_effect != null:
 		score += float(
 			ability.status_effect.estimate_for_ai(caster, target, health).get("utility_hint", 0.0)

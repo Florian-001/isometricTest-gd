@@ -8,6 +8,7 @@
 script = ExtResource("1_status")
 status_id = &"burning"
 display_name = "Burning"
+polarity = 1
 duration_turns = 2
 effect = 1
 icon = ExtResource("2_icon")

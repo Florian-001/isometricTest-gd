@@ -3,6 +3,8 @@
 [ext_resource type="Resource" uid="uid://7wlmmxsy6gcc" path="res://resources/abilities/heal.tres" id="ability_0"]
 [ext_resource type="Resource" uid="uid://coxj05o5g75fi" path="res://resources/abilities/focus.tres" id="ability_1"]
 [ext_resource type="Resource" uid="uid://d17q7fv47avlu" path="res://resources/abilities/beam.tres" id="ability_2"]
+[ext_resource type="Resource" path="res://resources/abilities/empower.tres" id="empower"]
+[ext_resource type="Resource" path="res://resources/abilities/cleanse.tres" id="cleanse"]
 [ext_resource type="Script" uid="uid://cb2sfxg1krtk4" path="res://scripts/character_class_definition.gd" id="class"]
 [ext_resource type="Script" uid="uid://dtcq17r6pgivp" path="res://scripts/class_ability_unlock.gd" id="unlock"]
 
@@ -19,8 +21,18 @@ required_level = 2
 script = ExtResource("unlock")
 ability = ExtResource("ability_2")
 
+[sub_resource type="Resource" id="UnlockEmpower"]
+script = ExtResource("unlock")
+ability = ExtResource("empower")
+required_level = 3
+
+[sub_resource type="Resource" id="UnlockCleanse"]
+script = ExtResource("unlock")
+ability = ExtResource("cleanse")
+required_level = 4
+
 [resource]
 script = ExtResource("class")
 class_id = &"cleric"
 display_name = "Cleric"
-ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_0"), SubResource("Unlock_1"), SubResource("Unlock_2")])
+ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_0"), SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("UnlockEmpower"), SubResource("UnlockCleanse")])

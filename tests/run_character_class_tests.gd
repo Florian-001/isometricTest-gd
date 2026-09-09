@@ -40,7 +40,7 @@ func _test_unlocks_and_isolation() -> void:
 	var expected := {
 		"warrior": ["Strike", "Charge", "Battle Stomp", "Taunt", "Multi Attack"], "archer": ["Strike", "Focus", "Multiple Arrows", "Dagger Throw"],
 		"wizard": ["Strike", "Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam"],
-		"cleric": ["Strike", "Heal", "Beam", "Focus"],
+		"cleric": ["Strike", "Heal", "Beam", "Focus", "Empower", "Cleanse"],
 	}
 	for id in expected:
 		var unit := TacticalCharacter.new()
@@ -49,7 +49,7 @@ func _test_unlocks_and_isolation() -> void:
 		_check(unit.get_character_level() == 1, "%s starts at level one" % id)
 		for level in range(1, expected[id].size() + 1):
 			_check(unit.set_class_level(_classes[id], level), "%s level can be edited" % id)
-			var count: int = mini(level + 2, 4) if id == "cleric" else level + 1 if id == "wizard" else level
+			var count: int = mini(level + 2, 6) if id == "cleric" else level + 1 if id == "wizard" else level
 			_check(_names(unit) == expected[id].slice(0, count), "%s level %d unlock boundary" % [id, level])
 		unit.set_class_level(_classes[id], 150)
 		_check(_names(unit) == expected[id], "levels beyond last unlock remain valid")
@@ -72,7 +72,7 @@ func _test_unlocks_and_isolation() -> void:
 	first.set_class_level(_classes.cleric, 3)
 	first.set_class_level(_classes.archer, 2)
 	_check(_names(first).count("Beam") == 1 and _names(first).count("Focus") == 1, "multiclass shared abilities are deduplicated")
-	_check(_names(first) == ["Strike", "Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam", "Heal", "Focus"], "equipment attack precedes stable class and unlock ordering")
+	_check(_names(first) == ["Strike", "Ice Shard", "Searing Dagger", "Slow", "Fireball", "Beam", "Heal", "Focus", "Empower"], "equipment attack precedes stable class and unlock ordering")
 	var unsorted := CharacterClassDefinition.new()
 	unsorted.class_id = &"test_order"
 	for level in [3, 1, 2, 1]:
@@ -202,7 +202,7 @@ func _test_battle_ui_and_saves() -> void:
 			panel.class_picker.select(index)
 	panel.add_class_button.pressed.emit()
 	_check(actor.get_character_level() == 3 and actor.get_class_levels().size() == 2, "developer picker adds a class at level one")
-	_check(panel.ability_entries.get_child_count() == 7, "developer preview includes Dagger Throw among both classes' locked and unlocked entries")
+	_check(panel.ability_entries.get_child_count() == 9, "developer preview includes Empower and Cleanse among both classes' locked and unlocked entries")
 	panel.ability_bypass.button_pressed = true
 	_check(actor.override_template_abilities and panel.ability_bypass.button_pressed, "developer bypass is explicit and visible")
 	panel.ability_bypass.button_pressed = false

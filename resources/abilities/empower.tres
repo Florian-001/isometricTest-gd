@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability"]
+[ext_resource type="Resource" path="res://resources/statuses/empowered.tres" id="status"]
+[ext_resource type="Texture2D" path="res://assets/status_icons/empowered.svg" id="icon"]
+
+[resource]
+script = ExtResource("ability")
+display_name = "Empower"
+ability_type = 2
+image = ExtResource("icon")
+requires_weapon = false
+effect = 3
+status_effect = ExtResource("status")
+range = 5.0
+delivery_type = 1
+target_flags = 5
+placeholder_color = Color(1, 0.78, 0.3, 1)

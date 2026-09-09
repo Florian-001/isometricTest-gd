@@ -6,6 +6,7 @@
 script = ExtResource("status")
 status_id = &"taunted"
 display_name = "Taunted"
+polarity = 1
 duration_turns = 1
 effect = 4
 affected_unit_ai_utility = -10.0

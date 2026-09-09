@@ -462,7 +462,7 @@ func test_ability_resources_and_sample_assignment() -> void:
 	assert_true(status_inspector_source.contains("object is ItemDefinition"), "the saved-status dropdown should handle ItemDefinition resources")
 	assert_eq(
 		StatusCatalogScript.get_statuses().map(func(saved_status: StatusEffectDefinition): return saved_status.display_name),
-		["Burning", "Focus", "Slow", "Stun"],
+		["Burning", "Empowered", "Focus", "Slow", "Stun", "Taunted"],
 		"the weapon status dropdown should discover every saved status deterministically"
 	)
 	item.slot = ItemDefinition.EquipmentSlot.ARMOR

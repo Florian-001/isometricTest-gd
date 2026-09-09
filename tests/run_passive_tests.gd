@@ -301,7 +301,7 @@ func _test_ui_and_saves() -> void:
 	var actor := battle._characters[0]
 	var panel := battle.dev_mode_panel
 	panel.select_unit(actor)
-	check(panel.passive_entries.get_child_count() == 3, "developer passive catalog contains Flight, Pack Tactics and Reassemble")
+	check(panel.passive_entries.get_child_count() == 4, "developer passive catalog contains Flight, Pack Tactics, Reassemble and Counter")
 	(panel.passive_entries.get_child(0) as CheckBox).button_pressed = true
 	check(actor.get_passive_abilities() == [flight] and battle._dev_dirty, "developer checkbox assigns passive and marks setup dirty")
 	(panel.passive_entries.get_child(0) as CheckBox).button_pressed = false

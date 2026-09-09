@@ -42,13 +42,16 @@ static func resolve_damage(amount: int, health: int, armor: int) -> Dictionary:
 	}
 
 
+## Forecasts may supply an effective stat value without coupling this calculator to AI state.
+## NAN retains the ordinary live-caster calculation.
 static func calculate_amount(
 	caster: TacticalCharacter,
 	damage_type: int,
 	innate_damage: int,
 	scaling_stat: int,
 	scaling_amount: float,
-	required_weapon_type: int = USE_DAMAGE_TYPE_WEAPON_RULE
+	required_weapon_type: int = USE_DAMAGE_TYPE_WEAPON_RULE,
+	stat_value_override: float = NAN
 ) -> int:
 	# Keep all damage arithmetic here. Every runtime and preview path delegates to this function.
 	return int(get_amount_breakdown(
@@ -57,7 +60,8 @@ static func calculate_amount(
 		innate_damage,
 		scaling_stat,
 		scaling_amount,
-		required_weapon_type
+		required_weapon_type,
+		stat_value_override
 	).total)
 
 
@@ -68,7 +72,8 @@ static func get_amount_breakdown(
 	innate_damage: int,
 	scaling_stat: int,
 	scaling_amount: float,
-	required_weapon_type: int = USE_DAMAGE_TYPE_WEAPON_RULE
+	required_weapon_type: int = USE_DAMAGE_TYPE_WEAPON_RULE,
+	stat_value_override: float = NAN
 ) -> Dictionary:
 	var innate := float(maxi(0, innate_damage))
 	var percentage := maxf(0.0, scaling_amount)
@@ -102,7 +107,7 @@ static func get_amount_breakdown(
 	)
 	var stat_value := 0.0
 	if uses_stat_term and is_instance_valid(caster):
-		stat_value = caster.get_effective_stat(scaling_stat)
+		stat_value = caster.get_effective_stat(scaling_stat) if is_nan(stat_value_override) else stat_value_override
 	var stat_contribution := stat_value * percentage / 100.0 if uses_stat_term else 0.0
 	var unrounded_total := innate + weapon_contribution + stat_contribution
 	return {

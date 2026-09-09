@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability"]
+[ext_resource type="Resource" path="res://resources/statuses/counter.tres" id="status"]
+
+[resource]
+script = ExtResource("ability")
+display_name = "Counter"
+ability_type = 0
+requires_weapon = false
+effect = 3
+status_effect = ExtResource("status")
+range = 0.0
+target_flags = 4
+placeholder_color = Color(0.35, 0.8, 1, 1)

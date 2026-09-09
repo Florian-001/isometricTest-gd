@@ -4,6 +4,8 @@
 [ext_resource type="Resource" path="res://resources/abilities/battle_stomp.tres" id="ability_2"]
 [ext_resource type="Resource" path="res://resources/abilities/taunt.tres" id="ability_3"]
 [ext_resource type="Resource" path="res://resources/abilities/multi_attack.tres" id="ability_4"]
+[ext_resource type="Resource" path="res://resources/abilities/counter.tres" id="ability_5"]
+[ext_resource type="Resource" path="res://resources/abilities/swipe.tres" id="ability_6"]
 [ext_resource type="Script" uid="uid://cb2sfxg1krtk4" path="res://scripts/character_class_definition.gd" id="class"]
 [ext_resource type="Script" uid="uid://dtcq17r6pgivp" path="res://scripts/class_ability_unlock.gd" id="unlock"]
 
@@ -27,8 +29,18 @@ script = ExtResource("unlock")
 ability = ExtResource("ability_4")
 required_level = 5
 
+[sub_resource type="Resource" id="Unlock_5"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_5")
+required_level = 6
+
+[sub_resource type="Resource" id="Unlock_6"]
+script = ExtResource("unlock")
+ability = ExtResource("ability_6")
+required_level = 7
+
 [resource]
 script = ExtResource("class")
 class_id = &"warrior"
 display_name = "Warrior"
-ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("Unlock_3"), SubResource("Unlock_4")])
+ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("Unlock_3"), SubResource("Unlock_4"), SubResource("Unlock_5"), SubResource("Unlock_6")])

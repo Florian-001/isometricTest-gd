@@ -2,6 +2,17 @@ class_name PassiveAbilityResolver
 extends RefCounted
 
 
+static func has_counter(unit: TacticalCharacter, snapshot: AIBoardSnapshot = null) -> bool:
+	if not is_instance_valid(unit):
+		return false
+	var passives := snapshot.get_passive_abilities(unit) if snapshot != null else unit.get_passive_abilities()
+	for passive in passives:
+		for effect in passive.effects:
+			if effect is CounterPassiveEffect:
+				return true
+	return false
+
+
 static func reassemble_effect(unit: TacticalCharacter) -> ReassemblePassiveEffect:
 	for passive in unit.get_passive_abilities():
 		for effect in passive.effects:
@@ -38,7 +49,8 @@ static func weapon_damage_bonus(unit: TacticalCharacter, snapshot: AIBoardSnapsh
 		center = snapshot.get_cell(unit) if snapshot != null else unit.grid_cell
 	var units := snapshot.units if snapshot != null else unit.get_passive_battle_units()
 	var bonus := 0
-	for passive in unit.get_passive_abilities():
+	var passives := snapshot.get_passive_abilities(unit) if snapshot != null else unit.get_passive_abilities()
+	for passive in passives:
 		for effect in passive.effects:
 			if not effect is NearbyAlliesWeaponDamagePassiveEffect or not effect.validate().is_empty():
 				continue
@@ -50,7 +62,8 @@ static func weapon_damage_bonus(unit: TacticalCharacter, snapshot: AIBoardSnapsh
 				var cell := snapshot.get_cell(ally) if snapshot != null else ally.grid_cell
 				if Vector2(center).distance_to(Vector2(cell)) > effect.radius + 0.0001:
 					continue
-				for ally_passive in ally.get_passive_abilities():
+				var ally_passives := snapshot.get_passive_abilities(ally) if snapshot != null else ally.get_passive_abilities()
+				for ally_passive in ally_passives:
 					if ally_passive.passive_id == passive.passive_id:
 						bonus += effect.damage_per_ally
 						break

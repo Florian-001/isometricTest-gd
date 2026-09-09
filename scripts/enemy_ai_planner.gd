@@ -751,7 +751,8 @@ func _forecast_ability(
 	target_cell: Vector2i,
 	snapshot: AIBoardSnapshot,
 	targeting: AbilityTargeting,
-	profile: EnemyAIProfile
+	profile: EnemyAIProfile,
+	allow_counters: bool = true
 ) -> float:
 	if not _can_use_ability_in_snapshot(caster, ability, snapshot):
 		return 0.0
@@ -804,10 +805,14 @@ func _forecast_ability(
 				score += additional_effect.ai_utility_hint
 		return score
 
+	var counter_defenders: Array[TacticalCharacter] = []
 	for _hit_index in range(ability.get_hit_count()):
 		if not _can_use_ability_in_snapshot(caster, ability, snapshot):
 			break
 		for recipient in recipients:
+			if (allow_counters and ability.has_damage() and snapshot.is_living(recipient)
+				and PassiveAbilityResolver.has_counter(recipient, snapshot) and not counter_defenders.has(recipient)):
+				counter_defenders.append(recipient)
 			var bonus_pending := ability.effect != AbilityDefinition.PrimaryEffect.DAMAGE
 			if ability.has_primary_effect() and snapshot.is_living(recipient):
 				var primary_estimate := (
@@ -866,6 +871,14 @@ func _forecast_ability(
 					profile,
 					snapshot
 				)
+	if allow_counters and not counter_defenders.is_empty():
+		for defender in OpportunityAttackSystemScript.get_initiative_order(snapshot.units):
+			if not snapshot.is_living(caster):
+				break
+			if counter_defenders.has(defender) and CounterAttackSystem.can_counter(defender, caster, snapshot.units, targeting, snapshot.wall_cells, snapshot):
+				var reaction_score := _forecast_ability(defender, CounterAttackSystem.get_ability(defender),
+					snapshot.get_cell(caster), snapshot, targeting, profile, false)
+				score += reaction_score if defender.is_friendly() == caster.is_friendly() else -reaction_score
 	return score
 
 
@@ -1212,6 +1225,7 @@ func _get_best_opposing_reply(
 	var best_reply := 0.0
 	for responder in snapshot.get_living_opponents(acting_unit):
 		var turn_state := snapshot.duplicate_state()
+		turn_state.expire_turn_start_statuses(responder)
 		var turn_start_score := _forecast_terrain_trigger(
 			responder,
 			TileTriggeredEffectDefinition.Trigger.TURN_START,
@@ -1532,6 +1546,18 @@ func _get_relevant_target_cells(
 	if ability.selects_per_hit():
 		return special_cells
 	if taunter != null and not ability.has_damage():
+		return special_cells
+	if ability.shape == AbilityDefinition.Shape.LINE_IN_FRONT:
+		# Centers may be empty and must remain available for every hypothetical origin.
+		for unit in snapshot.units:
+			if not snapshot.is_living(unit) or not _matches_unit_flag(caster, unit, ability):
+				continue
+			var cell := snapshot.get_cell(unit)
+			_append_cell_unique(special_cells, cell, snapshot)
+			var radius := floori(float(ability.get_effective_area_span() - 1) / 2.0)
+			for offset in range(1, radius + 1):
+				for direction in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+					_append_cell_unique(special_cells, cell + direction * offset, snapshot)
 		return special_cells
 	if ability.caster_centered:
 		# Each potential cast origin is also its center. Recipient flags are independent.
@@ -1974,6 +2000,8 @@ func _is_valid_primary_target(
 		return false
 	if ability.caster_centered:
 		return target_cell == caster_cell
+	if not targeting.is_valid_shape_aim(caster_cell, target_cell, ability):
+		return false
 	var delivery_origin := caster_cell
 	if ability.moves_caster():
 		var movement_path := _get_snapshot_caster_movement_path(

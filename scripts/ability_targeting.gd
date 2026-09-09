@@ -68,7 +68,7 @@ func get_cells_in_range_from(caster_cell: Vector2i, ability: AbilityDefinition, 
 		for x in range(grid_size.x):
 			var cell := Vector2i(x, y)
 			var distance := get_weighted_distance(caster_cell, cell)
-			if distance <= effective_range + COST_EPSILON:
+			if distance <= effective_range + COST_EPSILON and is_valid_shape_aim(caster_cell, cell, ability):
 				range_cells[cell] = distance
 	return range_cells
 
@@ -113,6 +113,8 @@ func is_valid_primary_target_from(
 		return false
 	if ability.caster_centered:
 		return selected_cell == caster_cell
+	if not is_valid_shape_aim(caster_cell, selected_cell, ability):
+		return false
 	var delivery_origin := caster_cell
 	if ability.moves_caster():
 		var movement_path := get_caster_movement_path_from(
@@ -201,6 +203,8 @@ func get_affected_cells(
 	var cells: Array[Vector2i] = []
 	if ability == null or not _is_in_bounds(selected_cell):
 		return cells
+	if not is_valid_shape_aim(caster_cell, selected_cell, ability):
+		return cells
 	if ability.caster_centered:
 		for cell in get_cells_in_range_from(caster_cell, ability, caster):
 			if not wall_cells.has(cell) and _line_of_sight.has_line_of_sight(caster_cell, cell, wall_cells):
@@ -231,14 +235,32 @@ func get_affected_cells(
 				_append_if_in_bounds(cells, selected_cell + Vector2i(offset, 0))
 		AbilityDefinition.Shape.LINE_FROM_CASTER:
 			cells = _get_wide_line(caster_cell, selected_cell, radius)
+		AbilityDefinition.Shape.LINE_IN_FRONT:
+			var direction := selected_cell - caster_cell
+			var sideways := Vector2i(-direction.y, direction.x)
+			for offset in range(-radius, radius + 1):
+				_append_if_in_bounds(cells, selected_cell + sideways * offset)
 	var visible_cells: Array[Vector2i] = []
 	var sight_origin := caster_cell if ability.shape == AbilityDefinition.Shape.LINE_FROM_CASTER else selected_cell
 	for cell in cells:
 		if wall_cells.has(cell):
 			continue
+		if ability.shape == AbilityDefinition.Shape.LINE_IN_FRONT:
+			# Every recipient must be reachable from the caster, including diagonal corners.
+			if MeleeDeliveryScript.can_reach(caster_cell, cell, wall_cells, float(radius) + 1.0):
+				visible_cells.append(cell)
+			continue
 		if _line_of_sight.has_line_of_sight(sight_origin, cell, wall_cells):
 			visible_cells.append(cell)
 	return visible_cells
+
+
+## Shared by runtime targeting, previews, and hypothetical AI cast origins.
+func is_valid_shape_aim(caster_cell: Vector2i, selected_cell: Vector2i, ability: AbilityDefinition) -> bool:
+	if ability.shape != AbilityDefinition.Shape.LINE_IN_FRONT:
+		return true
+	var delta := (selected_cell - caster_cell).abs()
+	return delta.x + delta.y == 1
 
 
 func get_trajectory_cells(
@@ -284,8 +306,10 @@ func get_affected_units_from(
 		return affected
 	var cells := get_affected_cells(caster_cell, selected_cell, ability, wall_cells, caster)
 	for unit in units:
+		if not _is_living(unit):
+			continue
 		var unit_cell := caster_cell if unit == caster else unit.grid_cell
-		if _is_living(unit) and cells.has(unit_cell) and _matches_unit_flag(caster, unit, ability):
+		if cells.has(unit_cell) and _matches_unit_flag(caster, unit, ability):
 			affected.append(unit)
 	return affected
 

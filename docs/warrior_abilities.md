@@ -7,8 +7,28 @@ Warrior class unlocks are authored in `resources/classes/warrior.tres`. Raise a 
 | 3 | Battle Stomp | Weapon damage + 100% effective Strength against every enemy within 1.5 grid units of the caster. |
 | 4 | Taunt | Applies Taunted to enemies within 1.5 grid units, through the end of their next turn. Works without a weapon. |
 | 5 | Multi Attack | Two separate melee hits on the same enemy, each dealing weapon damage + 50% effective Strength. Range matches Strike (1.414). |
+| 6 | Counter | Grants the Counter passive until the start of the caster's next turn. Click the caster to activate. |
+| 7 | Swipe | Weapon damage + 100% effective Strength to each enemy in a three-cell row immediately in front of the caster. |
 
 All three abilities spend one normal ability action and no movement points. Stomp and Multi Attack require a melee weapon. There are no additional cooldowns or resource costs. Stomp does not stun; Taunt causes no damage or stun.
+
+Counter and Swipe also spend one normal ability action, with no movement cost or cooldown. Counter works with any equipment, including unarmed; Swipe requires a melee weapon.
+
+## Counter
+
+Counter grants a positive status and a reusable passive. It retaliates once after each complete damaging attack that actually hits the unit, even when armor absorbs all damage. Melee, ranged, magic, area, and opportunity attacks qualify. A multi-hit cast or a cast with repeated target selections still triggers only one retaliation per defender. Terrain, damage over time, support abilities, and Counter retaliations never trigger it.
+
+The retaliation uses the current equipment-granted basic attack (Strike or Shoot, including unarmed Strike for friendlies), normal range and line of sight, weapon range bonuses, effective stats, passive damage bonuses, armor, and weapon statuses. It costs neither movement, an action, nor an opportunity reaction. The defender must still be alive, present, able to attack, and in range of the living original attacker; it never moves or retargets. Incoming stun or lethal damage prevents retaliation. Other units receiving Counter through the developer passive picker use their equipment-granted attack; units without a usable basic attack cannot retaliate.
+
+An area attack finishes damaging all recipients before surviving defenders counter in initiative order, breaking ties by roster order. An attacker's death stops remaining counters. Retaliations remain inside the original cast's resolution boundary, so a defeated acting unit cannot advance the turn mid-animation and combat finalization waits for completion.
+
+The temporary status expires before the owner's next turn-start terrain and status processing, including stunned turns. Other units' turns and the activation turn's end do not consume it. Reapplication refreshes instead of stacking. Cleanse preserves it. Runtime saves retain its duration and grant; temporary and authored copies deduplicate by passive ID, and expiry preserves an authored Counter passive.
+
+## Swipe
+
+Click one of the four orthogonally adjacent cells to aim. The selected cell is the middle of a three-cell row perpendicular to that direction. For a caster at `(x, y)` aiming at `(x, y-1)`, the row is `(x-1, y-1)`, `(x, y-1)`, `(x+1, y-1)`. Self and diagonal aiming are invalid. The row rotates with the chosen direction, independently of sprite facing.
+
+Each enemy in the row takes one Strike-strength hit. Allies and the caster are excluded. The center may be empty, and an entirely empty cast still spends the action. Board edges clip the row; wall cells and blocked diagonal corners cannot be hit. Weapon range bonuses do not extend Swipe. Hover previews, AI forecasts, and execution share this geometry; the slash spans the affected row.
 
 ## Targeting and damage
 
@@ -34,8 +54,18 @@ Taunt is checked before AI target limits and again after movement before a plann
 
 The Taunted resource uses the appended `StatusEffectDefinition.Effect.TAUNT` enum value and `ActiveStatus.source_unit`. Existing serialized enum values and save formats remain valid. All new abilities appear in the developer catalog; the status appears in the existing resource-based status picker.
 
+Swipe adds the appended `AbilityDefinition.Shape.LINE_IN_FRONT` value. `area_of_effect` controls its odd row width; the shipped resource uses 3 and range 1. This shape requires a stationary cast without caster-centered or per-hit selection modes.
+
+Statuses now optionally reference `granted_passive` (default null) and set `expires_at_turn_start` (default false). With turn-start expiry enabled, `duration_turns` counts owner turn starts. Existing statuses retain their turn-end behavior. Counter uses `CounterPassiveEffect`; its resource and inline developer-save forms are supported. `AbilityExecutor.execute_counter_attack()` is the resource-free, non-chaining reaction entry point; `resolution_finished` signals completion of the outer cast and all reactions.
+
 ## Verification
 
 Run `godot --headless --path . --script res://tests/run_warrior_tests.gd` for resource, class, radius, damage, status lifetime, save metadata, AI, reaction, and real battle UI checks. Run without `--headless` and append `-- --capture` to save battle screenshots under `.godot/warrior_validation/`.
 
+Run `godot --headless --path . --script res://tests/run_counter_swipe_tests.gd` for Counter and Swipe resource, geometry, damage, armor, reaction timing, lifecycle, save, AI, and battle UI coverage. Run without `--headless` and append `-- --capture` for screenshots under `.godot/counter_swipe_validation/`.
+
 Regression coverage includes the class, melee, Charge, opportunity, passive, developer-mode, and active-enemy-AI suites. The active-AI unit suite has an existing disengagement assertion failure documented before this change; new warrior coverage must pass independently.
+
+Counter/Swipe validation on Godot 4.7 passes 222 headless checks and 223 rendered checks, including a real battle's lethal counter, delayed turn advancement, and delayed armor restoration. The broader `run_headless.gd` and `run_dev_mode_unit.gd` runners retain the same fixture, equipment-catalog, and AI assertions reproduced in an isolated checkout of the pre-change commit; their failures are not introduced by these skills.
+
+The armor runner reports 120 passing assertions. Windows Godot shutdown sometimes exits with `0xc0000005` afterward, a symptom also observed during pre-implementation planning; other runs, including an isolated copy with these changes, exit normally. Keep that process-exit limitation separate from assertion results.

@@ -44,7 +44,8 @@ func perform(
 	target_cell: Vector2i,
 	grid: IsometricGrid,
 	impact_callback: Callable,
-	wall_cells: Dictionary = {}
+	wall_cells: Dictionary = {},
+	affected_cells: Array[Vector2i] = []
 ) -> bool:
 	var invalid_reason := _get_invalid_reason(caster, ability, target_cell, grid, wall_cells)
 	if not invalid_reason.is_empty():
@@ -70,6 +71,14 @@ func perform(
 		return false
 
 	var slash := _create_slash_visual(caster, ability, target_position, original_position)
+	if ability.shape == AbilityDefinition.Shape.LINE_IN_FRONT:
+		var points := PackedVector2Array()
+		for cell in affected_cells:
+			points.append(grid.grid_to_global(cell) - target_position)
+		if points.size() > 1:
+			slash.rotation = 0.0
+			slash.points = points
+			slash.scale = Vector2.ONE
 	grid.get_parent().add_child(slash)
 	melee_impact.emit(caster, ability, target_cell)
 	if impact_callback.is_valid():

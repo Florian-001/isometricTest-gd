@@ -38,6 +38,8 @@ static func to_data(passives: Array[PassiveAbilityDefinition]) -> Array:
 					effects.append({"type": "nearby_allies_weapon_damage", "radius": effect.radius, "damage_per_ally": effect.damage_per_ally})
 				elif effect is ReassemblePassiveEffect:
 					effects.append(effect.to_data())
+				elif effect is CounterPassiveEffect:
+					effects.append({"type": "counter"})
 				else:
 					effects.append(null)
 			result.append({"id": str(passive.passive_id), "name": passive.display_name, "description": passive.description, "icon": passive.icon.resource_path if passive.icon != null else "", "effects": effects})
@@ -67,6 +69,8 @@ static func from_data(data: Array) -> Array[PassiveAbilityDefinition]:
 					effects.append(effect)
 				elif settings["type"] == "reassemble":
 					effects.append(ReassemblePassiveEffect.from_data(settings))
+				elif settings["type"] == "counter":
+					effects.append(CounterPassiveEffect.new())
 				else:
 					var effect := NearbyAlliesWeaponDamagePassiveEffect.new()
 					effect.radius = settings["radius"]
@@ -108,6 +112,8 @@ static func validate_setup(setup: Dictionary) -> Array[String]:
 						errors.append("Invalid shared passive effect reference.")
 					continue
 				match settings.get("type", ""):
+					"counter":
+						pass
 					"reassemble":
 						errors.append_array(ReassemblePassiveEffect.validate_data(settings))
 					"ground_immunity":

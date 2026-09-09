@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="status"]
+[ext_resource type="Resource" path="res://resources/passives/counter.tres" id="passive"]
+
+[resource]
+script = ExtResource("status")
+status_id = &"counter"
+display_name = "Counter"
+polarity = 0
+duration_turns = 1
+expires_at_turn_start = true
+granted_passive = ExtResource("passive")
+color = Color(0.35, 0.8, 1, 1)

@@ -208,6 +208,48 @@ func get_status_remaining(unit: TacticalCharacter, status_id: StringName) -> int
 	return maxi(0, int((statuses[status_id] as Dictionary).get("remaining_turns", 0)))
 
 
+func get_passive_abilities(unit: TacticalCharacter) -> Array[PassiveAbilityDefinition]:
+	var passives := unit.get_passive_abilities(false)
+	var ids: Dictionary = {}
+	for passive in passives:
+		ids[passive.passive_id] = true
+	for status_id in get_status_ids(unit):
+		var status := get_status_state(unit, status_id)
+		var definition := status.get("definition") as StatusEffectDefinition
+		if definition == null or get_status_remaining(unit, status_id) <= 0 or definition.granted_passive == null:
+			continue
+		var passive := definition.granted_passive
+		if not ids.has(passive.passive_id):
+			passives.append(passive)
+			ids[passive.passive_id] = true
+	return passives
+
+
+func expire_turn_start_statuses(unit: TacticalCharacter) -> void:
+	var statuses := unit_statuses.get(unit, {}) as Dictionary
+	var changed := false
+	for status_id in get_status_ids(unit):
+		var status := statuses[status_id] as Dictionary
+		var definition := status.get("definition") as StatusEffectDefinition
+		if definition == null or not definition.expires_at_turn_start:
+			continue
+		status.remaining_turns = int(status.remaining_turns) - 1
+		changed = true
+		if status.remaining_turns <= 0:
+			statuses.erase(status_id)
+	if changed:
+		_recompute_status_stats(unit)
+
+
+func get_effective_stat(unit: TacticalCharacter, stat: int) -> float:
+	var definitions: Array[StatusEffectDefinition] = []
+	for status_id in get_status_ids(unit):
+		var definition := get_status_state(unit, status_id).get("definition") as StatusEffectDefinition
+		if definition != null and get_status_remaining(unit, status_id) > 0:
+			definitions.append(definition)
+	return unit.calculate_stat_with_statuses(stat, definitions)
+
+
 func get_status_state(unit: TacticalCharacter, status_id: StringName) -> Dictionary:
 	var statuses := unit_statuses.get(unit, {}) as Dictionary
 	return (statuses[status_id] as Dictionary).duplicate() if statuses.has(status_id) else {}

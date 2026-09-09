@@ -6,6 +6,8 @@ const AbilityCasterMovementScript = preload("res://scripts/ability_caster_moveme
 
 signal ability_started(caster: TacticalCharacter, ability: AbilityDefinition, target_cell: Vector2i)
 signal ability_finished(caster: TacticalCharacter, ability: AbilityDefinition, target_cell: Vector2i)
+## Emitted only when the complete outer cast and every nested reaction have returned.
+signal resolution_finished
 
 var projectile_delivery: ProjectileDelivery
 var melee_delivery: Node
@@ -14,6 +16,12 @@ var _active_resolutions := 0
 
 func is_resolving() -> bool:
 	return _active_resolutions > 0
+
+
+func _finish_resolution() -> void:
+	_active_resolutions -= 1
+	if _active_resolutions == 0:
+		resolution_finished.emit()
 
 
 func _init() -> void:
@@ -75,6 +83,42 @@ func execute_opportunity_attack(
 	return await _perform(caster, ability, selected_cell, units, grid, targeting, wall_cells)
 
 
+func can_execute_counter_attack(
+	caster: TacticalCharacter, attacker: TacticalCharacter, units: Array[TacticalCharacter],
+	grid: IsometricGrid, targeting: AbilityTargeting, wall_cells: Dictionary = {}
+) -> bool:
+	return grid != null and CounterAttackSystem.can_counter(caster, attacker, units, targeting, wall_cells)
+
+
+## Dedicated resource-free reaction. Its own impacts can never enqueue more counters.
+func execute_counter_attack(
+	caster: TacticalCharacter, attacker: TacticalCharacter, units: Array[TacticalCharacter],
+	grid: IsometricGrid, targeting: AbilityTargeting, wall_cells: Dictionary = {}
+) -> bool:
+	if not can_execute_counter_attack(caster, attacker, units, grid, targeting, wall_cells):
+		return false
+	return await _perform(caster, CounterAttackSystem.get_ability(caster), attacker.grid_cell,
+		units, grid, targeting, wall_cells, Callable(), false, [attacker])
+
+
+func _resolve_counter_attacks(
+	attacker: Variant, context: Dictionary, units: Array[TacticalCharacter],
+	grid: IsometricGrid, targeting: AbilityTargeting, wall_cells: Dictionary
+) -> void:
+	if not context.get("allow_counters", false) or context.defenders.is_empty():
+		return
+	# Sort the surviving roster, retaining the usual scene-order initiative tie breaker.
+	var present: Array[TacticalCharacter] = []
+	for unit in units:
+		if is_instance_valid(unit):
+			present.append(unit)
+	for defender in OpportunityAttackSystem.get_initiative_order(present):
+		if not is_instance_valid(attacker) or attacker.current_health <= 0 or not units.has(attacker):
+			break
+		if context.defenders.has(defender):
+			await execute_counter_attack(defender, attacker, units, grid, targeting, wall_cells)
+
+
 ## Validate the complete ordered selection before consuming the single action.
 func can_execute_targets(
 	caster: TacticalCharacter,
@@ -133,6 +177,7 @@ func execute_targets(
 	if not caster.spend_ability_action():
 		return false
 	_active_resolutions += 1
+	var reaction_context := {"allow_counters": true, "defenders": []}
 	ability_started.emit(caster, ability, first_cell)
 	for target in locked_targets:
 		if not is_instance_valid(caster) or not ability.can_be_used_by(caster) or not units.has(caster):
@@ -140,9 +185,10 @@ func execute_targets(
 		if not is_instance_valid(target) or not can_select_hit_target(caster, ability, target, units, grid, targeting, wall_cells):
 			continue
 		var recipients: Array[TacticalCharacter] = [target]
-		await _deliver_hit(caster, ability, target.grid_cell, units, grid, targeting, wall_cells, recipients)
-	_active_resolutions -= 1
+		await _deliver_hit(caster, ability, target.grid_cell, units, grid, targeting, wall_cells, recipients, reaction_context)
+	await _resolve_counter_attacks(caster, reaction_context, units, grid, targeting, wall_cells)
 	ability_finished.emit(caster if is_instance_valid(caster) else null, ability, first_cell)
+	_finish_resolution()
 	return true
 
 
@@ -154,11 +200,16 @@ func _perform(
 	grid: IsometricGrid,
 	targeting: AbilityTargeting,
 	wall_cells: Dictionary,
-	before_caster_step: Callable = Callable()
+	before_caster_step: Callable = Callable(),
+	allow_counters: bool = true,
+	forced_recipients: Array[TacticalCharacter] = []
 ) -> bool:
 	_active_resolutions += 1
-	var succeeded := await _perform_resolved(caster, ability, selected_cell, units, grid, targeting, wall_cells, before_caster_step)
-	_active_resolutions -= 1
+	var reaction_context := {"allow_counters": allow_counters, "defenders": []}
+	var succeeded := await _perform_resolved(caster, ability, selected_cell, units, grid, targeting, wall_cells, before_caster_step, reaction_context, forced_recipients)
+	await _resolve_counter_attacks(caster, reaction_context, units, grid, targeting, wall_cells)
+	ability_finished.emit(caster if is_instance_valid(caster) else null, ability, selected_cell)
+	_finish_resolution()
 	return succeeded
 
 
@@ -170,7 +221,9 @@ func _perform_resolved(
 	grid: IsometricGrid,
 	targeting: AbilityTargeting,
 	wall_cells: Dictionary,
-	before_caster_step: Callable = Callable()
+	before_caster_step: Callable = Callable(),
+	reaction_context: Dictionary = {},
+	forced_recipients: Array[TacticalCharacter] = []
 ) -> bool:
 
 	ability_started.emit(caster, ability, selected_cell)
@@ -203,8 +256,8 @@ func _perform_resolved(
 		):
 			return false
 	# Lock recipients once so subsequent hits can never switch to another unit.
-	var locked_recipients: Array[TacticalCharacter] = []
-	if ability.get_hit_count() > 1:
+	var locked_recipients: Array[TacticalCharacter] = forced_recipients.duplicate()
+	if ability.get_hit_count() > 1 and locked_recipients.is_empty():
 		locked_recipients = targeting.get_affected_units(caster, selected_cell, ability, units, wall_cells)
 	for hit_index in range(ability.get_hit_count()):
 		if hit_index > 0:
@@ -218,9 +271,8 @@ func _perform_resolved(
 					break
 			if not still_valid or not _can_execute_base(caster, ability, selected_cell, units, grid, targeting, wall_cells):
 				break
-		if not await _deliver_hit(caster, ability, selected_cell, units, grid, targeting, wall_cells, locked_recipients):
+		if not await _deliver_hit(caster, ability, selected_cell, units, grid, targeting, wall_cells, locked_recipients, reaction_context):
 			return false
-	ability_finished.emit(caster, ability, selected_cell)
 	return true
 
 
@@ -232,11 +284,12 @@ func _deliver_hit(
 	grid: IsometricGrid,
 	targeting: AbilityTargeting,
 	wall_cells: Dictionary,
-	locked_recipients: Array[TacticalCharacter]
+	locked_recipients: Array[TacticalCharacter],
+	reaction_context: Dictionary = {}
 ) -> bool:
 	caster.face_toward_world_position(grid.grid_to_global(selected_cell))
 	var impact_callback := Callable(self, "_apply_delivered_effects").bind(
-		caster, selected_cell, ability, units, grid, targeting, wall_cells, locked_recipients
+		caster, selected_cell, ability, units, grid, targeting, wall_cells, locked_recipients, reaction_context
 	)
 	match ability.delivery_type:
 		AbilityDefinition.DeliveryType.PROJECTILE:
@@ -251,13 +304,17 @@ func _deliver_hit(
 				return false
 			impact_callback.call()
 		AbilityDefinition.DeliveryType.MELEE:
+			var area_cells: Array[Vector2i] = []
+			if ability.shape == AbilityDefinition.Shape.LINE_IN_FRONT:
+				area_cells = targeting.get_affected_cells(caster.grid_cell, selected_cell, ability, wall_cells, caster)
 			var melee_finished: bool = await melee_delivery.perform(
 				caster,
 				ability,
 				selected_cell,
 				grid,
 				impact_callback,
-				wall_cells
+				wall_cells,
+				area_cells
 			)
 			if not melee_finished:
 				return false
@@ -274,10 +331,17 @@ func _apply_delivered_effects(
 	grid: IsometricGrid,
 	targeting: AbilityTargeting,
 	wall_cells: Dictionary,
-	locked_recipients: Array[TacticalCharacter]
+	locked_recipients: Array[TacticalCharacter],
+	reaction_context: Dictionary = {}
 ) -> void:
-	if not is_instance_valid(caster):
+	if not is_instance_valid(caster) or not caster.can_use_abilities() or not units.has(caster):
 		return
+	if not reaction_context.get("allow_counters", true):
+		if locked_recipients.size() != 1 or not is_instance_valid(locked_recipients[0]):
+			return
+		var attacker := locked_recipients[0]
+		if attacker.grid_cell != selected_cell or not can_execute_counter_attack(caster, attacker, units, grid, targeting, wall_cells):
+			return
 	if ability.selects_per_hit():
 		if locked_recipients.size() != 1:
 			return
@@ -286,7 +350,7 @@ func _apply_delivered_effects(
 			or not can_select_hit_target(caster, ability, target, units, grid, targeting, wall_cells)
 			or target.grid_cell != selected_cell):
 			return
-	_apply_effects(caster, selected_cell, ability, units, targeting, wall_cells, locked_recipients)
+	_apply_effects(caster, selected_cell, ability, units, targeting, wall_cells, locked_recipients, reaction_context)
 
 
 func can_execute(
@@ -394,7 +458,8 @@ func _apply_effects(
 	units: Array[TacticalCharacter],
 	targeting: AbilityTargeting,
 	wall_cells: Dictionary,
-	locked_recipients: Array[TacticalCharacter] = []
+	locked_recipients: Array[TacticalCharacter] = [],
+	reaction_context: Dictionary = {}
 ) -> void:
 	var recipients := targeting.get_affected_units(
 		caster,
@@ -404,14 +469,19 @@ func _apply_effects(
 		wall_cells
 	)
 	for recipient in recipients:
+		if not is_instance_valid(recipient) or recipient.current_health <= 0 or not units.has(recipient):
+			continue
 		if not locked_recipients.is_empty() and not locked_recipients.has(recipient):
 			continue
+		if (reaction_context.get("allow_counters", false) and ability.has_damage()
+			and PassiveAbilityResolver.has_counter(recipient) and not reaction_context.defenders.has(recipient)):
+			reaction_context.defenders.append(recipient)
 		var bonus_pending := ability.effect != AbilityDefinition.PrimaryEffect.DAMAGE
 		if ability.has_primary_effect() and recipient.current_health > 0:
 			ability.apply_primary_effect(caster, recipient)
 		for additional_effect in ability.effects:
 			if (
-				recipient.current_health > 0
+				is_instance_valid(recipient) and recipient.current_health > 0
 				and ability.should_apply_additional_effect(additional_effect)
 			):
 				if additional_effect is DamageEffectDefinition:
@@ -420,5 +490,5 @@ func _apply_effects(
 					recipient.apply_damage(additional_effect.calculate_amount(caster, ability) + bonus)
 				else:
 					additional_effect.apply(caster, recipient, ability)
-		if recipient.current_health > 0:
+		if is_instance_valid(recipient) and recipient.current_health > 0:
 			ability.apply_weapon_status(caster, recipient)

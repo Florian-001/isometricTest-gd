@@ -188,6 +188,7 @@ func _start_current_turn() -> void:
 	if not _is_living(starting_unit):
 		return
 	var was_bone_pile := starting_unit.is_bone_pile
+	starting_unit.expire_turn_start_statuses()
 	turn_starting.emit(starting_unit)
 	if current_unit != starting_unit:
 		return

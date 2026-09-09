@@ -32,6 +32,10 @@ enum ModifierValueType {
 ## Cleanse removes negative statuses, regardless of their source or effect.
 @export var polarity: Polarity = Polarity.NEGATIVE
 @export_range(1, 99, 1, "or_greater") var duration_turns: int = 1
+## Count down at the owner's turn start instead of the existing turn-end duration tick.
+@export var expires_at_turn_start: bool = false
+## Temporary passive; removed with this status and deduplicated against authored passives.
+@export var granted_passive: PassiveAbilityDefinition
 
 @export_category("Primary Effect")
 @export var effect: Effect = Effect.NONE:
@@ -74,7 +78,7 @@ func _validate_property(property: Dictionary) -> void:
 	if property_name in [&"damage_type", &"damage_per_turn"]:
 		should_hide = effect != Effect.DAMAGE_EACH_TURN
 	elif property_name == &"affected_unit_ai_utility":
-		should_hide = effect not in [Effect.STAT_MODIFIER, Effect.STUN, Effect.TAUNT] and modifiers.is_empty()
+		should_hide = effect not in [Effect.STAT_MODIFIER, Effect.STUN, Effect.TAUNT] and modifiers.is_empty() and granted_passive == null
 	elif property_name in [
 		&"affected_stat",
 		&"modifier_direction",
@@ -161,6 +165,11 @@ func estimate_for_ai(
 
 func get_description(turns_override: int = -1) -> String:
 	var description := _get_primary_description(turns_override)
+	if granted_passive != null:
+		description += " | " + granted_passive.get_description()
+	if expires_at_turn_start:
+		var turns := duration_turns if turns_override < 0 else turns_override
+		description += " | Expires at next turn start" if turns == 1 else " | Expires in %d owner turn starts" % turns
 	var modifier_descriptions: Array[String] = []
 	for modifier in modifiers:
 		if modifier == null or modifier.stat == UnitStat.Type.NONE:

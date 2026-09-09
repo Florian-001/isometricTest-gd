@@ -24,6 +24,7 @@ enum Shape {
 	LINE_VERTICAL,
 	LINE_HORIZONTAL,
 	LINE_FROM_CASTER,
+	LINE_IN_FRONT,
 }
 
 enum PrimaryEffect {
@@ -159,6 +160,8 @@ func selects_per_hit() -> bool:
 
 
 func get_targeting_configuration_error() -> String:
+	if shape == Shape.LINE_IN_FRONT and (caster_centered or moves_caster() or selects_per_hit()):
+		return "Line In Front requires a stationary, directional cast without per-hit selection."
 	if not selects_per_hit():
 		return ""
 	if has_target_flag(TargetFlags.CELL):
@@ -444,13 +447,17 @@ func get_damage_calculation_description(caster: TacticalCharacter) -> String:
 func calculate_primary_effect_amount(caster: TacticalCharacter, snapshot: AIBoardSnapshot = null, origin := Vector2i(-1, -1)) -> int:
 	match effect:
 		PrimaryEffect.DAMAGE:
+			var stat_value := NAN
+			if snapshot != null and DamageCalculator.is_unit_stat_scaling_source(scaling_stat) and scaling_stat != DamageCalculator.ScalingSource.NONE:
+				stat_value = snapshot.get_effective_stat(caster, scaling_stat)
 			return DamageCalculator.calculate_amount(
 				caster,
 				damage_type,
 				innate_damage,
 				scaling_stat,
 				scaling_amount,
-				get_required_weapon_type()
+				get_required_weapon_type(),
+				stat_value
 			) + get_passive_damage_bonus(caster, snapshot, origin)
 		PrimaryEffect.HEAL:
 			var total := float(maxi(0, effect_amount))
@@ -484,7 +491,7 @@ func apply_primary_effect(caster: TacticalCharacter, target: TacticalCharacter) 
 			target.heal(calculate_primary_effect_amount(caster))
 		PrimaryEffect.CLEANSE:
 			target.remove_negative_statuses()
-	if status_effect != null and target.current_health > 0:
+	if status_effect != null and is_instance_valid(target) and target.current_health > 0:
 		target.apply_status(status_effect, self, caster)
 
 
@@ -612,6 +619,8 @@ func get_description(caster: TacticalCharacter = null) -> String:
 		result += " | Charges in a clear straight line and stops adjacent"
 	if caster_centered:
 		result += " | Radius %.2f around caster; click caster to confirm" % get_effective_range(caster)
+	if shape == Shape.LINE_IN_FRONT:
+		result += " | Click an orthogonally adjacent cell; hit a %d-cell row across that direction" % get_effective_area_span()
 	if get_weapon_range_bonus(caster) > 0.0:
 		result += " | +%s weapon range (normal attacks only)" % str(get_weapon_range_bonus(caster))
 	if selects_per_hit():

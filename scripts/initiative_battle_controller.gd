@@ -36,6 +36,7 @@ var template_setup_input: Dictionary = {}
 var initialization_error: String = ""
 var _run_result_emitted := false
 var _combat_finalized := false
+var _pending_defeated_turn_unit: TacticalCharacter
 var _combat_finalization_queued := false
 
 @export_category("Battle Map")
@@ -661,6 +662,10 @@ func _character_display_name(character: TacticalCharacter) -> String:
 
 
 func _process(_delta: float) -> void:
+	if is_instance_valid(_pending_defeated_turn_unit) and not _ability_executor.is_resolving():
+		var defeated_unit := _pending_defeated_turn_unit
+		_pending_defeated_turn_unit = null
+		_end_defeated_current_unit(defeated_unit)
 	if _combat_over and not _combat_finalized:
 		_queue_run_result()
 	if _dev_open or get_tree().paused:
@@ -1802,7 +1807,11 @@ func _on_terrain_changed(
 
 
 func _end_defeated_current_unit(character: TacticalCharacter) -> void:
-	if not _combat_over and character == turn_manager.current_unit:
+	if _ability_executor.is_resolving():
+		_pending_defeated_turn_unit = character
+		return
+	if (is_instance_valid(character) and not _combat_over and character == turn_manager.current_unit
+		and (character.current_health <= 0 or character.is_bone_pile)):
 		turn_manager.end_current_turn()
 
 

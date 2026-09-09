@@ -10,7 +10,7 @@ Unlock levels are levels invested in that class, not total character level. Abil
 | --- | --- |
 | [Archer](resources/classes/archer.tres) | **2:** [Focus](resources/abilities/focus.tres); **3:** [Multiple Arrows](resources/abilities/multiple_arrows.tres); **4:** [Dagger Throw](resources/abilities/dagger_throw.tres) |
 | [Cleric](resources/classes/cleric.tres) | **1:** [Heal](resources/abilities/heal.tres); **1:** [Beam](resources/abilities/beam.tres); **2:** [Focus](resources/abilities/focus.tres); **3:** [Empower](resources/abilities/empower.tres); **4:** [Cleanse](resources/abilities/cleanse.tres) |
-| [Warrior](resources/classes/warrior.tres) | **2:** [Charge](resources/abilities/charge.tres); **3:** [Battle Stomp](resources/abilities/battle_stomp.tres); **4:** [Taunt](resources/abilities/taunt.tres); **5:** [Multi Attack](resources/abilities/multi_attack.tres) |
+| [Warrior](resources/classes/warrior.tres) | **2:** [Charge](resources/abilities/charge.tres); **3:** [Battle Stomp](resources/abilities/battle_stomp.tres); **4:** [Taunt](resources/abilities/taunt.tres); **5:** [Multi Attack](resources/abilities/multi_attack.tres); **6:** [Counter](resources/abilities/counter.tres); **7:** [Swipe](resources/abilities/swipe.tres) |
 | [Wizard](resources/classes/wizard.tres) | **1:** [Ice Shard](resources/abilities/ice_shard.tres); **2:** [Searing Dagger](resources/abilities/searing_dagger.tres); **3:** [Slow](resources/abilities/slow.tres); **4:** [Fireball](resources/abilities/fireball.tres); **5:** [Beam](resources/abilities/beam.tres) |
 
 ## Basic attacks — all classes
@@ -52,6 +52,8 @@ Descriptions show base ranges and damage/healing formulas. Actual values depend 
 | 3 | [Battle Stomp](resources/abilities/battle_stomp.tres) | Melee ability. Cast. Range 1.50. Physical damage (weapon damage + Strength x100%). Radius 1.50 around caster; click caster to confirm. Affects: enemies. Melee weapon required. |
 | 4 | [Taunt](resources/abilities/taunt.tres) | Melee ability. Cast. Range 1.50. Taunted: Attack the caster if possible; otherwise pursue them for 1 turn. Negative status. Radius 1.50 around caster; click caster to confirm. Affects: enemies. No weapon required. |
 | 5 | [Multi Attack](resources/abilities/multi_attack.tres) | Melee ability. Melee. Range 1.41. Physical damage (2 hits × (weapon damage + Strength x50%)). 2 separate hits on the same target. Affects: enemies. Melee weapon required. |
+| 6 | [Counter](resources/abilities/counter.tres) | Melee ability. Cast. Range 0.00. Counter for 1 turn. After each complete damaging attack, retaliate once with your basic attack if the attacker is in range. Retaliation costs no action or opportunity reaction. Requires being able to attack; excludes terrain, damage over time, and other counters. Expires at next turn start. Positive status. Affects: self. No weapon required. |
+| 7 | [Swipe](resources/abilities/swipe.tres) | Melee ability. Melee. Range 1.00. Physical damage (weapon damage + Strength x100%). Click an orthogonally adjacent cell; hit a 3-cell row across that direction. Affects: enemies. Can aim at a cell. Area: line in front, 3-cell span. Melee weapon required. |
 
 ## Wizard
 

@@ -741,9 +741,28 @@ func advance_status_durations() -> void:
 	var changed := false
 	for index in range(_active_statuses.size() - 1, -1, -1):
 		var active_status := _active_statuses[index]
+		if active_status.definition != null and active_status.definition.expires_at_turn_start:
+			continue
 		if not active_status.processed_this_turn:
 			continue
 		active_status.processed_this_turn = false
+		active_status.remaining_turns -= 1
+		changed = true
+		if active_status.remaining_turns <= 0:
+			_active_statuses.remove_at(index)
+	if changed:
+		_notify_statuses_changed(previous_state)
+
+
+## Called before turn-start terrain and status ticks, including skipped/stunned turns.
+func expire_turn_start_statuses() -> void:
+	_initialize_runtime_stats()
+	var previous_state := _capture_status_state()
+	var changed := false
+	for index in range(_active_statuses.size() - 1, -1, -1):
+		var active_status := _active_statuses[index]
+		if active_status.definition == null or not active_status.definition.expires_at_turn_start:
+			continue
 		active_status.remaining_turns -= 1
 		changed = true
 		if active_status.remaining_turns <= 0:
@@ -942,10 +961,14 @@ func _get_passive_assignments() -> Array[PassiveAbilityDefinition]:
 	return assignments
 
 
-func get_passive_abilities() -> Array[PassiveAbilityDefinition]:
+func get_passive_abilities(include_statuses: bool = true) -> Array[PassiveAbilityDefinition]:
 	var result: Array[PassiveAbilityDefinition] = []
 	var ids: Dictionary = {}
 	var assignments := _get_passive_assignments()
+	if include_statuses:
+		for active_status in get_active_statuses():
+			if active_status.definition != null and active_status.remaining_turns > 0 and active_status.definition.granted_passive != null:
+				assignments.append(active_status.definition.granted_passive)
 	for passive in assignments:
 		if passive != null and passive.passive_id != &"" and not ids.has(passive.passive_id):
 			result.append(passive)
@@ -1169,6 +1192,8 @@ func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
 	ability_availability_changed.emit(ability_available)
 	opportunity_reaction_availability_changed.emit(opportunity_reaction_available)
 	statuses_changed.emit()
+	passive_abilities_changed.emit()
+	_notify_passive_context_changed()
 	queue_redraw()
 
 
@@ -1498,6 +1523,8 @@ func _capture_status_state() -> Dictionary:
 
 func _notify_statuses_changed(previous_state: Dictionary) -> void:
 	statuses_changed.emit()
+	passive_abilities_changed.emit()
+	_notify_passive_context_changed()
 	queue_redraw()
 	var previous_movement_range := float(previous_state.get("movement_range", get_movement_range()))
 	var new_movement_range := get_movement_range()

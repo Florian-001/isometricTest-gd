@@ -1,6 +1,7 @@
 extends SceneTree
 ## Exercises the enabled editor plugin with disposable, filesystem-visible resources.
 
+const Xlsx = preload("res://tests/class_reference_xlsx_reader.gd")
 const Generator = preload("res://addons/class_ability_reference/reference_generator.gd")
 const PLUGIN_PATH := "res://addons/class_ability_reference/plugin.gd"
 const RUNNER := "res://addons/class_ability_reference/generate_reference.gd"
@@ -44,7 +45,7 @@ func _run() -> void:
 		return
 	await _wait_idle()
 	_classes = _directory.path_join("classes")
-	_output = _directory.path_join("reference.md")
+	_output = _directory.path_join("reference.xlsx")
 	_create_fixture()
 	await _scan()
 	_plugin.classes_directory = _classes
@@ -60,6 +61,7 @@ func _run() -> void:
 	await _test_inspector_save()
 	await _test_external_changes()
 	await _test_restart_and_failures()
+	await _test_locked_file()
 	_test_cli_check()
 	await _wait_idle()
 	_plugin.classes_directory = Generator.CLASSES_DIRECTORY
@@ -142,7 +144,7 @@ func _test_external_changes() -> void:
 	await _scan()
 	await _wait_for_event(count + 1)
 	_check(_text().contains("Editor Status for 6 turns"), "external nested status edit refreshes after the filesystem scan")
-	_check(_text().contains("| 4 | [Editor Ability]"), "external unlock level edit refreshes")
+	_check(Xlsx.cells(_output).get("B8") == 4, "external unlock level edit refreshes")
 	_check(_text().contains("Saved description v2") and not _text().contains("Saved description v1"), "fresh worker reads changed description code")
 	await _wait_idle()
 	_check(_events.size() == count + 1, "nearby saved changes are combined into one generation")
@@ -153,12 +155,12 @@ func _test_external_changes() -> void:
 	ResourceSaver.save(new_class, _classes.path_join("added.tres"))
 	await _scan()
 	await _wait_for_event(count + 1)
-	_check(_text().contains("## Added Class\n"), "new class is automatically discovered")
+	_check(_text().contains("Added Class"), "new class is automatically discovered")
 	count = _events.size()
 	DirAccess.remove_absolute(_classes.path_join("added.tres"))
 	await _scan()
 	await _wait_for_event(count + 1)
-	_check(not _text().contains("## Added Class\n"), "deleted class automatically disappears")
+	_check(not _text().contains("Added Class"), "deleted class automatically disappears")
 	await _wait_idle()
 	count = _events.size()
 	var modified := FileAccess.get_modified_time(_output)
@@ -191,6 +193,64 @@ func _test_restart_and_failures() -> void:
 	_check(_events.size() > count and _events[-1].ok, "saving a fix recovers automatically")
 
 
+func _test_locked_file() -> void:
+	if not OS.has_feature("windows"):
+		return # Windows sharing locks reproduce Excel's destination-file behavior.
+	await _wait_idle()
+	var script := _directory.path_join("hold_workbook.ps1")
+	var ready := _directory.path_join("lock-ready")
+	var release := _directory.path_join("lock-release")
+	_write(script, """param([string]$Workbook, [string]$Ready, [string]$Release)
+$handle = [IO.File]::Open($Workbook, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+try {
+    [IO.File]::WriteAllText($Ready, 'ready')
+    $deadline = [DateTime]::UtcNow.AddSeconds(60)
+    while (-not [IO.File]::Exists($Release) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+} finally { $handle.Dispose() }
+""")
+	var pid := OS.create_process("powershell.exe", PackedStringArray(["-NoProfile", "-WindowStyle", "Hidden", "-File", ProjectSettings.globalize_path(script), "-Workbook", ProjectSettings.globalize_path(_output), "-Ready", ProjectSettings.globalize_path(ready), "-Release", ProjectSettings.globalize_path(release)]), false)
+	var deadline := Time.get_ticks_msec() + 10000
+	while not FileAccess.file_exists(ready) and Time.get_ticks_msec() < deadline:
+		await process_frame
+	_check(pid > 0 and FileAccess.file_exists(ready), "hold a real Windows sharing lock on the disposable workbook")
+	if not FileAccess.file_exists(ready):
+		return
+	var original_hash := FileAccess.get_sha256(_output)
+	_write(_ability.resource_path, FileAccess.get_file_as_string(_ability.resource_path).replace("innate_damage = 81", "innate_damage = 91"))
+	await _scan()
+	await _wait_for_pending()
+	var first_pending: String = _plugin._replacement_path
+	_check(not first_pending.is_empty() and FileAccess.file_exists(first_pending), "locked output retains the fully generated pending workbook")
+	_check(FileAccess.get_sha256(_output) == original_hash, "lock leaves the existing workbook intact")
+	var retry_events := _events.size()
+	await create_timer(5.2).timeout
+	await _wait_idle()
+	await _wait_for_pending()
+	# Other development can update tracked scripts during this isolated fixture test.
+	_check(not _plugin._replacement_path.is_empty() and FileAccess.file_exists(_plugin._replacement_path) and _events.size() == retry_events, "five-second retry retains pending data without reporting a failure while lock persists")
+	_check(FileAccess.get_sha256(_output) == original_hash, "repeated locked replacements never remove the original workbook")
+	_write(_ability.resource_path, FileAccess.get_file_as_string(_ability.resource_path).replace("innate_damage = 91", "innate_damage = 97"))
+	await _scan()
+	deadline = Time.get_ticks_msec() + 15000
+	while (not FileAccess.file_exists(_plugin._replacement_path) or not Xlsx.text(_plugin._replacement_path).contains("97 innate")) and Time.get_ticks_msec() < deadline:
+		await process_frame
+	_check(_plugin._replacement_path != first_pending and not FileAccess.file_exists(first_pending), "new source changes replace the older pending workbook")
+	_check(Xlsx.text(_plugin._replacement_path).contains("97 innate"), "new pending workbook contains the latest saved data")
+	var count := _events.size()
+	_write(release, "release")
+	await _wait_for_event(count + 1)
+	_check(_events.size() > count and _events[-1].ok and _text().contains("97 innate"), "closing the locked file automatically installs the latest pending update")
+	_check(_plugin._replacement_path.is_empty(), "successful replacement clears pending state")
+	while OS.is_process_running(pid):
+		await process_frame
+
+
+func _wait_for_pending() -> void:
+	var deadline := Time.get_ticks_msec() + 10000
+	while _plugin._replacement_path.is_empty() and Time.get_ticks_msec() < deadline:
+		await process_frame
+
+
 func _test_cli_check() -> void:
 	var output: Array = []
 	var arguments := PackedStringArray(["--headless", "--path", ProjectSettings.globalize_path("res://"), "--script", RUNNER, "--", "--classes-dir=" + _classes, "--output=" + _output, "--check"])
@@ -200,7 +260,7 @@ func _test_cli_check() -> void:
 	_write(_output, "Stale reference\n")
 	output.clear()
 	_check(OS.execute(OS.get_executable_path(), arguments, output, true, false) == 1, "CLI --check exits nonzero for stale content")
-	_check(_text() == "Stale reference\n", "CLI --check leaves stale content untouched")
+	_check(FileAccess.get_file_as_string(_output) == "Stale reference\n", "CLI --check leaves stale content untouched")
 
 
 func _wait_for_event(count: int) -> void:
@@ -227,7 +287,7 @@ func _scan() -> void:
 
 
 func _text() -> String:
-	return FileAccess.get_file_as_string(_output) if FileAccess.file_exists(_output) else ""
+	return Xlsx.text(_output) if FileAccess.file_exists(_output) else ""
 
 
 func _description_script(description: String) -> String:

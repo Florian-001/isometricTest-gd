@@ -37,11 +37,11 @@ func _run() -> void:
 			printerr("Cannot write editor generation report: %s" % report_path)
 			quit(1)
 			return
-		report.store_string(JSON.stringify({"ok": result.ok, "changed": result.changed, "errors": result.errors}))
+		report.store_string(JSON.stringify(result))
 		report.close()
 	if result.ok:
 		print("Class abilities reference: %s (%s)." % ["updated" if result.changed else "up to date", output_path])
 	else:
 		for error in result.errors:
 			printerr(error)
-	quit(0 if result.ok else 1)
+	quit(0 if result.ok else (3 if result.get("locked", false) else 1))

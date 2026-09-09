@@ -1,5 +1,6 @@
 extends SceneTree
 
+const Xlsx = preload("res://tests/class_reference_xlsx_reader.gd")
 const Generator = preload("res://addons/class_ability_reference/reference_generator.gd")
 
 var _failures: Array[String] = []
@@ -24,7 +25,7 @@ func _check(condition: bool, message: String) -> void:
 
 func _run() -> void:
 	_classes = _directory.path_join("classes")
-	_output = _directory.path_join("reference.md")
+	_output = _directory.path_join("reference.xlsx")
 	DirAccess.make_dir_recursive_absolute(_classes)
 	_test_shipped_reference()
 	_create_fixture()
@@ -42,30 +43,36 @@ func _test_shipped_reference() -> void:
 	_check(result.ok, "shipped classes generate successfully")
 	if not result.ok:
 		return
-	var document: String = result.text
-	var expected := {
-		"archer": [[2, "Focus"], [3, "Multiple Arrows"], [4, "Dagger Throw"]],
-		"cleric": [[1, "Heal"], [1, "Beam"], [2, "Focus"], [3, "Empower"], [4, "Cleanse"]],
-		"warrior": [[2, "Charge"], [3, "Battle Stomp"], [4, "Taunt"], [5, "Multi Attack"]],
-		"wizard": [[1, "Ice Shard"], [2, "Searing Dagger"], [3, "Slow"], [4, "Fireball"], [5, "Beam"]],
-	}
-	for class_id in expected:
-		var definition := load("res://resources/classes/%s.tres" % class_id) as CharacterClassDefinition
-		var section := document.split("## " + definition.display_name + "\n")[1].split("\n## ")[0]
-		for unlock in expected[class_id]:
-			_check(section.contains("| %d | [%s]" % [unlock[0], unlock[1]]), "%s shows %s at level %d" % [class_id, unlock[1], unlock[0]])
-	_check(document.find("## Archer") < document.find("## Cleric") and document.find("## Cleric") < document.find("## Warrior") and document.find("## Warrior") < document.find("## Wizard"), "classes are alphabetical")
-	_check(document.contains("[Strike](resources/abilities/strike.tres)") and document.contains("[Shoot](resources/abilities/arrow.tres)"), "shared basic attacks have resource links")
-	_check(document.contains("20 innate + Intelligence x100%") and document.contains("3 hits × (weapon damage + Dexterity x60%)"), "damage formulas come from the existing descriptions")
+	var records: Array = result.rows
+	var index := 2
+	_check(records[0].class == "All classes" and records[0].ability == "Strike" and records[0].level == null, "shared Strike has no class unlock requirement")
+	_check(records[1].class == "All classes" and records[1].ability == "Shoot" and records[1].level == null, "shared Shoot has no class unlock requirement")
+	var errors: Array[String] = []
+	var definitions: Array = []
+	for path in Generator._class_paths(Generator.CLASSES_DIRECTORY, errors):
+		definitions.append(load(path))
+	definitions.sort_custom(func(a: Resource, b: Resource) -> bool: return a.display_name.nocasecmp_to(b.display_name) < 0)
+	for definition in definitions:
+		for unlock in definition.get_sorted_unlocks():
+			_check(index < records.size(), "record exists for every saved unlock")
+			if index >= records.size():
+				return
+			var record: Dictionary = records[index]
+			_check(record.class == definition.display_name and record.ability == unlock.ability.display_name and record.level == unlock.required_level, "saved class, ability, level and tie order match at row %d" % index)
+			_check(record.level is int, "unlock is numeric")
+			_check(record.description.begins_with(unlock.ability.get_description().replace(" | ", ". ")), "description comes directly from saved ability methods")
+			index += 1
+	_check(index == records.size(), "no omitted or extra unlock records")
+	var document := JSON.stringify(records)
+	_check(document.contains("20 innate + Intelligence x100%") and document.contains("3 hits × (weapon damage + Dexterity x60%)"), "damage formulas come from existing descriptions")
 	_check(document.contains("+1 Constitution") and document.contains("Remove all negative statuses; preserve positive statuses"), "status modifiers and cleansing are described")
 	_check(document.contains("Area: circle, 7-cell span") and document.contains("Line from caster toward target"), "area and line targeting are described")
 	_check(document.contains("Melee weapon required") and document.contains("Ranged weapon required") and document.contains("No weapon required"), "equipment requirements are described")
-	_check(Generator.build().text == document, "generation is deterministic")
-	# Every generated link resolves to a real project file, including the guide link.
-	var links := RegEx.new()
-	links.compile("\\]\\(([^)]+)\\)")
-	for link in links.search_all(document):
-		_check(FileAccess.file_exists("res://" + link.get_string(1).uri_decode()), "link resolves: " + link.get_string(1))
+	_check(Generator.build().rows == records, "generation is deterministic")
+	var scripts := {}
+	Generator._collect_scripts("res://addons/class_ability_reference", scripts)
+	_check(scripts.has(Generator.Spreadsheet.EXPORTER), "spreadsheet exporter participates in dependency fingerprinting")
+	_write("res://.godot/class_ability_reference/shipped_rows.json", JSON.stringify({"rows": records}))
 
 
 func _create_fixture() -> void:
@@ -111,39 +118,37 @@ func _test_saved_data_and_formatting() -> void:
 	_check(original.ok, "fixture generates")
 	if not original.ok:
 		return
-	_check(original.text.contains("Test \\[ability\\] \\| &lt;&amp;&gt;"), "Markdown labels escape brackets, pipes, and HTML")
-	_check(original.text.contains("ability%20%28test%29.tres"), "resource link encodes spaces and parentheses")
-	var section: String = original.text.split("## Alpha\n")[1].split("\n## ")[0]
-	_check(section.find("Test ") < section.find("[Heal]") and section.find("[Heal]") < section.find("[Beam]"), "unlocks sort by level and retain authored tie order")
-	_check(original.text.count("| 1 | [Heal]") == 2, "a shared ability is listed for each class that grants it")
+	_check(original.rows[2].ability == "Test [ability] | <&>", "labels remain literal structured text")
+	_check(original.rows[2].ability.begins_with("Test ") and original.rows[3].ability == "Heal" and original.rows[4].ability == "Beam", "unlocks sort by level and retain authored tie order")
+	_check(original.rows[3].class == "Alpha" and original.rows[5].class == "Zulu" and original.rows[5].ability == "Heal", "a shared ability is listed for each class that grants it")
 	var fingerprint := Generator.input_fingerprint(_classes)
 	_ability.innate_damage = 47
 	_ability.range = 9
 	_status.duration_turns = 7
 	_status.modifiers[0].value = 4
 	_class.ability_unlocks[1].required_level = 3
-	_check(Generator.build(_classes).text == original.text, "unsaved cached ability, class, and nested status edits are excluded")
+	_check(Generator.build(_classes).rows == original.rows, "unsaved cached ability, class, and nested status edits are excluded")
 	_check(Generator.input_fingerprint(_classes) == fingerprint, "unsaved edits do not change the source fingerprint")
 	_check(_ability.innate_damage == 47 and _status.duration_turns == 7 and _class.ability_unlocks[1].required_level == 3, "generating never overwrites unsaved Inspector objects")
 	ResourceSaver.save(_ability, _ability.resource_path)
 	ResourceSaver.save(_status, _status.resource_path)
 	ResourceSaver.save(_class, _class.resource_path)
 	var changed := Generator.build(_classes)
-	_check(changed.ok and changed.text.contains("47 innate") and changed.text.contains("Range 9.00"), "saved damage and range changes appear")
-	_check(changed.text.contains("Test Status for 7 turns") and changed.text.contains("+4 Strength"), "saved nested status duration and modifier changes appear")
-	_check(changed.text.contains("| 3 | [Test "), "saved class unlock change appears")
+	_check(changed.ok and JSON.stringify(changed.rows).contains("47 innate") and JSON.stringify(changed.rows).contains("Range 9.00"), "saved damage and range changes appear")
+	_check(JSON.stringify(changed.rows).contains("Test Status for 7 turns") and JSON.stringify(changed.rows).contains("+4 Strength"), "saved nested status duration and modifier changes appear")
+	_check(changed.rows[3].level == 3 and changed.rows[3].ability.begins_with("Test "), "saved class unlock change appears")
 	_check(Generator.input_fingerprint(_classes) != fingerprint, "saved dependency changes update the fingerprint")
 	var new_class := CharacterClassDefinition.new()
 	new_class.class_id = &"new_class"
 	new_class.display_name = "New Class"
 	ResourceSaver.save(new_class, _classes.path_join("new.tres"))
-	_check(Generator.build(_classes).text.contains("## New Class\n"), "new classes are discovered without configuration")
-	_check(Generator.build(_classes).text.contains("No class unlocks; basic attacks are still available."), "classes with no unlocks are explicit")
+	_check(JSON.stringify(Generator.build(_classes).rows).contains("New Class"), "new classes are discovered without configuration")
+	_check(JSON.stringify(Generator.build(_classes).rows).contains("No class unlocks; basic attacks are still available."), "classes with no unlocks are explicit")
 	DirAccess.remove_absolute(_classes.path_join("new.tres"))
-	_check(not Generator.build(_classes).text.contains("## New Class\n"), "removed classes disappear")
+	_check(not JSON.stringify(Generator.build(_classes).rows).contains("New Class"), "removed classes disappear")
 	var saved_text := FileAccess.get_file_as_string(_ability.resource_path)
 	_write(_ability.resource_path, saved_text.replace("innate_damage = 47", "innate_damage = 61"))
-	_check(Generator.build(_classes).text.contains("61 innate"), "external disk edits replace stale cached values")
+	_check(JSON.stringify(Generator.build(_classes).rows).contains("61 innate"), "external disk edits replace stale cached values")
 	_check(_ability.innate_damage == 47, "reading an external edit does not replace the cached Inspector resource")
 
 
@@ -160,23 +165,42 @@ func _test_writes_and_checks() -> void:
 	_write(_output, "Old document\n")
 	_check(not Generator.update(_output, _classes, true).ok and FileAccess.get_file_as_string(_output) == "Old document\n", "--check rejects stale content without writing")
 	_check(Generator.update(_output, _classes).ok, "existing output can be replaced atomically on this platform")
-	var temporary_files := Array(DirAccess.get_files_at(_directory)).filter(func(path: String) -> bool: return path.begins_with("reference.md.tmp-"))
-	_check(temporary_files.is_empty(), "completed generation leaves no temporary file")
+	var cells := Xlsx.cells(_output)
+	var records: Array = Generator.build(_classes).rows
+	for index in records.size():
+		var row: Dictionary = records[index]
+		var number := index + 6
+		_check(cells.get("A%d" % number) == row.class and cells.get("B%d" % number) == row.level and cells.get("C%d" % number) == row.ability and cells.get("D%d" % number) == row.description, "reopened workbook matches all four resource fields, including numeric levels")
+	var sheet := Xlsx.part(_output, "xl/worksheets/sheet1.xml")
+	var table := Xlsx.part(_output, "xl/tables/table1.xml")
+	_check(sheet.contains('ySplit="5"') and sheet.contains('state="frozen"'), "headers and guidance are frozen")
+	_check(table.contains("autoFilter") and table.contains('name="ClassAbilities"'), "native filterable table is present")
+	_check(Xlsx.part(_output, "xl/styles.xml").contains('wrapText="1"'), "long descriptions are wrapped")
+	var previous := FileAccess.get_sha256(_output)
+	var had_override := OS.has_environment("CLASS_ABILITIES_NODE")
+	var old_override := OS.get_environment("CLASS_ABILITIES_NODE")
+	OS.set_environment("CLASS_ABILITIES_NODE", _directory.path_join("missing-node"))
+	_check(not Generator.update(_output, _classes).ok and FileAccess.get_sha256(_output) == previous, "missing runtime reports failure and preserves the previous workbook")
+	if had_override:
+		OS.set_environment("CLASS_ABILITIES_NODE", old_override)
+	else:
+		OS.unset_environment("CLASS_ABILITIES_NODE")
+
 
 
 func _test_failures() -> void:
-	var previous := FileAccess.get_file_as_string(_output)
+	var previous := FileAccess.get_sha256(_output)
 	_class.ability_unlocks[1].required_level = 0
 	ResourceSaver.save(_class, _class.resource_path)
 	_check(not Generator.update(_output, _classes).ok, "invalid unlock fails generation")
-	_check(FileAccess.get_file_as_string(_output) == previous, "validation failure preserves the previous reference")
+	_check(FileAccess.get_sha256(_output) == previous, "validation failure preserves the previous reference")
 	_class.ability_unlocks[1].required_level = 3
 	ResourceSaver.save(_class, _class.resource_path)
 	var ability_text := FileAccess.get_file_as_string(_ability.resource_path)
 	_write(_ability.resource_path, ability_text.replace(_status.resource_path, _directory.path_join("missing.tres")))
 	var missing := Generator.update(_output, _classes)
 	_check(not missing.ok and str(missing.errors).contains("missing.tres"), "missing nested dependency reports the file")
-	_check(FileAccess.get_file_as_string(_output) == previous, "missing dependency preserves the previous reference")
+	_check(FileAccess.get_sha256(_output) == previous, "missing dependency preserves the previous reference")
 	_write(_ability.resource_path, ability_text)
 	var invalid_script := _directory.path_join("invalid_description.gd")
 	_write(invalid_script, "@tool\nextends AbilityEffectDefinition\nfunc get_description(_caster: TacticalCharacter = null) -> String:\n\tpush_error(\"Invalid description fixture\")\n\treturn \"Partial result\"\n")
@@ -186,8 +210,9 @@ func _test_failures() -> void:
 	print("Testing an intentional description error; the previous document must survive.")
 	var invalid_result := Generator.update(_output, _classes)
 	_check(not invalid_result.ok and str(invalid_result.errors).contains("Invalid description fixture"), "nested description script errors fail instead of publishing partial output")
-	_check(FileAccess.get_file_as_string(_output) == previous, "script failure preserves the previous reference")
-	_check(not Generator.update(_directory.path_join("missing_directory/ref.md"), Generator.CLASSES_DIRECTORY).ok, "write failure is reported")
+	_check(FileAccess.get_sha256(_output) == previous, "script failure preserves the previous reference")
+	_write(_directory.path_join("blocked"), "not a directory")
+	_check(not Generator.update(_directory.path_join("blocked/ref.xlsx"), Generator.CLASSES_DIRECTORY).ok, "write failure is reported")
 
 
 func _write(path: String, content: String) -> void:

@@ -18,6 +18,9 @@ const CHARACTER_ART_HIT_RECT := Rect2(-36.0, -100.0, 72.0, 98.0)
 const FALLBACK_HEALTH_BAR_RECT := Rect2(-23.0, -57.0, 46.0, 7.0)
 const ARTWORK_HEALTH_BAR_RECT := Rect2(-27.0, -117.0, 54.0, 7.0)
 const ARMOR_COLOR := Color("65b9ff")
+const TOKEN_RADIUS := 20.0
+const TOKEN_FRIENDLY_COLOR := Color("65b9ff")
+const TOKEN_ENEMY_COLOR := Color("f27878")
 
 signal health_changed(current_health: int, max_health: int)
 signal armor_changed(current_armor: int, max_armor: int)
@@ -189,6 +192,10 @@ var _editor_position_sync_queued := false
 var _editor_cell_sync_queued := false
 var _unit_name_visible := true
 var _unit_name_label: Label
+var _token_view_enabled := false
+var _normal_name_position := Vector2.ZERO
+var _normal_name_position_captured := false
+var _token_texture_bounds: Dictionary = {}
 
 
 func _ready() -> void:
@@ -314,6 +321,26 @@ func is_unit_name_visible() -> bool:
 	return _unit_name_visible
 
 
+func set_token_view_enabled(value: bool) -> void:
+	if _token_view_enabled == value:
+		return
+	_token_view_enabled = value
+	_refresh_unit_name_label()
+	queue_redraw()
+
+
+func is_token_view_enabled() -> bool:
+	return _token_view_enabled
+
+
+func _get_token_radius() -> float:
+	if _grid == null:
+		return TOKEN_RADIUS
+	# Inscribed circle of the isometric cell, with a small gap at its edges.
+	var half_cell := _grid.cell_size * 0.5
+	return minf(TOKEN_RADIUS, half_cell.x * half_cell.y / half_cell.length() * 0.94)
+
+
 func _refresh_unit_name_label() -> void:
 	if not is_instance_valid(_unit_name_label):
 		_unit_name_label = get_node_or_null("UnitNameLabel") as Label
@@ -324,6 +351,14 @@ func _refresh_unit_name_label() -> void:
 		_unit_name_label.text += "\nReforms next turn"
 	_unit_name_label.tooltip_text = "Reforms next turn if this pile survives." if is_bone_pile else ""
 	_unit_name_label.visible = _unit_name_visible
+	if _token_view_enabled:
+		if not _normal_name_position_captured:
+			_normal_name_position = _unit_name_label.position
+			_normal_name_position_captured = true
+		_unit_name_label.position = Vector2(_normal_name_position.x, _get_token_radius() + 2.0)
+	elif _normal_name_position_captured:
+		_unit_name_label.position = _normal_name_position
+		_normal_name_position_captured = false
 
 
 func get_combat_display_name() -> String:
@@ -1269,6 +1304,8 @@ func spend_opportunity_reaction() -> bool:
 
 
 func contains_global_point(point: Vector2) -> bool:
+	if _token_view_enabled:
+		return to_local(point).length_squared() <= pow(_get_token_radius(), 2.0)
 	if is_bone_pile:
 		return Rect2(-44.0, -52.0, 88.0, 60.0).has_point(to_local(point))
 	if has_directional_artwork():
@@ -1622,6 +1659,9 @@ func _update_sorting() -> void:
 
 
 func _draw() -> void:
+	if _token_view_enabled:
+		_draw_token()
+		return
 	var body_color := definition.body_color if definition != null else Color.WHITE
 	var health_color := definition.health_bar_color if definition != null else Color.GREEN
 	var shadow_color := Color(0.0, 0.0, 0.0, 0.38)
@@ -1683,6 +1723,42 @@ func _draw() -> void:
 	_draw_status_icons()
 	if get_max_armor() > 0:
 		_draw_armor_bar(bar_rect, health_position)
+
+
+func _get_token_texture() -> Texture2D:
+	if is_bone_pile:
+		return _get_facing_texture()
+	if definition != null and definition.portrait != null:
+		return definition.portrait
+	return _get_facing_texture()
+
+
+func _draw_token() -> void:
+	var radius := _get_token_radius()
+	var border := TOKEN_FRIENDLY_COLOR if is_friendly() else TOKEN_ENEMY_COLOR
+	draw_circle(Vector2.ZERO, radius, border, true, -1.0, true)
+	draw_circle(Vector2.ZERO, radius * 0.88, Color("101c2b"), true, -1.0, true)
+	var texture := _get_token_texture()
+	if texture != null:
+		if not _token_texture_bounds.has(texture):
+			var texture_image := texture.get_image()
+			var bounds := Rect2(Vector2.ZERO, texture.get_size())
+			if texture_image != null and not texture_image.is_empty():
+				var used_rect := Rect2(texture_image.get_used_rect())
+				if used_rect.has_area():
+					bounds = used_rect
+			_token_texture_bounds[texture] = bounds
+		var source: Rect2 = _token_texture_bounds[texture]
+		# Fit the image's diagonal inside the disc; keep its original proportions.
+		var size := source.size * (radius * 1.7 / maxf(source.size.length(), 1.0))
+		draw_texture_rect_region(texture, Rect2(-size * 0.5, size), source)
+	else:
+		var initial := get_combat_display_name().left(1).to_upper()
+		var font_size := maxi(1, int(radius))
+		var font := ThemeDB.fallback_font
+		var baseline := (font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5
+		draw_string(font, Vector2(-radius, baseline), initial,
+			HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, font_size, Color.WHITE)
 
 
 func _draw_armor_bar(health_rect: Rect2, health_text_position: Vector2) -> void:

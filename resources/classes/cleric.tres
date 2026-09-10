@@ -3,9 +3,9 @@
 [ext_resource type="Resource" uid="uid://7wlmmxsy6gcc" path="res://resources/abilities/heal.tres" id="ability_0"]
 [ext_resource type="Resource" uid="uid://coxj05o5g75fi" path="res://resources/abilities/focus.tres" id="ability_1"]
 [ext_resource type="Resource" uid="uid://d17q7fv47avlu" path="res://resources/abilities/beam.tres" id="ability_2"]
-[ext_resource type="Resource" path="res://resources/abilities/empower.tres" id="empower"]
-[ext_resource type="Resource" path="res://resources/abilities/cleanse.tres" id="cleanse"]
 [ext_resource type="Script" uid="uid://cb2sfxg1krtk4" path="res://scripts/character_class_definition.gd" id="class"]
+[ext_resource type="Resource" path="res://resources/abilities/cleanse.tres" id="cleanse"]
+[ext_resource type="Resource" path="res://resources/abilities/empower.tres" id="empower"]
 [ext_resource type="Script" uid="uid://dtcq17r6pgivp" path="res://scripts/class_ability_unlock.gd" id="unlock"]
 
 [sub_resource type="Resource" id="Unlock_0"]

@@ -8,8 +8,10 @@
 script = ExtResource("1_status")
 status_id = &"slow"
 display_name = "Slow"
-polarity = 1
+stackable = null
+lasts_until_battle_end = null
 duration_turns = 2
+expires_at_turn_start = null
 effect = 2
 percentage_amount = 30.0
 affected_unit_ai_utility = -8.0

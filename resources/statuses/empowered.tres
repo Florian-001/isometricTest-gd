@@ -1,12 +1,11 @@
-[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3]
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3 uid="uid://bpc0e5hrg8e4j"]
 
-[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="status"]
-[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
-[ext_resource type="Texture2D" path="res://assets/status_icons/empowered.svg" id="icon"]
+[ext_resource type="Texture2D" uid="uid://g4nc8bal6jxl" path="res://assets/status_icons/empowered.svg" id="icon"]
+[ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
+[ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="status"]
 
 [sub_resource type="Resource" id="Strength"]
 script = ExtResource("modifier")
-stat = 1
 value = 1.0
 
 [sub_resource type="Resource" id="Dexterity"]
@@ -39,6 +38,8 @@ script = ExtResource("status")
 status_id = &"empowered"
 display_name = "Empowered"
 polarity = 0
+stackable = null
+lasts_until_battle_end = null
 duration_turns = 3
 affected_unit_ai_utility = 12.0
 icon = ExtResource("icon")

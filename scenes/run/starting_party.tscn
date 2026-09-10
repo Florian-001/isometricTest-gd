@@ -1,15 +1,32 @@
-[gd_scene format=3]
-[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_a.tscn" id="1"]
-[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="2"]
-[ext_resource type="Resource" path="res://resources/items/weapons/goblin_bow.tres" id="bow"]
-[ext_resource type="Resource" path="res://resources/items/weapons/iron_sword.tres" id="sword"]
-[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
-[node name="StartingParty" type="Node2D"]
-[node name="Archer" parent="." instance=ExtResource("1")]
+[gd_scene format=3 uid="uid://bdhnvmmtp4emb"]
+
+[ext_resource type="PackedScene" uid="uid://cahrhj7ovnc6l" path="res://scenes/friendlies/friend_a.tscn" id="1"]
+[ext_resource type="PackedScene" uid="uid://d8ur1qmm0op" path="res://scenes/friendlies/friend_b.tscn" id="2"]
+[ext_resource type="Script" uid="uid://bjahsdfmwux0" path="res://scripts/character_class_level.gd" id="2_kfhg4"]
+[ext_resource type="Resource" uid="uid://dqg22tukqmrdd" path="res://resources/classes/archer.tres" id="3_jrdab"]
+[ext_resource type="Resource" uid="uid://1b2lkaipypt5" path="res://resources/classes/warrior.tres" id="7_q1snk"]
+[ext_resource type="Resource" uid="uid://dja1lf1w34kk8" path="res://resources/items/weapons/goblin_bow.tres" id="bow"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/weapons/iron_sword.tres" id="sword"]
+
+[sub_resource type="Resource" id="Resource_knrwx"]
+script = ExtResource("2_kfhg4")
+character_class = ExtResource("3_jrdab")
+
+[sub_resource type="Resource" id="Resource_cw36q"]
+script = ExtResource("2_kfhg4")
+character_class = ExtResource("7_q1snk")
+
+[node name="StartingParty" type="Node2D" unique_id=823428205]
+
+[node name="Archer" parent="." unique_id=1932236931 instance=ExtResource("1")]
 scenario_unit_id = "archer"
+class_level_overrides = Array[ExtResource("2_kfhg4")]([SubResource("Resource_knrwx")])
 use_complete_equipment_override = true
 complete_equipment_overrides = Array[ExtResource("item")]([ExtResource("bow")])
-[node name="Vanguard" parent="." instance=ExtResource("2")]
+
+[node name="Vanguard" parent="." unique_id=650065064 instance=ExtResource("2")]
 scenario_unit_id = "vanguard"
+class_level_overrides = Array[ExtResource("2_kfhg4")]([SubResource("Resource_cw36q")])
 use_complete_equipment_override = true
 complete_equipment_overrides = Array[ExtResource("item")]([ExtResource("sword")])

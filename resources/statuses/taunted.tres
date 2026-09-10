@@ -1,13 +1,15 @@
-[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3]
+[gd_resource type="Resource" script_class="StatusEffectDefinition" format=3 uid="uid://bpxnbfr2ttu1u"]
 
-[ext_resource type="Script" path="res://scripts/status_effect_definition.gd" id="status"]
+[ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="1_6e6on"]
+[ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="status"]
 
 [resource]
 script = ExtResource("status")
 status_id = &"taunted"
 display_name = "Taunted"
-polarity = 1
-duration_turns = 1
+stackable = null
+lasts_until_battle_end = null
+expires_at_turn_start = null
 effect = 4
 affected_unit_ai_utility = -10.0
 color = Color(0.95, 0.3, 0.2, 1)

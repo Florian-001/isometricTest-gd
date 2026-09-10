@@ -2,12 +2,15 @@
 
 [ext_resource type="Script" uid="uid://dameca7iqlt64" path="res://scripts/status_effect_definition.gd" id="1_status"]
 [ext_resource type="Texture2D" uid="uid://c3py0hp3g4cwv" path="res://assets/status_icons/stun.svg" id="2_icon"]
+[ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="2_y0y0q"]
 
 [resource]
 script = ExtResource("1_status")
 status_id = &"stun"
 display_name = "Stun"
-polarity = 1
+stackable = null
+lasts_until_battle_end = null
+expires_at_turn_start = null
 effect = 3
 affected_unit_ai_utility = -20.0
 icon = ExtResource("2_icon")

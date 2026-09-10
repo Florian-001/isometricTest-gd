@@ -1,20 +1,17 @@
-[gd_resource type="Resource" script_class="PassiveAbilityDefinition" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="PassiveAbilityDefinition" format=3 uid="uid://c32qlqvl6tc0i"]
 
-[ext_resource type="Script" path="res://scripts/passive_ability_definition.gd" id="passive"]
-[ext_resource type="Script" path="res://scripts/passive_effect_definition.gd" id="effect_type"]
-[ext_resource type="Script" path="res://scripts/nearby_allies_weapon_damage_passive_effect.gd" id="effect"]
-
-[ext_resource type="Texture2D" path="res://assets/passive_icons/pack_tactics.svg" id="icon"]
+[ext_resource type="Script" uid="uid://rudxwajpmb6g" path="res://scripts/nearby_allies_weapon_damage_passive_effect.gd" id="effect"]
+[ext_resource type="Script" uid="uid://bw4kb0cq43yjc" path="res://scripts/passive_effect_definition.gd" id="effect_type"]
+[ext_resource type="Texture2D" uid="uid://bx20oiitjpyac" path="res://assets/passive_icons/pack_tactics.svg" id="icon"]
+[ext_resource type="Script" uid="uid://dlrqe1gmulpyv" path="res://scripts/passive_ability_definition.gd" id="passive"]
 
 [sub_resource type="Resource" id="settings"]
 script = ExtResource("effect")
-radius = 1.5
-damage_per_ally = 1
 
 [resource]
 script = ExtResource("passive")
 passive_id = &"pack_tactics"
 display_name = "Pack Tactics"
 description = "Fight together to increase weapon damage."
-effects = Array[ExtResource("effect_type")]([SubResource("settings")])
 icon = ExtResource("icon")
+effects = Array[ExtResource("effect_type")]([SubResource("settings")])

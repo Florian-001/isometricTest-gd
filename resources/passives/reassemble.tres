@@ -1,14 +1,12 @@
-[gd_resource type="Resource" script_class="PassiveAbilityDefinition" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="PassiveAbilityDefinition" format=3 uid="uid://cerj5nqmua6v6"]
 
-[ext_resource type="Script" path="res://scripts/passive_ability_definition.gd" id="passive"]
-[ext_resource type="Script" path="res://scripts/passive_effect_definition.gd" id="effect_type"]
-[ext_resource type="Script" path="res://scripts/reassemble_passive_effect.gd" id="effect"]
-[ext_resource type="Texture2D" path="res://assets/characters/bone_pile.png" id="art"]
+[ext_resource type="Texture2D" uid="uid://cxfsvkbtrd3e1" path="res://assets/characters/bone_pile.png" id="art"]
+[ext_resource type="Script" uid="uid://b8voot3gh4g62" path="res://scripts/reassemble_passive_effect.gd" id="effect"]
+[ext_resource type="Script" uid="uid://bw4kb0cq43yjc" path="res://scripts/passive_effect_definition.gd" id="effect_type"]
+[ext_resource type="Script" uid="uid://dlrqe1gmulpyv" path="res://scripts/passive_ability_definition.gd" id="passive"]
 
 [sub_resource type="Resource" id="settings"]
 script = ExtResource("effect")
-pile_health = 1
-restored_health_percentage = 100.0
 pile_texture = ExtResource("art")
 
 [resource]

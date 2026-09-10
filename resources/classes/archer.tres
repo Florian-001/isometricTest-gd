@@ -2,7 +2,7 @@
 
 [ext_resource type="Resource" uid="uid://coxj05o5g75fi" path="res://resources/abilities/focus.tres" id="ability_1"]
 [ext_resource type="Resource" path="res://resources/abilities/multiple_arrows.tres" id="ability_2"]
-[ext_resource type="Resource" path="res://resources/abilities/dagger_throw.tres" id="ability_3"]
+[ext_resource type="Resource" uid="uid://c8qd6osq44oot" path="res://resources/abilities/dagger_throw.tres" id="ability_3"]
 [ext_resource type="Script" uid="uid://cb2sfxg1krtk4" path="res://scripts/character_class_definition.gd" id="class"]
 [ext_resource type="Script" uid="uid://dtcq17r6pgivp" path="res://scripts/class_ability_unlock.gd" id="unlock"]
 

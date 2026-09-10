@@ -1,17 +1,18 @@
-[gd_resource type="Resource" script_class="RunConfig" format=3]
+[gd_resource type="Resource" script_class="RunConfig" format=3 uid="uid://cjljaowr20b05"]
 
-[ext_resource type="Script" path="res://scripts/run_config.gd" id="script"]
-[ext_resource type="Script" path="res://scripts/run_encounter_definition.gd" id="encounter_type"]
-[ext_resource type="Script" path="res://scripts/run_combat_stage.gd" id="stage_type"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="5_n8avv"]
+[ext_resource type="Script" uid="uid://cx8y5t74ogrfx" path="res://scripts/run_combat_floor_override.gd" id="6_bntui"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/archer.tscn" id="archer"]
+[ext_resource type="PackedScene" path="res://scenes/friendlies/cleric.tscn" id="cleric"]
+[ext_resource type="Script" uid="uid://v3utuhkwm621" path="res://scripts/run_encounter_definition.gd" id="encounter_type"]
+[ext_resource type="Resource" uid="uid://brtwalc0fpckx" path="res://resources/run/five_combats_goblins.tres" id="goblins"]
 [ext_resource type="Resource" path="res://resources/run/five_combats_map_settings.tres" id="map"]
 [ext_resource type="Resource" path="res://resources/run/progression_normal.tres" id="normal"]
-[ext_resource type="Resource" path="res://resources/run/five_combats_goblins.tres" id="goblins"]
-[ext_resource type="Resource" path="res://resources/run/five_combats_skeletons.tres" id="skeletons"]
-[ext_resource type="PackedScene" path="res://scenes/run/starting_party.tscn" id="party"]
+[ext_resource type="PackedScene" uid="uid://bdhnvmmtp4emb" path="res://scenes/run/starting_party.tscn" id="party"]
+[ext_resource type="Script" uid="uid://b5eopc3aog4s0" path="res://scripts/run_config.gd" id="script"]
+[ext_resource type="Script" uid="uid://bi7uj0xgbv3ea" path="res://scripts/run_combat_stage.gd" id="stage_type"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/warrior.tscn" id="warrior"]
-[ext_resource type="PackedScene" path="res://scenes/friendlies/archer.tscn" id="archer"]
 [ext_resource type="PackedScene" path="res://scenes/friendlies/wizard.tscn" id="wizard"]
-[ext_resource type="PackedScene" path="res://scenes/friendlies/cleric.tscn" id="cleric"]
 
 [resource]
 script = ExtResource("script")
@@ -20,4 +21,4 @@ map_settings = ExtResource("map")
 starting_party = ExtResource("party")
 starting_character_roster = Array[PackedScene]([ExtResource("warrior"), ExtResource("archer"), ExtResource("wizard"), ExtResource("cleric")])
 normal_encounters = Array[ExtResource("encounter_type")]([ExtResource("normal")])
-combat_stages = Array[ExtResource("stage_type")]([ExtResource("goblins"), ExtResource("skeletons")])
+combat_stages = Array[ExtResource("stage_type")]([ExtResource("goblins")])

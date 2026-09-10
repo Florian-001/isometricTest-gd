@@ -8,8 +8,10 @@
 script = ExtResource("1_status")
 status_id = &"burning"
 display_name = "Burning"
-polarity = 1
+stackable = null
+lasts_until_battle_end = null
 duration_turns = 2
+expires_at_turn_start = null
 effect = 1
 icon = ExtResource("2_icon")
 color = Color(0.95, 0.25, 0.06, 1)

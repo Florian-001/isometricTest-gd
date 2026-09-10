@@ -1,20 +1,16 @@
-[gd_resource type="Resource" script_class="AbilityDefinition" format=3]
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3 uid="uid://c8qd6osq44oot"]
 
-[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability"]
+[ext_resource type="Script" uid="uid://vgimj2pvjync" path="res://scripts/ability_effect_definition.gd" id="1_ixnkx"]
+[ext_resource type="Script" uid="uid://bkutyqgsawkrb" path="res://scripts/ability_definition.gd" id="ability"]
 
 [resource]
 script = ExtResource("ability")
 display_name = "Dagger Throw"
 ability_type = 1
 requires_weapon = false
-hit_count = 1
 effect = 1
-damage_type = 0
-innate_damage = 0
 scaling_stat = 2
-scaling_amount = 100.0
-range = 5.0
+on_kill_status_stacks = null
 delivery_type = 0
-target_flags = 2
 placeholder_color = Color(0.65, 0.78, 0.88, 1)
 projectile_speed = 760.0

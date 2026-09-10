@@ -2,7 +2,7 @@ extends SceneTree
 
 const ENEMIES := [
 	{"id": "skeleton_warrior", "hp": 20, "constitution": 5, "damage": 6, "weapon": "rusty_sword", "attack": "strike", "stat": UnitStat.Type.STRENGTH, "type": ItemDefinition.WeaponType.MELEE},
-	{"id": "skeleton_archer", "hp": 12, "constitution": 3, "damage": 5, "weapon": "weathered_bow", "attack": "enemy_shot", "stat": UnitStat.Type.DEXTERITY, "type": ItemDefinition.WeaponType.RANGED},
+	{"id": "skeleton_archer", "hp": 12, "constitution": 3, "damage": 5, "weapon": "short_bow", "attack": "enemy_shot", "stat": UnitStat.Type.DEXTERITY, "type": ItemDefinition.WeaponType.RANGED},
 ]
 const DEMO := "res://resources/maps/spawn_template_demo.tres"
 var _failures: Array[String] = []

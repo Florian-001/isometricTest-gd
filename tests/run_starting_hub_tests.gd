@@ -68,7 +68,10 @@ func _test_roster_and_creation() -> void:
 		check(names == expected[entry.id], "%s level-one loadout" % entry.id)
 		check(character.get_character_level() == 1 and not character.override_template_abilities, "level one without developer bypass")
 		if entry.id in ["wizard", "cleric"]:
-			check(character.get_equipped_items().is_empty() and character.get_max_health() == 24, "casters inherit spellcaster stats without equipment")
+			var staff := load("res://resources/items/weapons/staff.tres") as ItemDefinition
+			check(character.get_equipped_items() == [staff] and character.get_max_health() == 24, "casters start with a Staff and retain their base health")
+			check(character.get_slot_occupant(ItemDefinition.EquipmentSlot.OFFHAND) == staff, "the starting Staff occupies both hands")
+			check(is_equal_approx(character.get_effective_stat(UnitStat.Type.INTELLIGENCE), character.get_effective_stat_without_equipment(UnitStat.Type.INTELLIGENCE) + 2.0), "the starting Staff grants two Intelligence")
 		else:
 			var weapon := "iron_sword.tres" if entry.id == "vanguard" else "goblin_bow.tres"
 			check(character.get_equipped_items()[0].resource_path.ends_with(weapon), "original run weapon preserved")
@@ -208,7 +211,7 @@ func _test_cleric_combat() -> void:
 	var units: Array[TacticalCharacter] = [cleric, enemy]
 	var health := enemy.current_health
 	cleric.reset_ability_action()
-	check(await executor.execute(cleric, load("res://resources/abilities/beam.tres"), enemy.grid_cell, units, grid, targeting), "solo Cleric casts Beam without equipment")
+	check(await executor.execute(cleric, load("res://resources/abilities/beam.tres"), enemy.grid_cell, units, grid, targeting), "solo Cleric casts Beam with starting Staff")
 	check(enemy.current_health < health, "level-one Beam deals damage")
 	cleric.apply_damage(6)
 	health = cleric.current_health

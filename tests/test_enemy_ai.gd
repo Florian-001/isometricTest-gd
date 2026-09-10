@@ -1057,7 +1057,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	var mage := _assert_enemy_definition(
 		"res://resources/enemies/mage.tres",
 		"Mage", 72, 5.0, [5, 8, 15, 18, 9],
-		["Mage Staff"],
+		["Staff"],
 		["Fireball", "Ice Shard", "Heal", "Slow"]
 	)
 	var body_colors := {
@@ -1135,7 +1135,7 @@ func test_reusable_enemy_archetypes_equipment_variants_and_scene_isolation() -> 
 	assert_eq(wolf_unit.get_abilities()[0].calculate_damage(wolf_unit), 14, "Wolf Strike should scale from Strength without weapon damage")
 	var mage_unit := track((load("res://scenes/enemies/mage.tscn") as PackedScene).instantiate()) as TacticalCharacter
 	mage_unit._ready()
-	assert_true(is_equal_approx(mage_unit.get_effective_stat(UnitStat.Type.INTELLIGENCE), 17.0), "Mage Staff should add two Intelligence")
+	assert_true(is_equal_approx(mage_unit.get_effective_stat(UnitStat.Type.INTELLIGENCE), 17.0), "Staff should add two Intelligence")
 	assert_eq(mage_unit.get_abilities()[0].calculate_damage(mage_unit), 37, "Mage Fireball should deal 20 plus effective Intelligence")
 	assert_eq(mage_unit.get_abilities()[1].calculate_damage(mage_unit), 32, "Mage Ice Shard should deal 15 plus effective Intelligence")
 	assert_eq(mage_unit.get_abilities()[2].calculate_primary_effect_amount(mage_unit), 42, "Mage Heal should restore 25 plus effective Intelligence")

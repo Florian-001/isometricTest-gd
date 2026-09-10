@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="1_item"]
 [ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="2_modifier"]
-[ext_resource type="Texture2D" uid="uid://c3ti56wkqa3ap" path="res://assets/item_icons/mage_staff.svg" id="inventory_icon"]
+[ext_resource type="Texture2D" uid="uid://c3ti56wkqa3ap" path="res://assets/item_icons/staff.svg" id="inventory_icon"]
 
 [sub_resource type="Resource" id="IntelligenceBonus"]
 script = ExtResource("2_modifier")
@@ -11,7 +11,7 @@ value = 2.0
 
 [resource]
 script = ExtResource("1_item")
-display_name = "Mage Staff"
+display_name = "Staff"
 weapon_handedness = 1
 icon = ExtResource("inventory_icon")
 modifiers = Array[ExtResource("2_modifier")]([SubResource("IntelligenceBonus")])

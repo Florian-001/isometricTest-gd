@@ -11,7 +11,7 @@ Both use General AI, movement 6, speed 10, and Strength, Dexterity, and Intellig
 
 Expand the scene's **Definition** resource in the Godot Inspector to edit stats, equipment, abilities, and CR. The definitions are `resources/enemies/bandit_warrior.tres` and `bandit_ranger.tres`. **Max Health** is derived from Constitution and appears in both the definition and unit Inspectors.
 
-The existing **Iron Sword** supplies 5 melee damage; **Strike** adds 1 Strength for 6 damage. The existing **Weathered Bow** supplies 4 ranged damage; **Enemy Shot** adds 1 Dexterity for 5 damage. Stat modifiers and equipment changes adjust the attacks normally. The shared weapons and abilities are already available in the developer catalogs.
+The existing **Iron Sword** supplies 5 melee damage; **Strike** adds 1 Strength for 6 damage. The existing **Short Bow** supplies 4 ranged damage; **Enemy Shot** adds 1 Dexterity for 5 damage. Stat modifiers and equipment changes adjust the attacks normally. The shared weapons and abilities are already available in the developer catalogs.
 
 To generate bandits, add `scenes/enemies/bandit_warrior.tscn` or `scenes/enemies/bandit_ranger.tscn` to a map template's **Enemy Pool**. For runs, expand the run configuration's **Combat Stages**, select a stage, and add either scene to that stage's **Enemy Pool**. Existing template and run pools remain unchanged. Scenario restart and saved games use the existing format.
 

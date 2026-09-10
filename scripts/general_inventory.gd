@@ -166,6 +166,7 @@ func capture_state() -> Array[String]:
 
 
 func restore_state(paths: Array) -> void:
+	paths = ItemDefinition.normalize_saved_paths(paths)
 	_items.clear()
 	for value in paths:
 		var path := str(value)

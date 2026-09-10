@@ -1126,6 +1126,7 @@ func capture_setup_state() -> Dictionary:
 
 
 func apply_setup_state(state: Dictionary) -> void:
+	state = ItemDefinition.normalize_saved_paths(state)
 	scenario_unit_id = str(state.get("id", ""))
 	var definition_path := str(state.get("definition", ""))
 	if ResourceLoader.exists(definition_path):
@@ -1206,6 +1207,7 @@ func capture_runtime_state() -> Dictionary:
 
 
 func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
+	state = ItemDefinition.normalize_saved_paths(state)
 	is_bone_pile = bool(state.get("bone_pile", false))
 	_reassembly_effect = ReassemblePassiveEffect.from_data(state.get("reassembly", {})) if is_bone_pile else null
 	_reassembly_destroyed = bool(state.get("reassembly_destroyed", false))

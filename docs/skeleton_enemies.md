@@ -23,7 +23,7 @@ The transparent bone-pile sprite is `assets/characters/bone_pile.png`; its built
 
 Expand each scene's **Definition** resource in the Godot Inspector to edit its stats and CR. The separate definitions live in `resources/enemies/skeleton_warrior.tres` and `skeleton_archer.tres`. Derived Max Health appears in both the definition and character Inspectors.
 
-**Rusty Sword** supplies 5 melee weapon damage; Strike adds the warrior's 1 Strength for 6 damage. **Weathered Bow** supplies 4 ranged weapon damage; Enemy Shot adds the archer's 1 Dexterity for 5 damage. Neither weapon adds stat modifiers or statuses. Both weapons have icons and are available in the developer item catalog. The existing attacks keep their normal stat scaling, weapon requirements, and targeting rules.
+**Rusty Sword** supplies 5 melee weapon damage; Strike adds the warrior's 1 Strength for 6 damage. **Short Bow** supplies 4 ranged weapon damage; Enemy Shot adds the archer's 1 Dexterity for 5 damage. Neither weapon adds stat modifiers or statuses. Both weapons have icons and are available in the developer item catalog. The existing attacks keep their normal stat scaling, weapon requirements, and targeting rules.
 
 To allow generated skeletons, add either scene to a template definition's **Enemy Pool**. Existing pools, including Spawn Template Demo, are unchanged. Scenario saves use the existing format.
 

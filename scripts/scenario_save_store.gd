@@ -149,7 +149,7 @@ static func load_save(path: String, directory_path := SAVE_DIRECTORY) -> Diction
 
 
 static func validate_payload(input: Dictionary) -> Dictionary:
-	input = input.duplicate(true)
+	input = ItemDefinition.normalize_saved_paths(input)
 	var errors: Array[String] = []
 	if int(input.get("schema_version", -1)) != SCHEMA_VERSION:
 		errors.append("Unsupported save schema version.")

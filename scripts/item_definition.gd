@@ -2,6 +2,30 @@
 class_name ItemDefinition
 extends Resource
 
+const LEGACY_RESOURCE_PATHS := {
+	"res://resources/items/weapons/mage_staff.tres": "res://resources/items/weapons/staff.tres",
+	"res://resources/items/weapons/weathered_bow.tres": "res://resources/items/weapons/short_bow.tres",
+}
+
+
+## Normalize exact historical item paths without altering the caller's save data.
+## Recursive traversal also covers status sources and pending rewards/shop offers.
+static func normalize_saved_paths(value: Variant) -> Variant:
+	if value is String:
+		return LEGACY_RESOURCE_PATHS.get(value, value)
+	if value is Dictionary:
+		var result: Dictionary = value.duplicate()
+		for key in result:
+			result[key] = normalize_saved_paths(result[key])
+		return result
+	if value is Array:
+		var result: Array = value.duplicate()
+		for index in range(result.size()):
+			result[index] = normalize_saved_paths(result[index])
+		return result
+	return value
+
+
 enum EquipmentSlot {
 	WEAPON,
 	ARMOR,

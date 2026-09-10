@@ -29,6 +29,7 @@ func get_class_summary() -> String:
 	return CharacterClassProgression.get_summary(CharacterClassProgression.from_data(setup.get("class_levels", [])))
 
 static func from_data(data: Dictionary) -> RunPartyMember:
+	data = ItemDefinition.normalize_saved_paths(data)
 	for key in ["health", "max_health"]:
 		if not RunState._integer(data.get(key)):
 			return null

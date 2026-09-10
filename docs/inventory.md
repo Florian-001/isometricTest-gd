@@ -33,7 +33,7 @@ the inventory scrolls it.
 
 Equipment is arranged as Weapon/Offhand above Armor/Accessory. Weapon resources
 expose **Weapon Handedness** in the Inspector: One-handed (the default) or
-Two-handed. All bows, Mage Staff, Long Sword, and Spear use both hands; other
+Two-handed. All bows, Staff, Long Sword, and Spear use both hands; other
 current weapons use one. Dedicated offhand items fit alongside a one-handed weapon or an empty
 weapon slot. Weapons cannot be equipped directly into Offhand.
 
@@ -164,3 +164,19 @@ Godot 4.7. Melee, Charge, opportunity attacks, equipment abilities, inventory,
 offhand, developer unit/integration, active enemy AI, Warrior abilities, run
 state, and full run-map integration regressions pass. The new range bonus does
 not change the save format or any starting character loadout.
+
+## Weapon names and saved paths
+
+**Staff** and **Short Bow** use `staff.tres` and `short_bow.tres`, with matching
+SVG icon filenames. Their stats and artwork are unchanged. New Wizards and
+Clerics start with Staff; saved equipment choices are preserved.
+
+`ItemDefinition.normalize_saved_paths` returns a copied save structure with the
+historical `mage_staff.tres` and `weathered_bow.tres` paths mapped to their new
+resources. Scenario/run validation and direct equipment/inventory restoration
+use it before loading resources, including status sources and pending shop or
+reward items. Reading does not rewrite a file; subsequent saves use the new paths.
+Unknown resource paths still fail normal validation, and save versions are unchanged.
+
+Run `godot --headless --path . --script res://tests/run_item_rename_tests.gd`
+for legacy save migration, renamed resources, and caster starting equipment.

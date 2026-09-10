@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c3ti56wkqa3ap"
-path="res://.godot/imported/mage_staff.svg-8ac311d946bfb957d1b48b3f608b52f9.ctex"
+uid="uid://dc0sn6bp4cys1"
+path="res://.godot/imported/short_bow.svg-a6d328a36924c5c2e331dcd0debe7a2a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/item_icons/mage_staff.svg"
-dest_files=["res://.godot/imported/mage_staff.svg-8ac311d946bfb957d1b48b3f608b52f9.ctex"]
+source_file="res://assets/item_icons/short_bow.svg"
+dest_files=["res://.godot/imported/short_bow.svg-a6d328a36924c5c2e331dcd0debe7a2a.ctex"]
 
 [params]
 

@@ -32,6 +32,7 @@ func to_data() -> Dictionary:
 		"pending": pending.duplicate(true), "message": last_message}
 
 static func from_data(data: Dictionary) -> RunState:
+	data = ItemDefinition.normalize_saved_paths(data)
 	for key in ["version", "gold", "status"]:
 		if not _integer(data.get(key)):
 			return null

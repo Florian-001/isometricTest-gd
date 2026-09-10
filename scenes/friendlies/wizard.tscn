@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://scenes/unit_name_label.tscn" id="label"]
 [ext_resource type="Script" path="res://scripts/character_class_level.gd" id="level"]
 [ext_resource type="Resource" path="res://resources/classes/wizard.tres" id="class"]
+[ext_resource type="Resource" path="res://resources/items/weapons/staff.tres" id="staff"]
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
 [sub_resource type="Resource" id="StartingLevel"]
 script = ExtResource("level")
 character_class = ExtResource("class")
@@ -18,6 +20,7 @@ definition = ExtResource("definition")
 class_level_overrides = Array[ExtResource("level")]([SubResource("StartingLevel")])
 override_template_abilities = false
 use_complete_equipment_override = true
+complete_equipment_overrides = Array[ExtResource("item")]([ExtResource("staff")])
 facing_left_texture = ExtResource("left")
 facing_right_texture = ExtResource("right")
 initial_facing = 1

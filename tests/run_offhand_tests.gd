@@ -5,7 +5,7 @@ const OFFHAND = ItemDefinition.EquipmentSlot.OFFHAND
 var sword: ItemDefinition = load("res://resources/items/weapons/iron_sword.tres")
 var shield: ItemDefinition = load("res://resources/items/offhand/wooden_shield.tres")
 var bow: ItemDefinition = load("res://resources/items/weapons/frost_bow.tres")
-var staff: ItemDefinition = load("res://resources/items/weapons/mage_staff.tres")
+var staff: ItemDefinition = load("res://resources/items/weapons/staff.tres")
 var armor: ItemDefinition = load("res://resources/items/armor/ranger_armor.tres")
 var failures: Array[String] = []
 var checks := 0
@@ -50,7 +50,7 @@ func _test_resources() -> void:
 	_check(items.size() == 29, "recursive item catalog includes all 29 resources")
 	for item in items:
 		var file := item.resource_path.get_file()
-		_check(item.is_two_handed() == (file.ends_with("_bow.tres") or file in ["mage_staff.tres", "long_sword.tres", "spear.tres"]), "%s handedness" % file)
+		_check(item.is_two_handed() == (file.ends_with("_bow.tres") or file in ["staff.tres", "long_sword.tres", "spear.tres"]), "%s handedness" % file)
 	_check((load("res://resources/dev_tool_catalog.tres") as DevToolCatalog).items.has(shield), "shield available in developer catalog")
 	_check((load("res://resources/run/default_run.tres") as RunConfig).equipment_pool.has(shield), "shield available in merchant/reward pool")
 	var battle := (load("res://scenes/battle.tscn") as PackedScene).instantiate()

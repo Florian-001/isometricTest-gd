@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dc0sn6bp4cys1"
-path="res://.godot/imported/weathered_bow.svg-169e86f7c43f3bfacdda08abd7b7b194.ctex"
+uid="uid://c3ti56wkqa3ap"
+path="res://.godot/imported/staff.svg-fb9843c69cbca9d8884092b92dd0a289.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/item_icons/weathered_bow.svg"
-dest_files=["res://.godot/imported/weathered_bow.svg-169e86f7c43f3bfacdda08abd7b7b194.ctex"]
+source_file="res://assets/item_icons/staff.svg"
+dest_files=["res://.godot/imported/staff.svg-fb9843c69cbca9d8884092b92dd0a289.ctex"]
 
 [params]
 

@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/run_map_screen.tscn" id="6_run_map"]
 [ext_resource type="Script" path="res://scripts/run_controller.gd" id="run_controller"]
 [ext_resource type="Resource" path="res://resources/run/default_run.tres" id="run_config"]
+[ext_resource type="Resource" path="res://resources/run/five_combats.tres" id="five_combats_config"]
 [ext_resource type="Resource" path="res://resources/maps/spawn_template_demo.tres" id="spawn_template"]
 [ext_resource type="PackedScene" path="res://scenes/starting_hub.tscn" id="starting_hub"]
 
@@ -19,6 +20,11 @@ battle_scene = ExtResource("5_battle")
 [node name="RunController" type="Node" parent="."]
 script = ExtResource("run_controller")
 config = ExtResource("run_config")
+
+[node name="FiveCombatsController" type="Node" parent="."]
+script = ExtResource("run_controller")
+config = ExtResource("five_combats_config")
+save_path = "user://run/five_combats.json"
 
 [node name="LevelSelect" type="CanvasLayer" parent="." unique_id=724740332]
 layer = 20
@@ -74,25 +80,49 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 15
-text = "Choose a battlefield to begin a new battle."
+text = "Choose a battlefield or begin a run with your party."
 horizontal_alignment = 1
 
 [node name="LevelButtons" type="VBoxContainer" parent="LevelSelect/Root/Center/Panel/Margin/VBox" unique_id=1065539737]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="ShowMapButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
-custom_minimum_size = Vector2(520, 58)
+[node name="AscentButtons" type="HBoxContainer" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
 layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ShowMapButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox/AscentButtons"]
+custom_minimum_size = Vector2(254, 48)
+layout_mode = 2
+size_flags_horizontal = 3
 tooltip_text = "Begin a new journey toward the summit"
 theme_override_font_sizes/font_size = 17
 text = "New Run"
 
-[node name="ContinueRunButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
+[node name="ContinueRunButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox/AscentButtons"]
 visible = false
-custom_minimum_size = Vector2(520, 48)
+custom_minimum_size = Vector2(254, 48)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Continue Run"
+
+[node name="FiveCombatsButtons" type="HBoxContainer" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="NewRunButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox/FiveCombatsButtons"]
+custom_minimum_size = Vector2(254, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Five normal combats in a row, with separate saved progress"
+text = "New Run: Five Combats"
+
+[node name="ContinueRunButton" type="Button" parent="LevelSelect/Root/Center/Panel/Margin/VBox/FiveCombatsButtons"]
+visible = false
+custom_minimum_size = Vector2(254, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Continue: Five Combats"
 
 [node name="RunMessage" type="Label" parent="LevelSelect/Root/Center/Panel/Margin/VBox"]
 layout_mode = 2

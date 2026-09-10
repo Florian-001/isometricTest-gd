@@ -2,6 +2,16 @@
 
 Start the game and choose **New Run**, select 1–4 characters in the [starting hub](starting_hub.md), then press **Start Run**. **Continue Run** resumes the saved journey directly; standalone battlefield buttons still start independent battles. The route has fifteen room floors and one final boss. Only connected next rooms can be selected. Escape/Menu preserves progress.
 
+## Five Combats
+
+Choose **New Run: Five Combats** for a separate short run using the same party-selection hub. Its five normal combats form one centered, numbered route: goblins at CR 1, 2, and 3, then skeletons at CR 4 and 5. There are no elites, boss, or noncombat rooms. Winning the fifth battle completes the run. Normal gold rewards, party health, equipment, inventory, and permanent losses carry forward as usual.
+
+**Continue: Five Combats** resumes this run; **View Last: Five Combats** displays its final outcome. Its checkpoint is `user://run/five_combats.json`, with its own `.bak` backup. Starting or replacing either run affects only that run's save slot. The original Ascent continues to use `user://run/active.json`.
+
+Edit `resources/run/five_combats.tres` for the short run's party and encounter configuration. Its map settings expose **Layout → Linear Combat** and **Combat Count** (1–15, default five). Separate `five_combats_goblins.tres` and `five_combats_skeletons.tres` resources hold its progression; keep their inclusive ranges covering every configured combat. Linear runs require normal encounters with a 1.0 multiplier and no chief, and do not require elite or boss catalogs. The existing battlefield and character/enemy assets are shared.
+
+The canvas exposes separate linear spacing and padding, allowing all five rooms to fit at the supported resolutions. The screen shows the selected run's title, combat count, relevant legend, and final result. Saved graphs record their layout; older graphs without layout metadata retain Ascent validation. Scenario saves and developer restarts retain the authored map identity when combat progression creates private resource copies.
+
 ## Edit in Godot
 
 - Open `scenes/run_map_screen.tscn` for the parchment screen, legend, party strip, room results, and merchant panel. The map canvas has an editor preview; select `Margin/VBox/MapScroll/MapCanvas` and use **Refresh map preview** after adjusting its preview seed/settings.
@@ -11,7 +21,7 @@ Start the game and choose **New Run**, select 1–4 characters in the [starting 
 - Edit `scenes/run/starting_party.tscn` for party templates, stable IDs, loadouts, and stats. Each run battlefield in `scenes/run/` contains `PartySpawns` with Inspector-editable grid cells. Maintain one spawn per original party member, including slots for members who may later be lost.
 - Encounter resources in `resources/run/` reference these battlefields. Elite resources multiply Constitution, Strength, Dexterity, and Intelligence by 1.5. The boss resource applies a 2.0 multiplier only to its named chief. Original standalone maps and their authored combat values are separate.
 - Select `Main/RunController` for a fixed development seed and the run configuration. Normal play chooses a new random seed.
-- The default run uses a fifteen-spawn battlefield with goblins on floors 1–3 and skeletons on floors 4–15, increasing base CR by one per floor. Normal and elite catalogs reference this layout; elites retain their stat multiplier. **Spawn Template Demo** remains available for standalone play. See [Battle map templates](map_templates.md) for Godot painting, enemy pools, standalone parties, and checkpoint behavior.
+- The default run uses a fifteen-spawn battlefield with goblins on floors 1–3 and skeletons on floors 4–15, using the authored stage CR budgets. Normal and elite catalogs reference this layout; elites retain their stat multiplier. **Spawn Template Demo** remains available for standalone play. See [Battle map templates](map_templates.md) for Godot painting, enemy pools, standalone parties, and checkpoint behavior.
 
 ## State and battle boundary
 
@@ -40,7 +50,10 @@ godot --headless --path . --script res://tests/run_run_map_tests.gd
 godot --headless --path . --script res://tests/run_run_state_tests.gd
 godot --path . --script res://tests/run_run_map_integration.gd
 godot --headless --path . --script res://tests/run_dev_run_integration.gd
+godot --headless --path . --script res://tests/run_five_combats_integration.gd
 ```
+
+The Five Combats suite drives all five real battles, separate save slots, repeated controller switching, fresh-session continuation, developer fresh/exact reloads, permanent party loss, duplicate results, victory before and after acknowledgement, failed final-save retry, backup recovery, and replacement cancellation. Run it without `--headless` for screenshots of both menu rows and the complete short map at 1024×720, 1280×720, and 1920×1080, plus victory and defeat panels. Saves and screenshots are isolated under `.godot/five_combats_validation`. Combat results are accelerated with lethal test damage; these checks verify progression and persistence, not balance. Progression unit tests use explicit CR 1–15 fixtures so ordinary full-run tuning does not invalidate their mathematical expectations.
 
 The map suite checks 1,000 seeds twice, topology and room constraints, serialization, and bounded failure for impossible weights. State tests exercise every room effect, unknown outcomes, purchases, duplicate actions, permanent loss, backup recovery, invalid saves, and failed-write rollback. Integration drives real mouse/keyboard input, scrolling and resizing, inventory equipment, a fresh application session, a full 16-room route with ten actual battle instances, merchant UI, victory, and defeat. Battle outcomes in the complete-route fixture are accelerated by applying lethal damage to test combatants; this verifies transitions and persistence rather than game balance.
 

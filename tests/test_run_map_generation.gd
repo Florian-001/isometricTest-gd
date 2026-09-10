@@ -64,3 +64,46 @@ func test_impossible_configuration_is_bounded() -> void:
 	settings.unknown_weight = 0
 	settings.generation_attempts = 2
 	assert_true(RunMapGenerator.new().generate(2, settings) == null, "invalid room weights fail without hanging")
+
+
+func test_linear_combat_topology_and_save_validation() -> void:
+	var settings := load("res://resources/run/five_combats_map_settings.tres") as RunMapSettings
+	for seed_value in range(20):
+		var graph := RunMapGenerator.new().generate(seed_value, settings)
+		assert_eq(graph.nodes.size(), 5, "exactly five combats")
+		assert_eq(graph.lane_count, 1, "one lane")
+		assert_eq(graph.edges.size(), 4, "four sequential connections")
+		for tier in range(5):
+			var node := graph.get_nodes_in_tier(tier)[0]
+			assert_eq(node.type, RunMapGraph.NodeType.NORMAL_COMBAT, "normal combats only")
+			assert_eq(graph.is_terminal_combat(node.id), tier == 4, "only last combat is terminal")
+		assert_eq(RunMapGraph.from_data(graph.to_data()).get_signature(), graph.get_signature(), "linear graph round-trips")
+	var data := RunMapGenerator.new().generate(10, settings).to_data()
+	for kind in [RunMapGraph.NodeType.BOSS, RunMapGraph.NodeType.HARD_COMBAT, RunMapGraph.NodeType.REST]:
+		var invalid := data.duplicate(true)
+		invalid.nodes[4][2] = kind
+		assert_true(RunMapGraph.from_data(invalid) == null, "linear graphs reject non-normal rooms")
+	for key in ["layout", "tiers", "lanes"]:
+		var invalid := data.duplicate(true)
+		invalid[key] = 1.5
+		assert_true(RunMapGraph.from_data(invalid) == null, "fractional %s rejected" % key)
+	var broken := data.duplicate(true)
+	broken.edges.remove_at(2)
+	assert_true(RunMapGraph.from_data(broken) == null, "disconnected chain rejected")
+	broken = data.duplicate(true)
+	broken.edges.append([0, 2])
+	assert_true(RunMapGraph.from_data(broken) == null, "skipped floor rejected")
+	broken = data.duplicate(true)
+	broken.erase("layout")
+	assert_true(RunMapGraph.from_data(broken) == null, "short graphs require explicit layout metadata")
+	var legacy := RunMapGenerator.new().generate(10).to_data()
+	legacy.erase("layout")
+	assert_true(RunMapGraph.from_data(legacy) != null, "legacy Ascent saves remain readable")
+	settings = settings.duplicate()
+	for count in [1, 15]:
+		settings.combat_count = count
+		var graph := RunMapGenerator.new().generate(10, settings)
+		assert_true(RunMapGraph.from_data(graph.to_data()) != null, "supported count boundary round-trips")
+	for count in [0, 16]:
+		settings.combat_count = count
+		assert_true(RunMapGenerator.new().generate(10, settings) == null, "invalid count rejected")

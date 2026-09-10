@@ -5,6 +5,9 @@ extends RefCounted
 ## Authoring and checkpoint resolution share this boundary. Cached Resources are never edited.
 static func validate_rules(config: RunConfig) -> Array[String]:
 	var errors: Array[String] = []
+	var floor_count := config.combat_floor_count()
+	if floor_count < 1 or floor_count > RunMapGenerator.ROOM_FLOORS:
+		return ["Combat progression requires between 1 and 15 room floors."]
 	if config.combat_stages.is_empty():
 		if not config.floor_overrides.is_empty():
 			errors.append("Add Combat Stages before using Floor Overrides.")
@@ -14,8 +17,8 @@ static func validate_rules(config: RunConfig) -> Array[String]:
 		if stage == null:
 			errors.append("Assign a resource to each Combat Stage, or remove the empty entry.")
 			continue
-		if stage.first_floor < 1 or stage.last_floor > RunMapGenerator.ROOM_FLOORS or stage.last_floor < stage.first_floor:
-			errors.append("Stage '%s' needs an inclusive floor range within 1–15." % stage.display_name)
+		if stage.first_floor < 1 or stage.last_floor > floor_count or stage.last_floor < stage.first_floor:
+			errors.append("Stage '%s' needs an inclusive floor range within 1–%d." % [stage.display_name, floor_count])
 			continue
 		if stage.starting_cr < 1 or stage.cr_per_floor < 1:
 			errors.append("Stage '%s' needs positive Starting CR and CR Per Floor." % stage.display_name)
@@ -26,7 +29,7 @@ static func validate_rules(config: RunConfig) -> Array[String]:
 			if floors.has(floor_number):
 				errors.append("Combat Stages overlap on floor %d." % floor_number)
 			floors[floor_number] = stage.combat_rating_at(floor_number)
-	for floor_number in range(1, RunMapGenerator.ROOM_FLOORS + 1):
+	for floor_number in range(1, floor_count + 1):
 		if not floors.has(floor_number):
 			errors.append("Combat Stages are missing floor %d." % floor_number)
 		elif floors.has(floor_number - 1) and int(floors[floor_number]) <= int(floors[floor_number - 1]):
@@ -36,8 +39,8 @@ static func validate_rules(config: RunConfig) -> Array[String]:
 		if entry == null:
 			errors.append("Assign a resource to each Floor Override, or remove the empty entry.")
 			continue
-		if entry.floor < 1 or entry.floor > RunMapGenerator.ROOM_FLOORS:
-			errors.append("Floor Overrides must target a floor within 1–15.")
+		if entry.floor < 1 or entry.floor > floor_count:
+			errors.append("Floor Overrides must target a floor within 1–%d." % floor_count)
 		if overridden.has(entry.floor):
 			errors.append("Only one Floor Override is allowed for floor %d." % entry.floor)
 		overridden[entry.floor] = true
@@ -47,9 +50,9 @@ static func validate_rules(config: RunConfig) -> Array[String]:
 			var pool_error := _pool_error(entry.enemy_pool)
 			if not pool_error.is_empty():
 				errors.append("Floor %d: %s" % [entry.floor, pool_error])
-	for encounter in config.normal_encounters + config.elite_encounters:
+	for encounter in config.progression_encounters():
 		if encounter == null or not encounter.battle_map is BattleMapTemplateDefinition or not encounter.chief_node_name.is_empty():
-			errors.append("Progression needs spawn-template encounters without named chiefs in both encounter catalogs.")
+			errors.append("Progression needs spawn-template encounters without named chiefs in its encounter catalogs.")
 		elif encounter.resource_path.is_empty() or encounter.resource_path.contains("::"):
 			errors.append("Save each progression encounter as a separate .tres file for checkpoints.")
 		elif not is_finite(encounter.enemy_multiplier) or encounter.enemy_multiplier < 1.0:
@@ -93,10 +96,10 @@ static func validate(config: RunConfig, party_slots: int = 0) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	# A repeated catalog entry can weight layout selection; validate it only once per floor.
 	var encounters: Array[RunEncounterDefinition] = []
-	for encounter in config.normal_encounters + config.elite_encounters:
+	for encounter in config.progression_encounters():
 		if not encounters.has(encounter):
 			encounters.append(encounter)
-	for floor_number in range(1, RunMapGenerator.ROOM_FLOORS + 1):
+	for floor_number in range(1, config.combat_floor_count() + 1):
 		var settings := _floor_settings(config, floor_number)
 		if int(settings.combat_rating) <= previous_budget:
 			warnings.append("Floor %d has CR %d after CR %d because of a manual override. The override is honored." % [floor_number, settings.combat_rating, previous_budget])
@@ -173,6 +176,7 @@ static func resolve_pending(pending: Dictionary, floor_number: int) -> Dictionar
 		return {"error": pool_error}
 	var effective := base.duplicate() as RunEncounterDefinition
 	var template := base.battle_map.duplicate() as BattleMapTemplateDefinition
+	template.source_resource_path = base.battle_map.get_save_path()
 	template.combat_rating = int(saved.combat_rating)
 	template.enemy_pool = pool
 	effective.battle_map = template

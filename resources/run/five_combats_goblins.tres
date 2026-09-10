@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RunCombatStage" format=3]
+
+[ext_resource type="Script" path="res://scripts/run_combat_stage.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_warrior.tscn" id="warrior"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_warrior_club.tscn" id="club"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin_archer.tscn" id="archer"]
+
+[resource]
+script = ExtResource("script")
+display_name = "Goblins"
+first_floor = 1
+last_floor = 3
+starting_cr = 1
+enemy_pool = Array[PackedScene]([ExtResource("warrior"), ExtResource("club"), ExtResource("archer")])

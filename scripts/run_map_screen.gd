@@ -28,6 +28,8 @@ func _ready() -> void:
 	hide()
 
 func setup(value: RunController) -> void:
+	if controller != null and controller.state_changed.is_connected(refresh):
+		controller.state_changed.disconnect(refresh)
 	controller = value
 	controller.state_changed.connect(refresh)
 	refresh()
@@ -48,7 +50,12 @@ func refresh() -> void:
 	graph = state.graph
 	map_canvas.set_state(state)
 	%GoldLabel.text = "%d  GOLD" % state.gold
-	%MapLength.text = "ACT I  /  %d OF 15 FLOORS" % mini(state.route.size(), 15)
+	var linear := graph.layout == RunMapSettings.Layout.LINEAR_COMBAT
+	var completed := state.route.size() + (1 if bool(state.pending.get("resolved", false)) and bool(state.pending.get("victory", false)) else 0)
+	%MapTitle.text = controller.config.display_name.to_upper()
+	%MapLength.text = "%d OF %d COMBATS" % [completed, graph.tier_count] if linear else "ACT I  /  %d OF 15 FLOORS" % mini(state.route.size(), 15)
+	for entry in $Margin/VBox/Legend.get_children():
+		entry.visible = not linear or entry.name == "Combat"
 	message.text = controller.error_message if not controller.error_message.is_empty() else ("Choose your next room. Only connected paths may be followed." if state.status == RunState.Status.ACTIVE else state.last_message)
 	_clear(party_entries)
 	for member in state.party:
@@ -78,6 +85,8 @@ func _refresh_room_panel() -> void:
 		return
 	if state.status != RunState.Status.ACTIVE:
 		room_title.text = "THE SUMMIT IS YOURS" if state.status == RunState.Status.WON else "THE ROAD ENDS HERE"
+		if state.status == RunState.Status.WON and state.graph.layout == RunMapSettings.Layout.LINEAR_COMBAT:
+			room_title.text = "RUN COMPLETE"
 		var completed := state.route.size() + (1 if state.status == RunState.Status.WON and not state.pending.is_empty() else 0)
 		room_body.text = state.last_message + "\n\n%d rooms completed · %d gold remaining" % [completed, state.gold]
 		room_action.text = "Return to menu"

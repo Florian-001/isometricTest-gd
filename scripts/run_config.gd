@@ -3,6 +3,7 @@ class_name RunConfig
 extends Resource
 
 @export_category("Map and Party")
+@export var display_name: String = "The Ascent"
 @export var map_settings: RunMapSettings
 @export var starting_party: PackedScene
 ## Independent friendly character scenes offered by the starting hub.
@@ -37,20 +38,41 @@ func is_configured() -> bool:
 	return validate_configuration().errors.is_empty()
 
 
+func is_linear() -> bool:
+	return map_settings != null and map_settings.layout == RunMapSettings.Layout.LINEAR_COMBAT
+
+
+func combat_floor_count() -> int:
+	return map_settings.combat_floor_count() if map_settings != null else RunMapGenerator.ROOM_FLOORS
+
+
+func progression_encounters() -> Array[RunEncounterDefinition]:
+	return normal_encounters if is_linear() else normal_encounters + elite_encounters
+
+
 func validate_configuration(party_slots: int = -1) -> Dictionary:
 	var errors: Array[String] = []
-	if map_settings == null or normal_encounters.is_empty() or elite_encounters.is_empty() or boss_encounter == null:
-		errors.append("Assign map settings, normal and elite encounters, and a boss.")
-	for encounter in normal_encounters + elite_encounters + [boss_encounter]:
+	if map_settings == null or normal_encounters.is_empty():
+		errors.append("Assign map settings and normal encounters.")
+	if map_settings != null:
+		errors.append_array(map_settings.validate())
+	if not is_linear() and (elite_encounters.is_empty() or boss_encounter == null):
+		errors.append("The Ascent requires elite encounters and a boss.")
+	var encounters := progression_encounters().duplicate()
+	if not is_linear():
+		encounters.append(boss_encounter)
+	for encounter in encounters:
 		if encounter == null or encounter.battle_map == null or not encounter.battle_map.is_configured():
 			errors.append("Every encounter needs a configured battle map.")
+		elif is_linear() and (encounter.enemy_multiplier != 1.0 or not encounter.chief_node_name.is_empty()):
+			errors.append("Linear combats require normal encounters with a 1.0 multiplier and no chief.")
 	var paths := {}
 	for item in equipment_pool:
 		if item == null or item.resource_path.is_empty():
 			errors.append("Every equipment pool item needs a saved resource.")
 			continue
 		paths[item.resource_path] = true
-	if paths.size() < shop_offer_count or shop_price <= 0 or unknown_combat_weight + unknown_treasure_weight + unknown_rest_weight <= 0:
+	if shop_price <= 0 or (not is_linear() and (paths.size() < shop_offer_count or unknown_combat_weight + unknown_treasure_weight + unknown_rest_weight <= 0)):
 		errors.append("Provide enough distinct shop items, a positive shop price, and positive total unknown-room weight.")
 	var slots := maxi(0, party_slots)
 	if party_slots < 0 and starting_party != null and starting_party.can_instantiate():
@@ -66,7 +88,7 @@ func validate_configuration(party_slots: int = -1) -> Dictionary:
 		party.free()
 	if slots == 0:
 		errors.append("The starting party must contain characters.")
-	for encounter in normal_encounters + elite_encounters + [boss_encounter]:
+	for encounter in encounters:
 		if encounter != null:
 			var capacity_error := validate_encounter_capacity(encounter.battle_map, slots)
 			if not capacity_error.is_empty():

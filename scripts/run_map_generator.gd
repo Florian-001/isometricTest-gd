@@ -11,8 +11,17 @@ var _search_budget: int
 func generate(seed_value: int = DEFAULT_SEED, settings: RunMapSettings = null) -> RunMapGraph:
 	if settings == null:
 		settings = RunMapSettings.new()
-	if settings.columns < 2 or settings.routes < 2:
+	if not settings.validate().is_empty():
 		return null
+	if settings.layout == RunMapSettings.Layout.LINEAR_COMBAT:
+		var graph := RunMapGraph.new(settings.combat_count, 1)
+		graph.layout = RunMapSettings.Layout.LINEAR_COMBAT
+		graph.seed_value = seed_value
+		for tier in range(settings.combat_count):
+			graph.add_node(tier, 0, RunMapGraph.NodeType.NORMAL_COMBAT)
+			if tier > 0:
+				graph.add_edge(tier - 1, tier)
+		return graph
 	for attempt in range(settings.generation_attempts):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed_value + attempt * 104729

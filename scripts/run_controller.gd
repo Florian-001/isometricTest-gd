@@ -172,9 +172,9 @@ func finish_battle(node_id: int, victory: bool, results: Array[Dictionary], inve
 	state.pending.victory = victory
 	if victory:
 		_apply_reward()
-		if int(state.pending.type) == RunMapGraph.NodeType.BOSS:
+		if state.graph.is_terminal_combat(node_id):
 			state.status = RunState.Status.WON
-			state.last_message = "The chief has fallen. Your party reached the summit."
+			state.last_message = "The chief has fallen. Your party reached the summit." if int(state.pending.type) == RunMapGraph.NodeType.BOSS else "Your party won all %d combats. The run is complete." % state.graph.tier_count
 	else:
 		state.status = RunState.Status.LOST
 		state.last_message = "Your party fell on the road. This run has ended."

@@ -139,9 +139,9 @@ static func from_data(data: Dictionary) -> RunState:
 	var survivors := state.party.filter(func(member: RunPartyMember) -> bool: return not member.lost).size()
 	if (state.status == Status.LOST) != (survivors == 0):
 		return null
-	var boss_completed := not state.route.is_empty() and state.graph.get_node_by_id(state.route.back()).type == RunMapGraph.NodeType.BOSS
-	boss_completed = boss_completed or (int(state.pending.get("type", -1)) == RunMapGraph.NodeType.BOSS and bool(state.pending.get("resolved", false)) and bool(state.pending.get("victory", false)))
-	if (state.status == Status.WON) != boss_completed:
+	var final_completed := not state.route.is_empty() and state.graph.is_terminal_combat(state.route.back())
+	final_completed = final_completed or (state.graph.is_terminal_combat(int(state.pending.get("node_id", -1))) and bool(state.pending.get("resolved", false)) and bool(state.pending.get("victory", false)))
+	if (state.status == Status.WON) != final_completed:
 		return null
 	state.last_message = str(data.get("message", ""))
 	return state

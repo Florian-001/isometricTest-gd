@@ -389,7 +389,7 @@ func capture_save_payload(fresh_start := false) -> Dictionary:
 	}
 	return {
 		"schema_version": ScenarioSaveStore.SCHEMA_VERSION,
-		"map_definition": map_definition.resource_path if map_definition != null else "",
+		"map_definition": map_definition.get_save_path() if map_definition != null else "",
 		"metadata": {
 			"name": "",
 			"map_name": map_definition.display_name if map_definition != null else "Unknown Map",

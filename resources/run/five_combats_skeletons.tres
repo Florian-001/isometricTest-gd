@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RunCombatStage" format=3]
+
+[ext_resource type="Script" path="res://scripts/run_combat_stage.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/skeleton_warrior.tscn" id="warrior"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/skeleton_archer.tscn" id="archer"]
+
+[resource]
+script = ExtResource("script")
+display_name = "Skeletons"
+first_floor = 4
+last_floor = 5
+starting_cr = 4
+enemy_pool = Array[PackedScene]([ExtResource("warrior"), ExtResource("archer")])

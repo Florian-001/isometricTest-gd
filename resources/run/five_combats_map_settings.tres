@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="RunMapSettings" format=3]
+
+[ext_resource type="Script" path="res://scripts/run_map_settings.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+layout = 1
+combat_count = 5

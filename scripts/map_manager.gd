@@ -13,10 +13,14 @@ const TacticalBattleScript = preload("res://scripts/initiative_battle_controller
 @onready var level_select: CanvasLayer = $LevelSelect
 @onready var level_buttons: VBoxContainer = $LevelSelect/Root/Center/Panel/Margin/VBox/LevelButtons
 @onready var empty_state: Label = $LevelSelect/Root/Center/Panel/Margin/VBox/EmptyState
-@onready var show_map_button: Button = $LevelSelect/Root/Center/Panel/Margin/VBox/ShowMapButton
+@onready var show_map_button: Button = $LevelSelect/Root/Center/Panel/Margin/VBox/AscentButtons/ShowMapButton
 @onready var run_map_screen: RunMapScreen = $RunMapLayer/RunMapScreen
 @onready var run_controller: RunController = $RunController
-@onready var continue_run_button: Button = $LevelSelect/Root/Center/Panel/Margin/VBox/ContinueRunButton
+@onready var ascent_run_controller: RunController = $RunController
+@onready var five_combats_controller: RunController = $FiveCombatsController
+@onready var continue_run_button: Button = $LevelSelect/Root/Center/Panel/Margin/VBox/AscentButtons/ContinueRunButton
+@onready var five_combats_button: Button = $LevelSelect/Root/Center/Panel/Margin/VBox/FiveCombatsButtons/NewRunButton
+@onready var continue_five_combats_button: Button = $LevelSelect/Root/Center/Panel/Margin/VBox/FiveCombatsButtons/ContinueRunButton
 @onready var replace_run_dialog: ConfirmationDialog = $ReplaceRunDialog
 @onready var starting_hub: StartingHub = $HubLayer/StartingHub
 @onready var run_message: Label = $LevelSelect/Root/Center/Panel/Margin/VBox/RunMessage
@@ -29,22 +33,35 @@ var current_battle: TacticalBattleScript
 
 func _ready() -> void:
 	show_map_button.pressed.connect(show_run_map)
+	five_combats_button.pressed.connect(show_run_map.bind(five_combats_controller))
 	run_map_screen.close_requested.connect(hide_run_map)
 	run_map_screen.setup(run_controller)
 	continue_run_button.pressed.connect(continue_run)
+	continue_five_combats_button.pressed.connect(continue_run.bind(five_combats_controller))
 	replace_run_dialog.confirmed.connect(_start_new_run)
 	replace_run_dialog.canceled.connect(_cancel_new_run)
 	starting_hub.back_requested.connect(_show_level_select)
 	starting_hub.start_requested.connect(_request_new_run)
 	run_controller.battle_requested.connect(_start_run_battle)
 	run_controller.state_changed.connect(_refresh_run_menu)
+	five_combats_controller.state_changed.connect(_refresh_run_menu)
 	_rebuild_level_buttons()
 	_show_level_select()
 
 
-func show_run_map() -> void:
+func _activate_run_controller(value: RunController) -> void:
+	if value == run_controller:
+		return
+	run_controller.battle_requested.disconnect(_start_run_battle)
+	run_controller = value
+	run_controller.battle_requested.connect(_start_run_battle)
+	run_map_screen.setup(run_controller)
+
+
+func show_run_map(value: RunController = null) -> void:
 	if is_instance_valid(current_battle):
 		return
+	_activate_run_controller(value if value != null else ascent_run_controller)
 	_pending_party_ids.clear()
 	_starting_run = false
 	level_select.hide()
@@ -58,6 +75,7 @@ func _request_new_run(character_ids: Array[String]) -> void:
 	_starting_run = true
 	_pending_party_ids = character_ids.duplicate()
 	if run_controller.has_unfinished_run() or (run_controller.state == null and run_controller.has_saved_run()):
+		replace_run_dialog.dialog_text = "Starting a new %s run replaces its saved journey. Continue?" % run_controller.config.display_name
 		replace_run_dialog.popup_centered()
 		return
 	_start_new_run()
@@ -84,9 +102,10 @@ func _cancel_new_run() -> void:
 	starting_hub.set_busy(false)
 
 
-func continue_run() -> void:
+func continue_run(value: RunController = null) -> void:
 	if is_instance_valid(current_battle):
 		return
+	_activate_run_controller(value if value != null else ascent_run_controller)
 	if run_controller.state == null:
 		run_message.text = run_controller.error_message
 		return
@@ -97,12 +116,14 @@ func continue_run() -> void:
 
 
 func _refresh_run_menu() -> void:
-	continue_run_button.visible = run_controller.has_saved_run()
+	continue_run_button.visible = ascent_run_controller.has_saved_run()
+	continue_five_combats_button.visible = five_combats_controller.has_saved_run()
 	run_message.text = run_controller.error_message
-	if run_controller.state != null and run_controller.state.status != RunState.Status.ACTIVE:
+	if ascent_run_controller.state != null and ascent_run_controller.state.status != RunState.Status.ACTIVE:
 		continue_run_button.text = "View Last Run"
 	else:
 		continue_run_button.text = "Continue Run"
+	continue_five_combats_button.text = "View Last: Five Combats" if five_combats_controller.state != null and five_combats_controller.state.status != RunState.Status.ACTIVE else "Continue: Five Combats"
 
 
 func hide_run_map() -> void:
@@ -130,7 +151,7 @@ func reload_battle_from_payload(payload: Dictionary, source_battle: TacticalBatt
 	var map_path := str(validation.payload.get("map_definition", ""))
 	var definition: BattleMapDefinitionScript
 	if (source_battle.run_encounter != null and source_battle.map_definition != null
-		and source_battle.map_definition.resource_path == map_path):
+		and source_battle.map_definition.get_save_path() == map_path):
 		definition = source_battle.map_definition
 	else:
 		for configured_level in levels:

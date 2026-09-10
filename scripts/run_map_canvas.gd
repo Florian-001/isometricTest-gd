@@ -15,6 +15,9 @@ signal room_selected(id: int)
 @export var floor_spacing: float = 140.0
 @export var horizontal_padding: float = 84.0
 @export var vertical_padding: float = 130.0
+## Compact spacing lets the five-combat route fit in the map viewport.
+@export var linear_floor_spacing: float = 90.0
+@export var linear_vertical_padding: float = 56.0
 @export var room_size: float = 68.0
 @export var boss_size: float = 108.0
 @export var position_jitter: Vector2 = Vector2(15, 10)
@@ -77,14 +80,15 @@ func set_graph(value: RunMapGraph) -> void:
 	_row_jitter.clear()
 	if graph == null:
 		return
-	custom_minimum_size.y = vertical_padding * 2.0 + floor_spacing * (graph.tier_count - 1)
+	var linear := graph.layout == RunMapSettings.Layout.LINEAR_COMBAT
+	custom_minimum_size.y = (linear_vertical_padding if linear else vertical_padding) * 2.0 + (linear_floor_spacing if linear else floor_spacing) * (graph.tier_count - 1)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = graph.seed_value ^ 398279
 	for tier in range(graph.tier_count):
 		# A shared row height preserves planarity even after visual jitter.
 		_row_jitter[tier] = rng.randf_range(-position_jitter.y, position_jitter.y)
 		var label := floor_label_scene.instantiate() as Label
-		label.text = "%02d" % (tier + 1) if tier < 15 else "BOSS"
+		label.text = "BOSS" if graph.get_nodes_in_tier(tier)[0].type == RunMapGraph.NodeType.BOSS else "%02d" % (tier + 1)
 		floors.add_child(label)
 		_floor_controls[tier] = label
 	for node in graph.nodes:
@@ -109,11 +113,11 @@ func _layout_rooms() -> void:
 	if graph == null:
 		return
 	var width := maxf(size.x, custom_minimum_size.x)
-	var lane_spacing := (width - horizontal_padding * 2.0) / float(graph.lane_count - 1)
+	var lane_spacing := (width - horizontal_padding * 2.0) / float(maxi(1, graph.lane_count - 1))
 	for node in graph.nodes:
 		var x := horizontal_padding + lane_spacing * node.lane
 		x += clampf(float(_jitter[node.id]), -lane_spacing * 0.15, lane_spacing * 0.15)
-		if node.type == RunMapGraph.NodeType.BOSS:
+		if node.type == RunMapGraph.NodeType.BOSS or graph.lane_count == 1:
 			x = width * 0.5
 		var y := _floor_y(node.tier)
 		var center := Vector2(x, y)
@@ -125,6 +129,8 @@ func _layout_rooms() -> void:
 	queue_redraw()
 
 func _floor_y(tier: int) -> float:
+	if graph.layout == RunMapSettings.Layout.LINEAR_COMBAT:
+		return linear_vertical_padding + (graph.tier_count - 1 - tier) * linear_floor_spacing + float(_row_jitter.get(tier, 0.0))
 	return vertical_padding + (graph.tier_count - 1 - tier) * floor_spacing + float(_row_jitter.get(tier, 0.0))
 
 func _draw() -> void:

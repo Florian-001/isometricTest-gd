@@ -33,6 +33,7 @@ class NodeData:
 
 var tier_count: int
 var lane_count: int
+var layout: RunMapSettings.Layout = RunMapSettings.Layout.ASCENT
 var nodes: Array[NodeData] = []
 var edges: Array[Vector2i] = []
 var seed_value: int = 1337
@@ -138,6 +139,11 @@ func incoming(id: int) -> Array[int]:
 	return result
 
 
+func is_terminal_combat(id: int) -> bool:
+	var node := get_node_by_id(id)
+	return node != null and node.tier == tier_count - 1 and outgoing(id).is_empty() and node.type in [NodeType.NORMAL_COMBAT, NodeType.HARD_COMBAT, NodeType.BOSS]
+
+
 func to_data() -> Dictionary:
 	var room_data: Array = []
 	var edge_data: Array = []
@@ -145,16 +151,24 @@ func to_data() -> Dictionary:
 		room_data.append([node.tier, node.lane, node.type])
 	for edge in edges:
 		edge_data.append([edge.x, edge.y])
-	return {"tiers": tier_count, "lanes": lane_count, "seed": seed_value, "nodes": room_data, "edges": edge_data}
+	return {"layout": int(layout), "tiers": tier_count, "lanes": lane_count, "seed": seed_value, "nodes": room_data, "edges": edge_data}
 
 
 static func from_data(data: Dictionary) -> RunMapGraph:
 	for key in ["tiers", "lanes", "seed"]:
-		if not (data.get(key) is int or data.get(key) is float):
+		if not _integer(data.get(key)):
 			return null
 	var graph := RunMapGraph.new(int(data.get("tiers", 0)), int(data.get("lanes", 0)))
 	graph.seed_value = int(data.get("seed", 0))
-	if graph.tier_count != 16 or graph.lane_count < 2 or graph.lane_count > 12:
+	var saved_layout: Variant = data.get("layout", RunMapSettings.Layout.ASCENT)
+	if not _integer(saved_layout) or int(saved_layout) not in [RunMapSettings.Layout.ASCENT, RunMapSettings.Layout.LINEAR_COMBAT]:
+		return null
+	graph.layout = int(saved_layout) as RunMapSettings.Layout
+	var linear := graph.layout == RunMapSettings.Layout.LINEAR_COMBAT
+	if linear:
+		if graph.tier_count < 1 or graph.tier_count > 15 or graph.lane_count != 1:
+			return null
+	elif graph.tier_count != 16 or graph.lane_count < 2 or graph.lane_count > 12:
 		return null
 	var rooms: Variant = data.get("nodes", [])
 	var links: Variant = data.get("edges", [])
@@ -167,13 +181,13 @@ static func from_data(data: Dictionary) -> RunMapGraph:
 		if not raw is Array or raw.size() != 3:
 			return null
 		for value in raw:
-			if not (value is int or value is float) or not is_finite(float(value)):
+			if not _integer(value):
 				return null
 		var tier := int(raw[0])
 		var lane := int(raw[1])
 		var type := int(raw[2])
 		var key := Vector2i(tier, lane)
-		if tier < 0 or tier >= 16 or lane < 0 or lane >= graph.lane_count or type < 1 or type > NodeType.BOSS or occupied.has(key):
+		if tier < 0 or tier >= graph.tier_count or lane < 0 or lane >= graph.lane_count or type < 1 or type > NodeType.BOSS or occupied.has(key):
 			return null
 		occupied[key] = true
 		graph.add_node(tier, lane, type)
@@ -181,7 +195,7 @@ static func from_data(data: Dictionary) -> RunMapGraph:
 		if not raw is Array or raw.size() != 2:
 			return null
 		for value in raw:
-			if not (value is int or value is float) or not is_finite(float(value)):
+			if not _integer(value):
 				return null
 		var a := graph.get_node_by_id(int(raw[0]))
 		var b := graph.get_node_by_id(int(raw[1]))
@@ -197,11 +211,20 @@ static func from_data(data: Dictionary) -> RunMapGraph:
 			if a.tier == c.tier and (a.lane - c.lane) * (b.lane - d.lane) < 0:
 				return null
 		graph.add_edge(a.id, b.id)
-	if graph.get_nodes_in_tier(0).size() < 2 or graph.get_nodes_in_tier(15).size() != 1:
+	if linear:
+		if graph.nodes.size() != graph.tier_count or graph.edges.size() != graph.tier_count - 1:
+			return null
+	elif graph.get_nodes_in_tier(0).size() < 2 or graph.get_nodes_in_tier(15).size() != 1:
 		return null
 	for node in graph.nodes:
-		if (node.tier == 15) != (node.type == NodeType.BOSS):
+		if linear and node.type != NodeType.NORMAL_COMBAT:
 			return null
-		if (node.tier > 0 and graph.incoming(node.id).is_empty()) or (node.tier < 15 and graph.outgoing(node.id).is_empty()):
+		if not linear and (node.tier == 15) != (node.type == NodeType.BOSS):
+			return null
+		if (node.tier > 0 and graph.incoming(node.id).is_empty()) or (node.tier < graph.tier_count - 1 and graph.outgoing(node.id).is_empty()):
 			return null
 	return graph
+
+
+static func _integer(value: Variant) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and float(value) == floorf(float(value))

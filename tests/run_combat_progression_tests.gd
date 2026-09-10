@@ -22,7 +22,11 @@ func _config() -> RunConfig:
 	config.elite_encounters = source.elite_encounters.duplicate()
 	config.combat_stages = []
 	for stage in source.combat_stages:
-		config.combat_stages.append(stage.duplicate())
+		var fixture := stage.duplicate() as RunCombatStage
+		# Exercise CR 1–15 independently of the game's authored difficulty tuning.
+		fixture.starting_cr = fixture.first_floor
+		fixture.cr_per_floor = 1
+		config.combat_stages.append(fixture)
 	config.floor_overrides = []
 	return config
 
@@ -59,14 +63,14 @@ func _test_rules() -> void:
 	var original_pool := template.enemy_pool.duplicate()
 	var original_cr := template.combat_rating
 	var report := config.validate_configuration()
-	_check(report.errors.is_empty() and report.warnings.is_empty(), "Default progression is valid and can spend every floor budget")
+	_check(report.errors.is_empty() and report.warnings.is_empty(), "Fixture progression is valid and can spend every floor budget")
 	_check(template.enemy_pool == original_pool and template.combat_rating == original_cr, "Full authoring validation does not mutate the shared template")
 	config.normal_encounters.append(config.normal_encounters[0])
 	_check(config.validate_configuration().warnings.is_empty(), "Repeated layout entries do not create false difficulty-plateau warnings")
 	config.normal_encounters = [config.normal_encounters[0]]
 	for floor_number in range(1, 16):
 		var resolved := RunCombatProgression.resolve_floor(config, floor_number)
-		_check(resolved.error.is_empty() and resolved.combat_rating == floor_number, "Every default floor has its own rising CR")
+		_check(resolved.error.is_empty() and resolved.combat_rating == floor_number, "Every fixture floor has its own rising CR")
 		_check(resolved.stage == ("Goblins" if floor_number <= 3 else "Skeletons"), "Stage boundaries include 3→4, 8→9 and the final room floor")
 	_check(not RunCombatProgression.resolve_floor(config, 16).error.is_empty(), "Boss floor has no generated stage")
 	config.combat_stages.reverse()
@@ -170,6 +174,7 @@ func _test_generation() -> void:
 		_check(pending == controller._prepare_room(node), "Seeded progression generation is deterministic")
 		var effective := RunCombatProgression.resolve_pending(pending, floor_number)
 		_check(effective.encounter != controller.config.normal_encounters[0] and effective.encounter.battle_map != source, "Generated encounters use private resource copies")
+		_check(effective.encounter.battle_map.get_save_path() == source.resource_path and load(source.resource_path) == source, "Private progression copies retain map save identity without replacing cached resources")
 		_check(TemplateEncounterSetup.validate_saved(effective.encounter.battle_map, pending.template_setup, 2).is_empty(), "Resolved settings validate the saved roster")
 	_check(source.combat_rating == original_cr and source.enemy_pool == original_pool, "Generation never mutates shared template settings")
 	controller.config.floor_overrides = [_override(6, 4, [load(SKELETON)])]

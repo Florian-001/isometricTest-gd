@@ -150,7 +150,7 @@ func _run() -> void:
 	var panel := BalancePanel.new()
 	panel.catalog_root = ROOT
 	panel.persist_preferences = false
-	panel.enabled_groups = ["Identity", "Base stats", "Equipment", "Results", "Item"]
+	panel.preferences.set_value("table", "groups", ["Identity", "Base stats", "Equipment", "Results", "Item"])
 	panel.store.recovery_path = ""
 	root.add_child(panel)
 	await process_frame

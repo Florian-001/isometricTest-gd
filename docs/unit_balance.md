@@ -8,9 +8,9 @@ enable Unit Balance in that Plugins page or reopen the project.
 ## Enemy workflow
 
 The default overview compares combat rating, HP, armor, movement, initiative,
-attack, damage per hit, hit count, potential total, and range. Enable **Base
-stats**, **Equipment**, or **Effective stats** above the table to show those
-columns. Enemy names remain fixed while the other columns scroll horizontally.
+attack, damage per hit, hit count, potential total, and range. Use **Columns…**
+beside the Enemies/Items tabs to choose exactly which columns to show. Enemy
+names remain fixed while the other columns scroll horizontally.
 The table discovers EnemyDefinition resources recursively under `resources`,
 including the root-level Raider. It edits templates, not scene instances or
 scene overrides.
@@ -46,6 +46,28 @@ health overrides, and movement limits. Damage is before target armor absorption.
 Potential cast total assumes every hit resolves and is not guaranteed damage
 against one target. Conditional passive descriptions are shown separately.
 Attack selection is an editor preference and never changes the enemy loadout.
+
+### Choosing columns
+
+**Columns…** opens a searchable checklist for the current table. Individual
+checkboxes update the table immediately without closing the picker. Search by
+column label, full stat name (for example, `strength`), or group. Group checkboxes
+toggle their entire group, including columns hidden by the search; their counts
+show partial selections. The name column is always visible, and every other
+column—including combat rating—can be hidden.
+
+**Show all** reveals every column, **Hide optional columns** leaves only names,
+and **Reset defaults** restores the enemy results overview or all item columns.
+These actions apply to the current table regardless of the search. Press **Done**
+to close the picker.
+
+Enemy and item selections are saved separately in the existing local editor
+preferences and restored on reopening. Existing group-only settings are migrated
+to equivalent individual selections. Columns retain their original order. When
+the active/anchor column is hidden, cell selection moves to the name column while
+selected rows remain selected; hiding the sort column resets sorting to name.
+Keyboard navigation and copy/paste use only visible columns. Visibility changes
+never modify resource drafts or their undo history.
 
 ## Items and bulk editing
 
@@ -101,6 +123,7 @@ Run from the project root with Godot 4.7.1:
 
 ```text
 godot --headless --path . --script res://tests/run_unit_balance_tests.gd
+godot --headless --path . --script res://tests/run_unit_balance_column_tests.gd
 godot --headless --editor --path . --script res://tests/run_unit_balance_editor_tests.gd
 godot --path . --rendering-method gl_compatibility --script res://tests/capture_unit_balance.gd
 ```
@@ -112,6 +135,10 @@ HP overrides, movement bounds, multi-hit totals, undo/redo, bulk paste, conflict
 recovery, save failures, and cached-resource refresh. The editor suite checks
 plugin registration, staged edits, saving, and searchable dialogs. The capture
 script renders the real tables at 1440×900 and 1000×760 without editing assets.
+The column suite uses isolated fixtures and preferences to check migration,
+independent selections, group actions, search, persistence, and editing/navigation
+after hiding columns. Run it with a graphical renderer and append `-- --capture`
+to render the picker at both sizes under `.godot/unit_balance_column_tests`.
 
 Related equipment (498 checks), armor (120), and passive (83) suites pass. The
 aggregate `run_headless.gd` suite has eight pre-existing failing tests; the same

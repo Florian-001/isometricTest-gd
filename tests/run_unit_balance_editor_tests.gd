@@ -30,6 +30,18 @@ func _run() -> void:
 	check(panel.is_visible_in_tree(), "Unit Balance tab opens")
 	check(panel.grid.rows.size() >= 13, "Editor table contains enemy templates")
 	check(panel.store.dirty_paths().is_empty(), "Opening the table does not modify resources")
+	var original_columns: Array = panel.column_visibility.enemies.duplicate()
+	panel._show_column_picker()
+	await process_frame
+	var column_picker = panel.get_children().filter(func(child): return child is AcceptDialog)[0]
+	check(column_picker.visible and column_picker.checkboxes.has("combat_rating"), "Editor opens individual column checklist")
+	check(not column_picker.no_results.visible, "Editor checklist initially displays its groups")
+	column_picker.toggle_column("combat_rating", false)
+	check(not panel.grid.columns.any(func(column): return column.key == "combat_rating") and column_picker.visible, "Editor column toggle applies without closing picker")
+	check(panel.store.dirty_paths().is_empty(), "Editor visibility change does not dirty resources")
+	column_picker.hide()
+	panel.set_visible_columns("enemies", original_columns)
+	await process_frame
 	panel.grid.select_cell(0, 0)
 	await process_frame
 	check(panel.details.get_child_count() > 3, "Selecting an enemy displays loadout and calculations")

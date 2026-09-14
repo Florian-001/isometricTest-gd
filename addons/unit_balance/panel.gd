@@ -6,6 +6,8 @@ const Store = preload("res://addons/unit_balance/draft_store.gd")
 const Preview = preload("res://addons/unit_balance/preview.gd")
 const Columns = preload("res://addons/unit_balance/columns.gd")
 const Grid = preload("res://addons/unit_balance/balance_grid.gd")
+const ColumnVisibility = preload("res://addons/unit_balance/column_visibility.gd")
+const ColumnPicker = preload("res://addons/unit_balance/column_picker.gd")
 const PREFS := "res://.godot/unit_balance/preferences.cfg"
 
 var catalog := Catalog.new()
@@ -16,11 +18,10 @@ var status := Label.new()
 var summary := Label.new()
 var details := VBoxContainer.new()
 var tabs := TabBar.new()
-var groups := HFlowContainer.new()
 var preferences := ConfigFile.new()
 var attacks: Dictionary = {}
 var previews: Dictionary = {}
-var enabled_groups: Array = ["Identity", "Results", "Item"]
+var column_visibility: Dictionary = {}
 var sort_key := "display_name"
 var sort_ascending := true
 var refresh_queued := false
@@ -29,6 +30,7 @@ var undo_button: Button
 var redo_button: Button
 var catalog_root := "res://resources"
 var persist_preferences := true
+var preferences_path := PREFS
 
 
 func _ready() -> void:
@@ -36,11 +38,11 @@ func _ready() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", 8)
-	if persist_preferences and preferences.load(PREFS) == OK:
-		enabled_groups = preferences.get_value("table", "groups", enabled_groups)
+	if persist_preferences and preferences.load(preferences_path) == OK:
 		attacks = preferences.get_value("table", "attacks", {})
 		sort_key = preferences.get_value("table", "sort_key", sort_key)
 		sort_ascending = preferences.get_value("table", "sort_ascending", true)
+	column_visibility = ColumnVisibility.read_preferences(preferences)
 	var heading := HBoxContainer.new()
 	add_child(heading)
 	var title := Label.new()
@@ -66,6 +68,7 @@ func _ready() -> void:
 	tabs.add_tab("Items")
 	tabs.custom_minimum_size.x = 190
 	filter_bar.add_child(tabs)
+	_button(filter_bar, "Columns…", _show_column_picker)
 	search.placeholder_text = "Search name, path, equipment, or values…"
 	search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	filter_bar.add_child(search)
@@ -77,10 +80,8 @@ func _ready() -> void:
 		grid.active_key = "display_name"
 		grid.anchor_key = "display_name"
 		grid.horizontal.value = 0
-		_build_groups()
 		_refresh()
 	)
-	add_child(groups)
 	var conditions := Label.new()
 	conditions.text = "Preview: starting equipment, no temporary statuses, no nearby allies. Damage before target armor."
 	conditions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -119,8 +120,8 @@ func _ready() -> void:
 	store.changed.connect(_schedule_refresh)
 	refresh_catalog()
 	var recovered := store.restore_recovery() if not store.recovery_path.is_empty() else 0
-	_build_groups()
 	_refresh()
+	_save_preferences()
 	_message("Recovered %d unsaved resources. Review and Save All, or Revert All." % recovered if recovered > 0 else "Double-click / Enter to edit • Shift-click: rectangle • Ctrl-click: rows • Ctrl+C/V: copy/paste • Green values are calculated")
 
 
@@ -145,23 +146,37 @@ func _schedule_refresh() -> void:
 		_refresh.call_deferred()
 
 
-func _build_groups() -> void:
-	_clear(groups)
-	if tabs.current_tab == 1:
-		return
-	for group in ["Base stats", "Equipment", "Effective stats", "Results"]:
-		var check := CheckBox.new()
-		check.text = group
-		check.button_pressed = group in enabled_groups
-		groups.add_child(check)
-		check.toggled.connect(func(pressed):
-			if pressed:
-				enabled_groups.append(group)
-			else:
-				enabled_groups.erase(group)
-			_refresh()
-			_save_preferences()
-		)
+func _table_key() -> String:
+	return "enemies" if tabs.current_tab == 0 else "items"
+
+
+func _show_column_picker() -> void:
+	var picker := ColumnPicker.new()
+	var table := _table_key()
+	picker.setup(table, column_visibility[table])
+	add_child(picker)
+	picker.columns_changed.connect(func(keys): set_visible_columns(table, keys))
+	picker.visibility_changed.connect(func():
+		if not picker.visible:
+			picker.queue_free()
+	)
+	picker.popup_centered_clamped(Vector2i(520, 600), 0.85)
+	picker.search.grab_focus()
+
+
+func set_visible_columns(table: String, keys: Array) -> void:
+	column_visibility[table] = ColumnVisibility.normalize(table, keys)
+	_refresh()
+	_save_preferences()
+
+
+func _reconcile_visible_columns(keys: Array) -> void:
+	if grid.active_key not in keys or grid.anchor_key not in keys:
+		grid.active_key = "display_name"
+		grid.anchor_key = "display_name"
+	if sort_key not in keys:
+		sort_key = "display_name"
+		sort_ascending = true
 
 
 func _refresh() -> void:
@@ -170,7 +185,9 @@ func _refresh() -> void:
 		return
 	previews.clear()
 	var all_columns := Columns.enemies() if tabs.current_tab == 0 else Columns.items()
-	var visible_columns: Array = all_columns.filter(func(column): return column.group in enabled_groups or column.group == "Identity")
+	var keys: Array = column_visibility[_table_key()]
+	_reconcile_visible_columns(keys)
+	var visible_columns: Array = all_columns.filter(func(column): return column.key in keys)
 	var rows: Array = []
 	var paths: Array = catalog.enemies if tabs.current_tab == 0 else catalog.items
 	for path in paths:
@@ -602,12 +619,12 @@ func _message(text: String, error := false) -> void:
 func _save_preferences() -> void:
 	if not persist_preferences:
 		return
-	preferences.set_value("table", "groups", enabled_groups)
+	ColumnVisibility.write_preferences(preferences, column_visibility)
 	preferences.set_value("table", "attacks", attacks)
 	preferences.set_value("table", "sort_key", sort_key)
 	preferences.set_value("table", "sort_ascending", sort_ascending)
-	DirAccess.make_dir_recursive_absolute(PREFS.get_base_dir())
-	preferences.save(PREFS)
+	DirAccess.make_dir_recursive_absolute(preferences_path.get_base_dir())
+	preferences.save(preferences_path)
 
 
 static func _button(parent: Node, text: String, action: Callable) -> Button:

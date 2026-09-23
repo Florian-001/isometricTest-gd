@@ -30,15 +30,15 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg", "res://addons/tile_painter/plugin.cfg", "res://addons/wall_painter/plugin.cfg", "res://addons/spawn_painter/plugin.cfg", "res://addons/class_ability_reference/plugin.cfg", "res://addons/unit_balance/plugin.cfg")
+enabled=PackedStringArray("res://addons/class_ability_reference/plugin.cfg", "res://addons/godot_ai/plugin.cfg", "res://addons/spawn_painter/plugin.cfg", "res://addons/tile_painter/plugin.cfg", "res://addons/unit_balance/plugin.cfg", "res://addons/wall_painter/plugin.cfg")
 
 [input]
 
 battle_token_view={
 "deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":4194326)]
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":16,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194326,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
 }
-
 battle_end_turn={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":32,"key_label":0,"unicode":32,"location":0,"echo":false,"script":null)

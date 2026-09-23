@@ -11,5 +11,5 @@ script = ExtResource("1_aohy4")
 script = ExtResource("2_fti4b")
 display_name = "Wooden Sword"
 icon = ExtResource("inventory_icon")
-weapon_damage = 15
+weapon_damage = 1
 modifiers = Array[ExtResource("1_aohy4")]([SubResource("StrengthBonus")])

@@ -1,16 +1,18 @@
 # Compact unit tokens
 
-Hold either **Ctrl** key to show all on-map units as compact round tokens. Release
-Ctrl to restore the normal artwork. Tokens use existing character artwork or an
+Press either **Ctrl** key to show all on-map units as compact round tokens. Press
+Ctrl again to restore the normal artwork. Holding or releasing the key does not
+change the selected view. Tokens use existing character artwork or an
 assigned portrait, with blue borders for friendlies and red borders for enemies.
 Bone piles use their pile image; units without artwork display an initial.
 
-Health, armor, and status displays are hidden while Ctrl is held. The **Names**
+Health, armor, and status displays are hidden while token view is enabled. The **Names**
 setting still controls unit names. Selection, movement, and targeting continue
 normally, using the token's circular footprint instead of the hidden artwork.
 The view also works while developer mode is paused and applies to newly added
-units. Losing window focus restores normal visuals. This view is temporary and
-does not change saved scenarios or run state.
+units. Switching window focus preserves the selected view. Each newly loaded
+battle starts with normal visuals; the toggle does not change saved scenarios
+or run state.
 
 The Input Map action is `battle_token_view`. `TacticalCharacter` exposes
 `set_token_view_enabled(bool)` and `is_token_view_enabled()` for presentation.

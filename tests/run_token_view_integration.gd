@@ -40,43 +40,49 @@ func _run() -> void:
 	for character in battle._characters:
 		_check(battle._get_character_at_global_point(character.global_position) == character,
 			"each token center picks its own unit")
-	await _ctrl(KEY_LOCATION_RIGHT, true)
+	await _ctrl(KEY_LOCATION_LEFT, true, true)
+	await _ctrl(KEY_LOCATION_LEFT, true, true)
+	_check_all(battle, true)
 	await _ctrl(KEY_LOCATION_LEFT, false)
 	_check_all(battle, true)
-	await _ctrl(KEY_LOCATION_RIGHT, false)
+	await _tap_ctrl(KEY_LOCATION_LEFT)
 	_check_all(battle, false)
 	_check(label.position == name_position, "normal name position is restored")
 	_check(unit.contains_global_point(unit.global_position + Vector2(0, -70)), "normal sprite hit area returns")
 	await _ctrl(KEY_LOCATION_RIGHT, true)
-	await _ctrl(KEY_LOCATION_LEFT, true)
+	await _ctrl(KEY_LOCATION_RIGHT, true, true)
 	await _ctrl(KEY_LOCATION_RIGHT, false)
 	_check_all(battle, true)
-	await _ctrl(KEY_LOCATION_LEFT, false)
+	await _tap_ctrl(KEY_LOCATION_LEFT)
 	_check_all(battle, false)
+	_check(battle.capture_save_payload(false) == payload, "toggling off preserves combat and save state")
 	# Presentation keys still work while actions or an enemy turn block gameplay.
 	var was_locked := battle._movement_locked
 	battle._movement_locked = true
-	await _ctrl(KEY_LOCATION_LEFT, true)
+	await _tap_ctrl(KEY_LOCATION_LEFT)
 	_check_all(battle, true)
-	await _ctrl(KEY_LOCATION_LEFT, false)
+	await _tap_ctrl(KEY_LOCATION_LEFT)
 	_check_all(battle, false)
 	battle._movement_locked = was_locked
 
 	battle.set_unit_names_visible(false)
-	await _ctrl(KEY_LOCATION_LEFT, true)
+	await _tap_ctrl(KEY_LOCATION_LEFT)
 	_check(not label.visible, "token view respects hidden names")
 	root.focus_exited.emit()
-	_check_all(battle, false)
+	_check_all(battle, true)
 	await _ctrl(KEY_LOCATION_LEFT, false)
 	root.focus_entered.emit()
 	await process_frame
-	_check_all(battle, false)
+	_check_all(battle, true)
 	_check(not label.visible, "focus restoration preserves hidden names")
+	await _tap_ctrl(KEY_LOCATION_RIGHT)
+	_check_all(battle, false)
 	root.focus_exited.emit()
-	# Simulate arriving in the window with Ctrl already held.
+	# Focus and polled key state cannot change the selected view.
 	Input.action_press(&"battle_token_view")
 	root.focus_entered.emit()
-	_check_all(battle, true)
+	await process_frame
+	_check_all(battle, false)
 	Input.action_release(&"battle_token_view")
 	await process_frame
 	_check_all(battle, false)
@@ -85,19 +91,19 @@ func _run() -> void:
 	# The battle root processes while developer mode pauses map simulation.
 	battle._open_dev_mode()
 	_check(paused, "developer mode pauses simulation")
-	await _ctrl(KEY_LOCATION_LEFT, true)
+	await _tap_ctrl(KEY_LOCATION_LEFT)
 	_check_all(battle, true)
 	var scene := load("res://scenes/enemies/skeleton_warrior.tscn") as PackedScene
 	battle._add_dev_unit(scene, _open_cell(battle))
 	var skeleton: TacticalCharacter = battle._characters.back()
-	_check(skeleton.is_token_view_enabled(), "new units inherit held token view")
+	_check(skeleton.is_token_view_enabled(), "new units inherit toggled token view after Ctrl is released")
 	skeleton.apply_damage(999)
 	_check(skeleton.is_bone_pile, "skeleton turns into a bone pile")
 	_check(skeleton._get_token_texture() == skeleton.get_reassembly_effect().pile_texture,
 		"bone pile token uses pile art")
-	await _ctrl(KEY_LOCATION_LEFT, false)
+	await _tap_ctrl(KEY_LOCATION_LEFT)
 	_check_all(battle, false)
-	_check(skeleton.is_bone_pile, "releasing Ctrl preserves the current form")
+	_check(skeleton.is_bone_pile, "toggling off preserves the current form")
 
 	# Small cells constrain the badge; assigned portraits override facing artwork.
 	var small_grid := IsometricGrid.new()
@@ -117,17 +123,25 @@ func _run() -> void:
 	small_grid.queue_free()
 	if OS.get_cmdline_user_args().has("--capture"):
 		await _capture(battle, skeleton)
+	await _tap_ctrl(KEY_LOCATION_LEFT)
+	_check_all(battle, true)
 	paused = false
 	battle.queue_free()
 	await process_frame
-	# A scene loaded while Ctrl is already held starts in token view.
+	# A new battle defaults off even if the previous view was on and Ctrl is held.
 	await _ctrl(KEY_LOCATION_LEFT, true)
 	var next_battle := (load("res://scenes/battle.tscn") as PackedScene).instantiate() as TacticalBattle
 	next_battle.map_definition = load("res://resources/maps/goblin_skirmish.tres") as BattleMapDefinition
 	root.add_child(next_battle)
 	await process_frame
-	_check_all(next_battle, true)
+	_check_all(next_battle, false)
+	await _ctrl(KEY_LOCATION_LEFT, true, true)
+	_check_all(next_battle, false)
 	await _ctrl(KEY_LOCATION_LEFT, false)
+	_check_all(next_battle, false)
+	await _tap_ctrl(KEY_LOCATION_RIGHT)
+	_check_all(next_battle, true)
+	await _tap_ctrl(KEY_LOCATION_RIGHT)
 	_check_all(next_battle, false)
 	next_battle.queue_free()
 	await process_frame
@@ -168,12 +182,18 @@ func _test_movement() -> void:
 	await process_frame
 
 
-func _ctrl(location: KeyLocation, pressed: bool) -> void:
+func _tap_ctrl(location: KeyLocation) -> void:
+	await _ctrl(location, true)
+	await _ctrl(location, false)
+
+
+func _ctrl(location: KeyLocation, pressed: bool, echo := false) -> void:
 	var event := InputEventKey.new()
 	event.keycode = KEY_CTRL
 	event.physical_keycode = KEY_CTRL
 	event.location = location
 	event.pressed = pressed
+	event.echo = echo
 	event.ctrl_pressed = pressed
 	Input.parse_input_event(event)
 	await process_frame

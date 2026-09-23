@@ -110,14 +110,9 @@ var _pending_ai_history_cutoff := -1
 var _pending_ai_history_scroll_position := -1
 var initialization_succeeded := false
 var _token_view_enabled := false
-var _token_view_has_focus := true
-var _held_token_ctrl_locations: Dictionary = {}
 
 
 func _ready() -> void:
-	get_window().focus_exited.connect(_on_token_view_focus_exited)
-	get_window().focus_entered.connect(_on_token_view_focus_entered)
-	_sync_token_view()
 	var ai_restore_context: Dictionary = {}
 	var raw_ai_restore_context: Variant = pending_restore_payload.get(DEV_AI_RESTORE_CONTEXT, {})
 	if raw_ai_restore_context is Dictionary:
@@ -446,8 +441,9 @@ func _restore_runtime_state(runtime: Dictionary) -> bool:
 
 
 func _input(event: InputEvent) -> void:
-	_track_token_view_input(event)
-	_sync_token_view()
+	# Releases and key-repeat echoes must not toggle the view again.
+	if event.is_action_pressed(&"battle_token_view", false):
+		_set_token_view_enabled(not _token_view_enabled)
 	if _handle_battle_shortcut(event):
 		get_viewport().set_input_as_handled()
 		return
@@ -671,24 +667,7 @@ func _character_display_name(character: TacticalCharacter) -> String:
 	)
 
 
-func _track_token_view_input(event: InputEvent) -> void:
-	if not _token_view_has_focus or not event is InputEventKey:
-		return
-	var key := event as InputEventKey
-	if key.keycode != KEY_CTRL and key.physical_keycode != KEY_CTRL:
-		return
-	# Input's aggregate Ctrl state can be released while the other Ctrl is held.
-	if key.pressed:
-		_held_token_ctrl_locations[key.location] = true
-	else:
-		_held_token_ctrl_locations.erase(key.location)
-
-
-func _sync_token_view() -> void:
-	var enabled := _token_view_has_focus and (
-		not _held_token_ctrl_locations.is_empty()
-		or Input.is_action_pressed(&"battle_token_view")
-	)
+func _set_token_view_enabled(enabled: bool) -> void:
 	if _token_view_enabled == enabled:
 		return
 	_token_view_enabled = enabled
@@ -705,19 +684,7 @@ func _sync_token_view() -> void:
 			_update_hover(point)
 
 
-func _on_token_view_focus_exited() -> void:
-	_token_view_has_focus = false
-	_held_token_ctrl_locations.clear()
-	_sync_token_view()
-
-
-func _on_token_view_focus_entered() -> void:
-	_token_view_has_focus = true
-	_sync_token_view()
-
-
 func _process(_delta: float) -> void:
-	_sync_token_view()
 	if is_instance_valid(_pending_defeated_turn_unit) and not _ability_executor.is_resolving():
 		var defeated_unit := _pending_defeated_turn_unit
 		_pending_defeated_turn_unit = null

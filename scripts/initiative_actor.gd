@@ -1663,9 +1663,13 @@ func _update_sorting() -> void:
 func _draw() -> void:
 	if _token_view_enabled:
 		_draw_token()
-		return
+	else:
+		_draw_character_artwork()
+	_draw_combat_details()
+
+
+func _draw_character_artwork() -> void:
 	var body_color := definition.body_color if definition != null else Color.WHITE
-	var health_color := definition.health_bar_color if definition != null else Color.GREEN
 	var shadow_color := Color(0.0, 0.0, 0.0, 0.38)
 
 	draw_set_transform(Vector2(0.0, -5.0), 0.0, Vector2(1.35, 0.48))
@@ -1680,9 +1684,28 @@ func _draw() -> void:
 		draw_circle(Vector2(0.0, -29.0), 16.0, body_color)
 		draw_circle(Vector2(-5.0, -34.0), 4.0, body_color.lightened(0.35))
 
-	var bar_rect := ARTWORK_HEALTH_BAR_RECT if facing_texture != null else FALLBACK_HEALTH_BAR_RECT
+
+func _get_health_bar_rect() -> Rect2:
+	if _token_view_enabled:
+		var radius := _get_token_radius()
+		var armor_height := 12.0 if get_max_armor() > 0 else 0.0
+		return Rect2(-radius, -radius - 15.0 - armor_height, radius * 2.0, 11.0)
 	if is_bone_pile:
-		bar_rect = Rect2(-27.0, -60.0, 54.0, 7.0)
+		return Rect2(-27.0, -60.0, 54.0, 7.0)
+	return ARTWORK_HEALTH_BAR_RECT if _get_facing_texture() != null else FALLBACK_HEALTH_BAR_RECT
+
+
+func _get_health_text_position(bar_rect: Rect2) -> Vector2:
+	if _token_view_enabled:
+		return bar_rect.position + Vector2(0.0, 9.0)
+	if is_bone_pile:
+		return Vector2(-70.0, -51.5)
+	return Vector2(-70.0, -108.5) if _get_facing_texture() != null else Vector2(-65.0, -48.5)
+
+
+func _draw_combat_details() -> void:
+	var health_color := definition.health_bar_color if definition != null else Color.GREEN
+	var bar_rect := _get_health_bar_rect()
 	draw_rect(bar_rect, Color(0.025, 0.035, 0.05, 0.95), true)
 	var ratio := clampf(float(current_health) / float(get_max_health()), 0.0, 1.0)
 	draw_rect(
@@ -1694,34 +1717,8 @@ func _draw() -> void:
 		true
 	)
 
-	var health_text := str(current_health)
-	var health_font := ThemeDB.fallback_font
-	var health_position := (
-		Vector2(-70.0, -108.5)
-		if facing_texture != null
-		else Vector2(-65.0, -48.5)
-	)
-	if is_bone_pile:
-		health_position = Vector2(-70.0, -51.5)
-	draw_string_outline(
-		health_font,
-		health_position,
-		health_text,
-		HORIZONTAL_ALIGNMENT_RIGHT,
-		38.0,
-		12,
-		3,
-		Color(0.01, 0.015, 0.025, 0.95)
-	)
-	draw_string(
-		health_font,
-		health_position,
-		health_text,
-		HORIZONTAL_ALIGNMENT_RIGHT,
-		38.0,
-		12,
-		Color.WHITE
-	)
+	var health_position := _get_health_text_position(bar_rect)
+	_draw_pool_value(current_health, health_position, Color.WHITE)
 	_draw_status_icons()
 	if get_max_armor() > 0:
 		_draw_armor_bar(bar_rect, health_position)
@@ -1772,13 +1769,21 @@ func _draw_armor_bar(health_rect: Rect2, health_text_position: Vector2) -> void:
 		ARMOR_COLOR
 	)
 	var text_position := health_text_position + Vector2(0.0, 12.0)
+	_draw_pool_value(current_armor, text_position, ARMOR_COLOR)
+
+
+func _draw_pool_value(value: int, text_position: Vector2, color: Color) -> void:
+	var alignment := HORIZONTAL_ALIGNMENT_CENTER if _token_view_enabled else HORIZONTAL_ALIGNMENT_RIGHT
+	var width := _get_health_bar_rect().size.x if _token_view_enabled else 38.0
+	var font_size := 10 if _token_view_enabled else 12
+	var outline_size := 2 if _token_view_enabled else 3
 	draw_string_outline(
-		ThemeDB.fallback_font, text_position, str(current_armor),
-		HORIZONTAL_ALIGNMENT_RIGHT, 38.0, 12, 3, Color(0.01, 0.015, 0.025, 0.95)
+		ThemeDB.fallback_font, text_position, str(value),
+		alignment, width, font_size, outline_size, Color(0.01, 0.015, 0.025, 0.95)
 	)
 	draw_string(
-		ThemeDB.fallback_font, text_position, str(current_armor),
-		HORIZONTAL_ALIGNMENT_RIGHT, 38.0, 12, ARMOR_COLOR
+		ThemeDB.fallback_font, text_position, str(value),
+		alignment, width, font_size, color
 	)
 
 
@@ -1833,6 +1838,8 @@ func _get_status_icon_entries() -> Array[Dictionary]:
 	total_width += float(statuses.size() - 1) * STATUS_ICON_GAP
 	var cursor_x := -total_width * 0.5
 	var status_icon_top := ARTWORK_STATUS_ICON_TOP if has_directional_artwork() else FALLBACK_STATUS_ICON_TOP
+	if _token_view_enabled:
+		status_icon_top = _get_health_bar_rect().position.y - STATUS_ICON_SIZE - 4.0
 	if has_stacks:
 		# Keep count badges clear of the health bar and health text below the row.
 		status_icon_top -= STATUS_STACK_BADGE_HEIGHT - 2.0

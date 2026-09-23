@@ -6,8 +6,10 @@ change the selected view. Tokens use existing character artwork or an
 assigned portrait, with blue borders for friendlies and red borders for enemies.
 Bone piles use their pile image; units without artwork display an initial.
 
-Health, armor, and status displays are hidden while token view is enabled. The **Names**
-setting still controls unit names. Selection, movement, and targeting continue
+Token view shows a compact health bar above each token, with armor beneath health
+when the unit has armor. Current values appear inside the bars. Status icons sit above them
+and retain their stack-count badges. These displays update with combat changes.
+The **Names** setting still controls unit names below tokens. Selection, movement, and targeting continue
 normally, using the token's circular footprint instead of the hidden artwork.
 The view also works while developer mode is paused and applies to newly added
 units. Switching window focus preserves the selected view. Each newly loaded

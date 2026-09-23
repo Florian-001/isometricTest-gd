@@ -101,6 +101,8 @@ func _run() -> void:
 	_check(skeleton.is_bone_pile, "skeleton turns into a bone pile")
 	_check(skeleton._get_token_texture() == skeleton.get_reassembly_effect().pile_texture,
 		"bone pile token uses pile art")
+	_check(skeleton._get_health_bar_rect().end.y < -skeleton._get_token_radius()
+		and skeleton.current_health == skeleton.get_max_health(), "bone pile health uses the compact token layout")
 	await _tap_ctrl(KEY_LOCATION_LEFT)
 	_check_all(battle, false)
 	_check(skeleton.is_bone_pile, "toggling off preserves the current form")
@@ -115,6 +117,8 @@ func _run() -> void:
 	fallback.initialize(small_grid)
 	fallback.set_token_view_enabled(true)
 	_check(fallback._get_token_radius() < 8.0, "token fits a small grid cell")
+	_check(is_equal_approx(fallback._get_health_bar_rect().size.x, fallback._get_token_radius() * 2.0),
+		"health bar fits a small token")
 	_check(fallback._get_token_texture() == null, "missing artwork uses initials")
 	fallback.definition = CharacterDefinition.new()
 	fallback.definition.portrait = unit.facing_right_texture
@@ -145,6 +149,7 @@ func _run() -> void:
 	_check_all(next_battle, false)
 	next_battle.queue_free()
 	await process_frame
+	_test_combat_details()
 	await _test_movement()
 	if _failures.is_empty():
 		print("TOKEN_VIEW_INTEGRATION_OK")
@@ -153,6 +158,69 @@ func _run() -> void:
 		for failure in _failures:
 			push_error(failure)
 		quit(1)
+
+
+func _test_combat_details() -> void:
+	for artwork in [false, true]:
+		var actor := (load("res://scenes/friendlies/friend_a.tscn") as PackedScene).instantiate() as TacticalCharacter if artwork else TacticalCharacter.new()
+		actor.definition = CharacterDefinition.new()
+		actor.use_complete_equipment_override = true
+		root.add_child(actor)
+		var armor := ItemDefinition.new()
+		armor.slot = ItemDefinition.EquipmentSlot.ARMOR
+		armor.armor = 10
+		var buff := load("res://resources/statuses/strength_up.tres") as StatusEffectDefinition
+		for index in range(3):
+			actor.apply_status(buff)
+		var fallback_status := StatusEffectDefinition.new()
+		fallback_status.status_id = &"token_test_status"
+		fallback_status.display_name = "Test"
+		actor.apply_status(fallback_status)
+		var normal_bar := actor._get_health_bar_rect()
+		var normal_text := actor._get_health_text_position(normal_bar)
+		var normal_statuses := actor._get_status_icon_entries()
+		var state := actor.capture_runtime_state()
+		actor.set_token_view_enabled(true)
+		var no_armor_bar := actor._get_health_bar_rect()
+		_check(is_equal_approx(no_armor_bar.size.x, actor._get_token_radius() * 2.0)
+			and is_zero_approx(no_armor_bar.get_center().x), "token health bar is centered and matches its diameter")
+		_check(no_armor_bar.end.y < -actor._get_token_radius(), "health stays above the portrait")
+		_check(no_armor_bar.has_point(actor._get_health_text_position(no_armor_bar)),
+			"token values fit inside the bars instead of extending into adjacent tokens")
+		_check(not actor.contains_global_point(actor.to_global(no_armor_bar.get_center())), "combat details do not expand the token hit area")
+		var entries := actor._get_status_icon_entries()
+		_check(entries.size() == 2 and entries[0].stack_count == 3, "token shows multiple statuses and their stack counts")
+		_check(entries[1].definition.icon == null, "status without an icon retains its initial fallback")
+		for entry in entries:
+			_check(entry.rect.end.y < no_armor_bar.position.y, "status icons clear the health bar")
+			if entry.definition.stackable:
+				_check(entry.stack_badge_rect.end.y < no_armor_bar.position.y, "stack badge clears the health bar")
+		_check(not entries[0].rect.intersects(entries[1].rect), "adjacent status icons do not overlap")
+		_check(actor.capture_runtime_state() == state, "showing combat details does not change state")
+		actor.set_token_view_enabled(false)
+		_check(actor._get_health_bar_rect() == normal_bar and actor._get_health_text_position(normal_bar) == normal_text
+			and actor._get_status_icon_entries() == normal_statuses, "normal artwork and fallback layouts are restored exactly")
+		actor.set_token_view_enabled(true)
+		actor.equip_item(armor)
+		var armored_bar := actor._get_health_bar_rect()
+		_check(armored_bar.position.y < no_armor_bar.position.y
+			and armored_bar.end.y + 12.0 < -actor._get_token_radius(), "equipping armor reserves room for both bars above the portrait")
+		_check(actor._get_status_icon_entries()[0].stack_badge_rect.end.y < armored_bar.position.y,
+			"statuses move up with the additional armor row")
+		var maximum := actor.get_max_health()
+		actor.apply_damage(13)
+		_check(actor.current_armor == 0 and actor.current_health == maximum - 3
+			and actor._get_health_bar_rect() == armored_bar, "damage updates both pools and keeps depleted armor visible")
+		actor.heal(2)
+		actor.restore_armor()
+		_check(actor.current_health == maximum - 1 and actor.current_armor == 10, "token view retains live healing and armor restoration")
+		actor.remove_status(buff.status_id)
+		_check(actor._get_status_icon_entries().size() == 1, "removing a status updates token icons")
+		actor.remove_status(fallback_status.status_id)
+		_check(actor._get_status_icon_entries().is_empty(), "removing all statuses leaves no stale icons")
+		actor.unequip_item(ItemDefinition.EquipmentSlot.ARMOR)
+		_check(actor._get_health_bar_rect() == no_armor_bar, "removing armor compacts the layout again")
+		actor.free()
 
 
 func _test_movement() -> void:
@@ -222,6 +290,24 @@ func _capture(battle: TacticalBattle, skeleton: TacticalCharacter) -> void:
 	battle._characters[0].set_grid_cell_immediate(Vector2i(4, 4))
 	battle._characters[1].set_grid_cell_immediate(Vector2i(5, 4))
 	skeleton.set_grid_cell_immediate(Vector2i(4, 5))
+	var armored: TacticalCharacter = battle._characters[0]
+	armored.equip_item(load("res://resources/items/armor/leather_armor.tres"))
+	armored.apply_damage(armored.get_max_armor() + 3)
+	armored.heal(1)
+	armored.restore_armor()
+	armored.apply_damage(3)
+	for index in range(3):
+		armored.apply_status(load("res://resources/statuses/strength_up.tres"))
+	var fallback_status := StatusEffectDefinition.new()
+	fallback_status.status_id = &"token_capture_status"
+	fallback_status.display_name = "Test"
+	armored.apply_status(fallback_status)
+	battle._characters[1].apply_status(load("res://resources/statuses/dexterity_up.tres"))
+	# Damage popups are frozen by this paused fixture; omit them from layout captures.
+	for character in battle._characters:
+		for child in character.get_children():
+			if child is CanvasItem and child.has_meta("damage_number"):
+				child.hide()
 	var center := battle.grid.grid_to_global(Vector2i(4, 4))
 	battle.tactical_camera.position = center
 	DirAccess.make_dir_recursive_absolute("res://.godot/token_view_validation")
@@ -230,10 +316,12 @@ func _capture(battle: TacticalBattle, skeleton: TacticalCharacter) -> void:
 		for enabled in [false, true]:
 			for character in battle._characters:
 				character.set_token_view_enabled(enabled)
-			await process_frame
-			await RenderingServer.frame_post_draw
-			var path := "res://.godot/token_view_validation/%s_%s.png" % ["tokens" if enabled else "normal", zoom_level]
-			_check(root.get_texture().get_image().save_png(path) == OK, "screenshot saves")
+			for names in [false, true]:
+				battle.set_unit_names_visible(names)
+				await process_frame
+				await RenderingServer.frame_post_draw
+				var path := "res://.godot/token_view_validation/%s_%s_names_%s.png" % ["tokens" if enabled else "normal", zoom_level, names]
+				_check(root.get_texture().get_image().save_png(path) == OK, "screenshot saves")
 	# Inspect an intermediate movement position without advancing paused combat.
 	var moving: TacticalCharacter = battle._characters[0]
 	moving.position = moving.position.lerp(battle.grid.grid_to_global(Vector2i(5, 5)), 0.5)

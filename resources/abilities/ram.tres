@@ -14,7 +14,6 @@ display_name = "Ram"
 ability_type = 0
 requires_weapon = false
 effect = 1
-on_kill_status_stacks = null
 range = 1.0
 delivery_type = 2
 effects = Array[ExtResource("effect")]([SubResource("Push")])

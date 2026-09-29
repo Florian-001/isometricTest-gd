@@ -945,11 +945,16 @@ func _update_ability_hover(global_mouse: Vector2) -> void:
 		and _ability_range_cells.has(cell)
 		and (not _selected_ability.moves_caster() or not caster_movement_path.is_empty())
 	):
-		var projectile_path := _ability_executor.projectile_delivery.get_preview(
-			effect_origin,
-			cell,
-			wall_cells
+		var delivery_endpoint := _ability_targeting.get_delivery_endpoint(
+			effect_origin, cell, _selected_ability, wall_cells, _selected_character
 		)
+		var projectile_path: Array[Vector2i]
+		if _selected_ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE:
+			projectile_path = [effect_origin, delivery_endpoint]
+		else:
+			projectile_path = _ability_executor.projectile_delivery.get_preview(
+				effect_origin, cell, wall_cells
+			)
 		if trajectory_cells.is_empty():
 			trajectory_cells.assign(projectile_path)
 		else:

@@ -298,7 +298,8 @@ func _deliver_hit(
 				ability,
 				selected_cell,
 				grid,
-				wall_cells
+				wall_cells,
+				targeting.get_delivery_endpoint(caster.grid_cell, selected_cell, ability, wall_cells, caster)
 			)
 			if not projectile_arrived:
 				return false
@@ -440,6 +441,7 @@ func _can_execute_base(
 		delivery_origin = AbilityCasterMovementScript.get_landing_cell(movement_path)
 	if (
 		ability.delivery_type == AbilityDefinition.DeliveryType.PROJECTILE
+		and ability.shape != AbilityDefinition.Shape.LINE_TO_MAX_RANGE
 		and not projectile_delivery.has_clear_trajectory(delivery_origin, selected_cell, wall_cells)
 	):
 		return false

@@ -38,18 +38,26 @@ func has_clear_trajectory(
 	return _line_of_sight.has_line_of_sight(caster_cell, target_cell, wall_cells)
 
 
+## visual_endpoint changes travel only; signals continue to identify the chosen aim.
 func launch(
 	caster: TacticalCharacter,
 	ability: AbilityDefinition,
 	target_cell: Vector2i,
 	grid: IsometricGrid,
-	wall_cells: Dictionary = {}
+	wall_cells: Dictionary = {},
+	visual_endpoint: Vector2i = Vector2i(-1, -1)
 ) -> bool:
 	var invalid_reason := _get_invalid_reason(caster, ability, target_cell, grid, wall_cells)
 	if not invalid_reason.is_empty():
 		projectile_cancelled.emit(caster, ability, target_cell, invalid_reason)
 		return false
 
+	var endpoint := target_cell if visual_endpoint == Vector2i(-1, -1) else visual_endpoint
+	if visual_endpoint == Vector2i(-1, -1) and ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE:
+		endpoint = AbilityTargeting.new(grid.grid_size).get_delivery_endpoint(caster.grid_cell, target_cell, ability, wall_cells, caster)
+	if not grid.is_in_bounds(endpoint):
+		projectile_cancelled.emit(caster, ability, target_cell, &"invalid_visual_endpoint")
+		return false
 	var visual := _create_visual(ability)
 	visual.name = "AbilityProjectile"
 	visual.z_index = 4090
@@ -57,7 +65,7 @@ func launch(
 	visual.global_position = caster.global_position + Vector2(0.0, -29.0)
 	projectile_launched.emit(caster, ability, target_cell)
 
-	var target_position := grid.grid_to_global(target_cell) + Vector2(0.0, -18.0)
+	var target_position := grid.grid_to_global(endpoint) + Vector2(0.0, -18.0)
 	var duration := maxf(
 		0.08,
 		visual.global_position.distance_to(target_position) / ability.projectile_speed
@@ -90,7 +98,11 @@ func _get_invalid_reason(
 		return &"invalid_target"
 	if wall_cells.has(target_cell):
 		return &"target_is_wall"
-	if not has_clear_trajectory(caster.grid_cell, target_cell, wall_cells):
+	if ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE:
+		var targeting := AbilityTargeting.new(grid.grid_size)
+		if not targeting.get_affected_cells(caster.grid_cell, target_cell, ability, wall_cells, caster).has(target_cell):
+			return &"blocked_by_wall"
+	elif not has_clear_trajectory(caster.grid_cell, target_cell, wall_cells):
 		return &"blocked_by_wall"
 	return &""
 

@@ -109,7 +109,7 @@ func is_valid_primary_target_from(
 		return false
 	if wall_cells.has(selected_cell):
 		return false
-	if not _line_of_sight.has_line_of_sight(caster_cell, selected_cell, wall_cells):
+	if ability.shape != AbilityDefinition.Shape.LINE_TO_MAX_RANGE and not _line_of_sight.has_line_of_sight(caster_cell, selected_cell, wall_cells):
 		return false
 	if ability.caster_centered:
 		return selected_cell == caster_cell
@@ -135,6 +135,8 @@ func is_valid_primary_target_from(
 		return false
 	if ability.moves_caster():
 		return true
+	if ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE and not get_affected_cells(caster_cell, selected_cell, ability, wall_cells, caster).has(selected_cell):
+		return false
 	if ability.has_target_flag(AbilityDefinition.TargetFlags.CELL):
 		return true
 	var occupant := _get_living_unit_at_from(selected_cell, units, caster, caster_cell)
@@ -205,6 +207,11 @@ func get_affected_cells(
 		return cells
 	if not is_valid_shape_aim(caster_cell, selected_cell, ability):
 		return cells
+	if ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE:
+		for cell in _get_full_range_line(caster_cell, selected_cell, ability.get_effective_range(caster), wall_cells):
+			if cell != caster_cell and not wall_cells.has(cell):
+				cells.append(cell)
+		return cells
 	if ability.caster_centered:
 		for cell in get_cells_in_range_from(caster_cell, ability, caster):
 			if not wall_cells.has(cell) and _line_of_sight.has_line_of_sight(caster_cell, cell, wall_cells):
@@ -257,10 +264,46 @@ func get_affected_cells(
 
 ## Shared by runtime targeting, previews, and hypothetical AI cast origins.
 func is_valid_shape_aim(caster_cell: Vector2i, selected_cell: Vector2i, ability: AbilityDefinition) -> bool:
+	if ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE:
+		return selected_cell != caster_cell and ability.get_targeting_configuration_error().is_empty()
 	if ability.shape != AbilityDefinition.Shape.LINE_IN_FRONT:
 		return true
 	var delta := (selected_cell - caster_cell).abs()
 	return delta.x + delta.y == 1
+
+
+## The selected cell remains the aim; only full-range lines extend their delivery.
+## Includes the first blocking wall as a visual impact, never as an effect recipient.
+func get_delivery_endpoint(
+	caster_cell: Vector2i,
+	selected_cell: Vector2i,
+	ability: AbilityDefinition,
+	wall_cells: Dictionary = {},
+	caster: TacticalCharacter = null
+) -> Vector2i:
+	if ability == null or ability.shape != AbilityDefinition.Shape.LINE_TO_MAX_RANGE:
+		return selected_cell
+	if not is_valid_shape_aim(caster_cell, selected_cell, ability):
+		return caster_cell
+	var cells := _get_full_range_line(caster_cell, selected_cell, ability.get_effective_range(caster), wall_cells)
+	return cells.back() if not cells.is_empty() else caster_cell
+
+
+func _get_full_range_line(start: Vector2i, aim: Vector2i, maximum_range: float, wall_cells: Dictionary) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	if start == aim or not _is_in_bounds(start) or not _is_in_bounds(aim):
+		return result
+	# An integer multiple preserves the exact chosen slope and existing rasterization.
+	# Extend beyond the range boundary, then trim by the game's weighted distance.
+	var factor := maxi(1, ceili((maximum_range + 1.0) / get_weighted_distance(start, aim)))
+	var destination := start + (aim - start) * factor
+	for cell in _get_supercover_line(start, destination):
+		if get_weighted_distance(start, cell) > maximum_range + COST_EPSILON:
+			break
+		result.append(cell)
+		if cell != start and wall_cells.has(cell):
+			break
+	return result
 
 
 func get_trajectory_cells(

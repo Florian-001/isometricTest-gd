@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability"]
+
+[resource]
+script = ExtResource("ability")
+display_name = "Power Shoot"
+ability_type = 1
+effect = 1
+damage_type = 0
+innate_damage = 0
+scaling_stat = 2
+scaling_amount = 150.0
+range = 5.0
+delivery_type = 0
+target_flags = 2
+placeholder_color = Color(0.72, 0.48, 0.22, 1)
+projectile_speed = 760.0

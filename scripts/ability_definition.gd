@@ -25,6 +25,7 @@ enum Shape {
 	LINE_HORIZONTAL,
 	LINE_FROM_CASTER,
 	LINE_IN_FRONT,
+	LINE_TO_MAX_RANGE,
 }
 
 enum PrimaryEffect {
@@ -167,6 +168,8 @@ func selects_per_hit() -> bool:
 
 
 func get_targeting_configuration_error() -> String:
+	if shape == Shape.LINE_TO_MAX_RANGE and (caster_centered or moves_caster() or selects_per_hit() or get_effective_area_span() > 1):
+		return "Line To Max Range requires a stationary, one-cell-wide cast without caster-centered or per-hit selection."
 	if shape == Shape.LINE_IN_FRONT and (caster_centered or moves_caster() or selects_per_hit()):
 		return "Line In Front requires a stationary, directional cast without per-hit selection."
 	if not selects_per_hit():
@@ -646,6 +649,8 @@ func get_description(caster: TacticalCharacter = null) -> String:
 		result += " | Charges in a clear straight line and stops adjacent"
 	if caster_centered:
 		result += " | Radius %.2f around caster; click caster to confirm" % get_effective_range(caster)
+	if shape == Shape.LINE_TO_MAX_RANGE:
+		result += " | Aim at another cell; line continues to maximum range, stopping at walls or the map edge"
 	if shape == Shape.LINE_IN_FRONT:
 		result += " | Click an orthogonally adjacent cell; hit a %d-cell row across that direction" % get_effective_area_span()
 	if get_weapon_range_bonus(caster) > 0.0:

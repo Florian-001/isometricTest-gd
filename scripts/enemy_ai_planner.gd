@@ -1620,7 +1620,7 @@ func _get_relevant_target_cells(
 	if taunter != null:
 		# Forced targets must never be lost to the normal top-three target cutoff.
 		special_cells.append(snapshot.get_cell(taunter))
-		if ability.area_of_effect > 1 or ability.shape == AbilityDefinition.Shape.LINE_FROM_CASTER:
+		if ability.area_of_effect > 1 or ability.shape in [AbilityDefinition.Shape.LINE_FROM_CASTER, AbilityDefinition.Shape.LINE_TO_MAX_RANGE]:
 			for y in range(snapshot.grid_size.y):
 				for x in range(snapshot.grid_size.x):
 					var cell := Vector2i(x, y)
@@ -1645,7 +1645,7 @@ func _get_relevant_target_cells(
 	for index in range(unit_limit):
 		_append_cell_unique(result, snapshot.get_cell(ranked_units[index]), snapshot)
 
-	if ability.has_target_flag(AbilityDefinition.TargetFlags.CELL) or ability.area_of_effect > 1:
+	if ability.has_target_flag(AbilityDefinition.TargetFlags.CELL) or ability.area_of_effect > 1 or ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE:
 		var centers: Array[Vector2i] = []
 		for index in range(unit_limit):
 			_append_cell_unique(centers, snapshot.get_cell(ranked_units[index]), snapshot)
@@ -2037,7 +2037,7 @@ func _is_valid_primary_target(
 		return false
 	if targeting.get_weighted_distance(caster_cell, target_cell) > ability.get_effective_range(caster) + COST_EPSILON:
 		return false
-	if not _has_line_of_sight(caster_cell, target_cell, snapshot.wall_cells):
+	if ability.shape != AbilityDefinition.Shape.LINE_TO_MAX_RANGE and not _has_line_of_sight(caster_cell, target_cell, snapshot.wall_cells):
 		return false
 	if not respects_taunt(caster, caster_cell, ability, target_cell, snapshot, targeting):
 		return false
@@ -2064,6 +2064,8 @@ func _is_valid_primary_target(
 		return false
 	if ability.moves_caster():
 		return true
+	if ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE and not targeting.get_affected_cells(caster_cell, target_cell, ability, snapshot.wall_cells, caster).has(target_cell):
+		return false
 	if ability.has_target_flag(AbilityDefinition.TargetFlags.CELL):
 		return true
 	var occupant := snapshot.get_living_unit_at(target_cell)

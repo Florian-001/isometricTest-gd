@@ -5,6 +5,8 @@ const Visibility = preload("res://addons/unit_balance/column_visibility.gd")
 signal columns_changed(keys: Array)
 
 var table := "enemies"
+var supplied_columns: Array = []
+var supplied_defaults: Array = []
 var visible_keys: Array = []
 var search := LineEdit.new()
 var checkboxes: Dictionary = {}
@@ -14,9 +16,11 @@ var count_label := Label.new()
 var no_results := Label.new()
 
 
-func setup(table_name: String, keys: Array) -> void:
+func setup(table_name: String, keys: Array, definitions: Array = [], defaults: Array = []) -> void:
+	supplied_columns = definitions
+	supplied_defaults = defaults
 	table = table_name
-	visible_keys = Visibility.normalize(table, keys)
+	visible_keys = _normalize(keys)
 	title = "Columns · " + table.capitalize()
 	ok_button_text = "Done"
 	var content := VBoxContainer.new()
@@ -42,7 +46,7 @@ func setup(table_name: String, keys: Array) -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 12)
 	scroll.add_child(list)
-	for column in Visibility.definitions(table):
+	for column in _definitions():
 		if not group_boxes.has(column.group):
 			var box := VBoxContainer.new()
 			list.add_child(box)
@@ -76,7 +80,7 @@ func toggle_column(key: String, shown: bool) -> void:
 
 func toggle_group(group: String, shown: bool) -> void:
 	var keys := visible_keys.duplicate()
-	for column in Visibility.definitions(table):
+	for column in _definitions():
 		if column.group != group:
 			continue
 		if shown and column.key not in keys:
@@ -88,19 +92,19 @@ func toggle_group(group: String, shown: bool) -> void:
 
 func apply_preset(preset: String) -> void:
 	match preset:
-		"all": _commit(Visibility.definitions(table).map(func(column): return column.key))
+		"all": _commit(_definitions().map(func(column): return column.key))
 		"none": _commit([])
-		"defaults": _commit(Visibility.defaults(table))
+		"defaults": _commit(_defaults())
 
 
 func _commit(keys: Array) -> void:
-	visible_keys = Visibility.normalize(table, keys)
+	visible_keys = _normalize(keys)
 	_sync_checks()
 	columns_changed.emit(visible_keys.duplicate())
 
 
 func _sync_checks() -> void:
-	var definitions := Visibility.definitions(table)
+	var definitions := _definitions()
 	for column in definitions:
 		checkboxes[column.key].set_pressed_no_signal(column.key in visible_keys)
 	for group in group_checks:
@@ -116,10 +120,22 @@ func _sync_checks() -> void:
 func filter_columns(query: String) -> void:
 	var matches := {}
 	var normalized := query.strip_edges().to_lower()
-	for column in Visibility.definitions(table):
+	for column in _definitions():
 		var matches_query: bool = normalized.is_empty() or normalized in (column.title + " " + column.key + " " + column.group).to_lower()
 		checkboxes[column.key].visible = matches_query
 		matches[column.group] = matches.get(column.group, false) or matches_query
 	for group in group_boxes:
 		group_boxes[group].visible = matches.get(group, false)
 	no_results.visible = not matches.values().has(true)
+
+
+func _definitions() -> Array:
+	return supplied_columns if not supplied_columns.is_empty() else Visibility.definitions(table)
+
+
+func _defaults() -> Array:
+	return supplied_defaults if not supplied_columns.is_empty() else Visibility.defaults(table)
+
+
+func _normalize(keys: Array) -> Array:
+	return _definitions().filter(func(column): return column.key == "display_name" or column.key in keys).map(func(column): return column.key)

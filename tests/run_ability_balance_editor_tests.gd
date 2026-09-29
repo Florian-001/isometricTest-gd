@@ -46,6 +46,20 @@ func _run() -> void:
 	fixture_panel.refresh_catalog()
 	fixture_panel.grid.select_cell(fixture_panel.grid.row_index_for(path), 0)
 	await process_frame
+	var columns = load("res://addons/ability_balance/columns.gd")
+	for key in ["ap_cost", "cooldown_turns"]:
+		check(fixture_panel.grid.columns.any(func(column): return column.key == key), "Overview includes " + key)
+		var column: Dictionary = columns.property_column(fixture, key)
+		check(columns.parse(column, "-1").has("error"), "Rejects negative " + key)
+		fixture_panel._edit_cell(path, column)
+		await process_frame
+		var dialogs = fixture_panel.get_children().filter(func(child): return child is ConfirmationDialog and child.visible)
+		check(dialogs.size() == 1, "Cost/CD cell opens editor")
+		if not dialogs.is_empty():
+			var input = dialogs[0].find_children("*", "LineEdit", true, false)[0]
+			input.text = "2" if key == "ap_cost" else "3"
+			dialogs[0].confirmed.emit()
+			dialogs[0].hide()
 	var effect_buttons = fixture_panel.details.find_children("*", "Button", true, false).filter(func(button): return button.text.begins_with("Distance:"))
 	check(effect_buttons.size() == 1, "Known nested effect exposes property controls")
 	if not effect_buttons.is_empty():
@@ -63,6 +77,7 @@ func _run() -> void:
 	check(result.saved == [path], "Save All saves only fixture")
 	check(ResourceLoader.get_resource_uid(path) == uid, "Save preserves authored UID")
 	check(load(path).effects[0].distance == 4, "Save refreshes embedded effect cache")
+	check(load(path).ap_cost == 2 and load(path).cooldown_turns == 3, "Editor saves authored AP/CD settings")
 	fixture_panel.tabs.current_tab = 1
 	await process_frame
 	check(fixture_panel.grid.columns[0].key == "display_name", "Passive name stays frozen first")

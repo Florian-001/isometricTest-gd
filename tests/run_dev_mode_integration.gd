@@ -334,7 +334,7 @@ func _test_heal_selected_unit(battle: TacticalBattle) -> void:
 		unit.reset_movement()
 		unit.spend_movement(1.0)
 		unit.reset_ability_action()
-		unit.spend_ability_action()
+		unit.spend_action_points(unit.action_points)
 		unit.reset_opportunity_reaction()
 		unit.spend_opportunity_reaction()
 		var status_source: TacticalCharacter = enemy if unit == friendly else friendly
@@ -535,7 +535,7 @@ func _test_atomic_cross_map_load() -> void:
 			break
 	active.current_health -= 9
 	active.spend_movement(1.5)
-	active.spend_ability_action()
+	active.spend_action_points(active.action_points)
 	active.spend_opportunity_reaction()
 	active.apply_status(
 		load("res://resources/statuses/burning.tres") as StatusEffectDefinition,

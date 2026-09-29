@@ -187,6 +187,8 @@ func validation(path: String) -> Array[String]:
 	if resource is AbilityDefinition:
 		if resource.display_name.strip_edges().is_empty():
 			errors.append("Ability needs a display name.")
+		if resource.ap_cost < 1 or resource.cooldown_turns < 0:
+			errors.append("AP cost must be positive and cooldown turns must be nonnegative.")
 		var targeting: String = resource.get_targeting_configuration_error()
 		if not targeting.is_empty():
 			errors.append(targeting)

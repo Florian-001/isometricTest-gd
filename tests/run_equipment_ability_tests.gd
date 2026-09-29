@@ -161,7 +161,7 @@ func _test_damage_and_reactions() -> void:
 	check(await executor.execute_opportunity_attack(caster, strike, target.grid_cell, units, grid, targeting), "unarmed opportunity attack executes after spent action")
 	check(snapshot.get_health(target) == target.current_health and not caster.opportunity_reaction_available, "unarmed reaction forecast matches actual damage and spending")
 	caster.equip_item(sword)
-	check(not caster.ability_available and not caster.opportunity_reaction_available, "equipping never restores action or reaction")
+	check(caster.action_points == 1 and caster.get_ability_cooldown(strike) == 1 and not caster.opportunity_reaction_available, "equipping never restores AP, cooldown or reaction")
 	var weapon_bonus := strike.get_passive_damage_bonus(caster)
 	check(weapon_bonus > 0, "armed Strike includes applicable passive bonuses")
 	await _cast_and_compare(caster, target, strike, roundi(caster.get_effective_stat(UnitStat.Type.STRENGTH) + sword.weapon_damage) + weapon_bonus)
@@ -178,7 +178,7 @@ func _test_damage_and_reactions() -> void:
 	check(not executor.can_execute(caster, shoot, target.grid_cell, units, grid, targeting, {Vector2i(3, 1): true}), "Shoot respects projectile-blocking walls")
 	target.set_grid_cell_immediate(Vector2i(7, 1))
 	check(not executor.can_execute(caster, shoot, target.grid_cell, units, grid, targeting), "Shoot retains range five")
-	caster.spend_ability_action()
+	caster.spend_action_points(caster.action_points)
 	caster.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
 	check(caster.get_abilities() == [strike] and not caster.ability_available and not caster.opportunity_reaction_available, "unequipping restores only the default attack")
 	check(strike.get_weapon_status_effect(caster) == null and strike.get_passive_damage_bonus(caster) == 0, "unequipping removes weapon status and passive contribution")
@@ -199,7 +199,7 @@ func _cast_and_compare(caster: TacticalCharacter, target: TacticalCharacter, abi
 	check(ability.calculate_damage(caster) == expected and ability.get_damage_summary(caster) == "%d DMG" % expected, "damage summary matches expected formula")
 	check(await executor.execute(caster, ability, target.grid_cell, units, grid, targeting), "normal equipment ability executes")
 	check(before - target.current_health == expected and target.current_health == snapshot.get_health(target), "runtime impact and AI forecast agree with preview")
-	check(not caster.ability_available and caster.remaining_movement == movement, "cast spends one action without movement cost")
+	check(caster.action_points == 1 and caster.remaining_movement == movement, "cast spends one action without movement cost")
 	check(not await executor.execute(caster, ability, target.grid_cell, units, grid, targeting), "spent action prevents another cast")
 
 
@@ -211,7 +211,7 @@ func _test_saves() -> void:
 	unit.initialize(grid)
 	for weapon in [null, sword, bow]:
 		unit.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, weapon)
-		unit.spend_ability_action()
+		unit.spend_action_points(unit.action_points)
 		var setup: Dictionary = JSON.parse_string(JSON.stringify(unit.capture_setup_state()))
 		var state: Dictionary = JSON.parse_string(JSON.stringify(unit.capture_runtime_state()))
 		var restored := scene.instantiate() as TacticalCharacter
@@ -260,7 +260,7 @@ func _test_battle_ui() -> void:
 	await _capture("equipped_shoot")
 	actor.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
 	check(battle._selected_ability == null, "unequipping cancels removed Shoot targeting")
-	actor.spend_ability_action()
+	actor.spend_action_points(actor.action_points)
 	actor.spend_opportunity_reaction()
 	actor.equip_item(bow)
 	check(not actor.ability_available and not actor.opportunity_reaction_available and battle.ability_bar.get_node("Margin/HBox").get_child(0).disabled, "battle equipment changes preserve spent actions and disabled bar")

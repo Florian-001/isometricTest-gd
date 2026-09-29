@@ -343,6 +343,17 @@ static func _validate_runtime(
 			continue
 		var state: Dictionary = raw_state
 		var unit_id := str(state.get("id", ""))
+		var ap: Variant = state.get("action_points", 0)
+		if not RunState._integer(ap) or float(ap) < 0.0 or float(ap) > TacticalCharacter.AP_PER_TURN:
+			errors.append("Unit %s has invalid AP; expected an integer from 0 to 2." % unit_id)
+		var cooldowns: Variant = state.get("ability_cooldowns", {})
+		if not cooldowns is Dictionary:
+			errors.append("Unit %s has invalid ability cooldowns." % unit_id)
+		else:
+			for ability_path in cooldowns:
+				_validate_resource_paths([ability_path], "ability", errors)
+				if not RunState._integer(cooldowns[ability_path]) or float(cooldowns[ability_path]) < 0.0:
+					errors.append("Unit %s has invalid cooldown duration." % unit_id)
 		var armor_spent: Variant = state.get("armor_damage_spent", 0)
 		if not RunState._integer(armor_spent) or float(armor_spent) < 0.0:
 			errors.append("Unit %s has invalid spent armor; expected a nonnegative integer." % unit_id)

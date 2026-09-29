@@ -175,7 +175,7 @@ func _test_execution() -> void:
 	caster.set_class_level(_classes.warrior, 1)
 	caster.set_dev_ability_loadout([charge])
 	_check(await executor.execute(caster, charge, enemy.grid_cell, units, grid, targeting), "explicit developer bypass executes locked class ability")
-	_check(not caster.ability_available, "successful bypass cast spends normal action")
+	_check(caster.action_points == 1, "successful bypass cast spends normal action")
 	caster.reset_dev_ability_loadout()
 	_check(_names(caster) == ["Strike"], "disabling bypass restores equipment and class abilities")
 	world.free()

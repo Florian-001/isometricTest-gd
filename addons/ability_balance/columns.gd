@@ -1,7 +1,7 @@
 @tool
 extends RefCounted
 
-const ACTIVE_DEFAULTS := ["display_name", "ability_type", "effect", "damage_type", "innate_damage", "effect_amount", "scaling_stat", "scaling_amount", "hit_count", "range", "area_of_effect"]
+const ACTIVE_DEFAULTS := ["display_name", "ap_cost", "cooldown_turns", "ability_type", "effect", "damage_type", "innate_damage", "effect_amount", "scaling_stat", "scaling_amount", "hit_count", "range", "area_of_effect"]
 const PASSIVE_DEFAULTS := ["display_name", "passive_id", "description", "effect_summary", "validation"]
 const ACTIVE_EFFECTS := ["res://scripts/damage_effect_definition.gd", "res://scripts/heal_effect_definition.gd", "res://scripts/apply_status_effect_definition.gd", "res://scripts/knockback_effect_definition.gd"]
 const PASSIVE_EFFECTS := ["res://scripts/counter_passive_effect.gd", "res://scripts/ground_immunity_passive_effect.gd", "res://scripts/nearby_allies_weapon_damage_passive_effect.gd", "res://scripts/reassemble_passive_effect.gd"]
@@ -88,6 +88,10 @@ static func from_property(property: Dictionary) -> Dictionary:
 		column.title = "Base healing"
 	elif key == "scaling_stat":
 		column.title = "Scaling source"
+	elif key == "ap_cost":
+		column.title = "AP cost"
+	elif key == "cooldown_turns":
+		column.title = "CD (turns)"
 	return column
 
 

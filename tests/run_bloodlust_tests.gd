@@ -174,7 +174,7 @@ func _test_damage_and_rewards() -> void:
 		var movement := caster.remaining_movement
 		check(await executor.execute(caster, ability, target.grid_cell, units, grid, targeting), "valid Bloodlust executes")
 		check(_stacks(caster) == (2 if scenario[2] else 0), "reward matches lethal outcome %s" % str(scenario))
-		check(not caster.ability_available and caster.remaining_movement == movement and caster.grid_cell == Vector2i(4, 4), "cast spends only one ability action")
+		check(caster.action_points == 1 and caster.remaining_movement == movement and caster.grid_cell == Vector2i(4, 4), "cast spends only one ability action")
 		check(not await executor.execute(caster, ability, target.grid_cell, units, grid, targeting), "spent action cannot cast again")
 		_matches(forecast.snapshot)
 		_clear()

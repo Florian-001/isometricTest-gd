@@ -136,7 +136,7 @@ func _test_health_and_actions() -> void:
 	var unit := _make_unit([sword])
 	var base_max := unit.get_max_health()
 	var health := unit.current_health
-	unit.spend_ability_action()
+	unit.spend_action_points(unit.action_points)
 	unit.spend_opportunity_reaction()
 	_check(unit.equip_item(shield).is_empty(), "shield coexists with a sword")
 	_check(unit.get_effective_stat(UnitStat.Type.CONSTITUTION) == 13.0 and unit.get_max_health() == base_max + 12, "shield adds three Constitution and normally twelve max HP")

@@ -105,7 +105,7 @@ func _test_enemy(entry: Dictionary) -> void:
 		var succeeded := await executor.execute(actor, attack, cell, units, grid, targeting, {})
 		_check(succeeded and health_before - target.current_health == entry.damage, "%s deals exactly %d damage at valid range %s" % [entry.id, entry.damage, cell])
 		_check(target.current_health == forecast.get_health(target), "%s actual damage agrees with the AI forecast" % entry.id)
-		_check(not actor.ability_available, "%s attack spends its ability action" % entry.id)
+		_check(actor.action_points == 1, "%s attack spends its ability action" % entry.id)
 	actor.set_dev_stat_override(entry.stat, 4.0)
 	actor.reset_ability_action()
 	var scaled_health_before := target.current_health

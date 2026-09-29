@@ -132,7 +132,7 @@ func _check_cast(caster: TacticalCharacter, target: TacticalCharacter, expected:
 	check(await executor.execute(caster, ability, target.grid_cell, units, grid, targeting), "projectile executes")
 	check(before - target.current_health == expected and target.current_health == snapshot.get_health(target), "actual damage matches Dexterity and AI forecast")
 	check(launches == prior_launches + 1, "exactly one projectile is launched")
-	check(not caster.ability_available and caster.remaining_movement == movement, "one ability action consumed with no movement cost")
+	check(caster.action_points == 1 and caster.remaining_movement == movement, "one ability action consumed with no movement cost")
 	check(not await executor.execute(caster, ability, target.grid_cell, units, grid, targeting), "spent action prevents a second cast")
 
 

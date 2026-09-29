@@ -164,7 +164,7 @@ func _test_power() -> void:
 	check(await executor.execute(caster, power, target.grid_cell, units, grid, targeting), "Power Shoot executes")
 	check(target.current_health == health - 22 and behind.current_health == other_health, "Power Shoot resolves physical formula once on one enemy")
 	check(launch_cells == [target.grid_cell] and impact_positions[0].is_equal_approx(grid.grid_to_global(target.grid_cell) + Vector2(0, -18)), "Power Shoot retains ordinary projectile endpoint and aim signal")
-	check(not caster.ability_available, "Power Shoot spends one action")
+	check(caster.action_points == 1, "Power Shoot spends one action")
 
 
 func _test_armor() -> void:
@@ -202,7 +202,7 @@ func _test_piercing() -> void:
 		check(target.current_health == health, "Excluded unit receives no piercing damage")
 	check(launch_cells == [aim.grid_cell], "Piercing emits selected aim in existing projectile signals")
 	check(impact_positions.size() == 1 and impact_positions[0].is_equal_approx(grid.grid_to_global(Vector2i(6, 3)) + Vector2(0, -18)), "Projectile travels beyond aim to full-range endpoint")
-	check(not caster.ability_available, "Piercing spends a single action")
+	check(caster.action_points == 1, "Piercing spends a single action")
 
 
 func _test_walls() -> void:

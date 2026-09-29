@@ -29,8 +29,7 @@ func rebuild(unit: TacticalCharacter, interaction_enabled: bool) -> void:
 		var button := _create_button(ability, unit, shortcut_number)
 		button.disabled = (
 			not interaction_enabled
-			or not unit.ability_available
-			or not ability.can_be_used_by(unit)
+			or not unit.can_activate_ability(ability)
 		)
 		entries.add_child(button)
 		slot_index += 1
@@ -69,7 +68,7 @@ func _create_button(
 	button.toggle_mode = true
 	var has_damage := ability.has_damage()
 	var damage_text := ability.get_damage_summary(caster)
-	var unavailable_reason := ability.get_unavailable_reason(caster)
+	var unavailable_reason := caster.get_ability_unavailable_reason(ability)
 	var summary_text := damage_text if has_damage else ""
 	if not unavailable_reason.is_empty():
 		summary_text = unavailable_reason
@@ -105,8 +104,11 @@ func _create_button(
 			else shortcut_text if not shortcut_text.is_empty() else summary_text
 		)
 	button.icon = ability.image
+	button.text += "\n%d AP" % ability.get_ap_cost()
 	button.expand_icon = true
 	button.tooltip_text = "%s\n%s" % [ability.display_name, ability.get_description(caster)]
+	if not unavailable_reason.is_empty():
+		button.tooltip_text += "\nUnavailable: " + unavailable_reason
 	var source_text := caster.get_ability_source_text(ability)
 	if not source_text.is_empty():
 		button.tooltip_text += "\n" + source_text

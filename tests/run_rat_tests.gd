@@ -153,7 +153,7 @@ func _test_bite() -> void:
 		var succeeded := await executor.execute(rat, bite, cell, units, grid, targeting, {})
 		_check(succeeded, "Bite is usable at adjacent and diagonal melee range")
 		_check(health_before - target.current_health == 5, "Bite removes exactly 5 HP from an unmodified target")
-		_check(not rat.ability_available, "Bite spends the normal ability action")
+		_check(rat.action_points == 1, "Bite spends the normal ability action")
 	field.queue_free()
 	await process_frame
 

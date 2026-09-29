@@ -21,6 +21,7 @@ const ARMOR_COLOR := Color("65b9ff")
 const TOKEN_RADIUS := 20.0
 const TOKEN_FRIENDLY_COLOR := Color("65b9ff")
 const TOKEN_ENEMY_COLOR := Color("f27878")
+const AP_PER_TURN := 2
 
 signal health_changed(current_health: int, max_health: int)
 signal armor_changed(current_armor: int, max_armor: int)
@@ -173,7 +174,7 @@ var remaining_movement: float:
 		return 0.0 if is_stunned() or is_bone_pile else _remaining_movement
 var ability_available: bool:
 	get:
-		return _ability_available and can_use_abilities()
+		return action_points > 0 and can_use_abilities()
 var opportunity_reaction_available: bool:
 	get:
 		return _opportunity_reaction_available and can_use_opportunity_reactions()
@@ -182,7 +183,8 @@ var _defeat_emitted := false
 ## Run battles opt into permanent defeat; standalone encounters keep revival behavior.
 var permanent_defeat: bool = false
 var _remaining_movement := 0.0
-var _ability_available := false
+var action_points: int = 0
+var _ability_cooldowns: Dictionary = {}
 var _opportunity_reaction_available := true
 var _equipped_items: Dictionary = {}
 var _active_statuses: Array[ActiveStatus] = []
@@ -647,7 +649,30 @@ func can_use_ability(ability: AbilityDefinition) -> bool:
 
 
 func get_ability_unavailable_reason(ability: AbilityDefinition) -> String:
-	return ability.get_unavailable_reason(self) if ability != null else "Ability unavailable"
+	if ability == null:
+		return "Ability unavailable"
+	var base_reason := ability.get_unavailable_reason(self)
+	if not base_reason.is_empty():
+		return base_reason
+	var cooldown := get_ability_cooldown(ability)
+	if cooldown > 0:
+		return "CD %d" % cooldown
+	if action_points < ability.get_ap_cost():
+		return "Not enough AP"
+	return ""
+
+
+func can_activate_ability(ability: AbilityDefinition) -> bool:
+	return (can_use_ability(ability) and action_points >= ability.get_ap_cost()
+		and get_ability_cooldown(ability) == 0)
+
+
+func get_ability_cooldown(ability: AbilityDefinition) -> int:
+	return int(_ability_cooldowns.get(ability.get_cooldown_key(), 0)) if ability != null else 0
+
+
+func get_ability_cooldowns() -> Dictionary:
+	return _ability_cooldowns.duplicate()
 
 
 func is_stunned() -> bool:
@@ -1196,7 +1221,9 @@ func capture_runtime_state() -> Dictionary:
 		"current_health": current_health,
 		"armor_damage_spent": _armor_damage_spent,
 		"remaining_movement": _remaining_movement,
-		"ability_available": _ability_available,
+		"ability_available": action_points > 0,
+		"action_points": action_points,
+		"ability_cooldowns": get_ability_cooldowns(),
 		"reaction_available": _opportunity_reaction_available,
 		"equipped_items": _resource_paths(get_equipped_items()),
 		"statuses": statuses,
@@ -1217,7 +1244,13 @@ func restore_runtime_state(state: Dictionary, units_by_id: Dictionary) -> void:
 	current_facing = int(state.get("facing", initial_facing))
 	var saved_health := int(state.get("current_health", get_max_health()))
 	_remaining_movement = maxf(0.0, float(state.get("remaining_movement", 0.0)))
-	_ability_available = bool(state.get("ability_available", false))
+	action_points = clampi(int(state.get("action_points", AP_PER_TURN if bool(state.get("ability_available", false)) else 0)), 0, AP_PER_TURN)
+	_ability_cooldowns.clear()
+	var saved_cooldowns: Dictionary = state.get("ability_cooldowns", {})
+	for key in saved_cooldowns:
+		var remaining := maxi(0, int(saved_cooldowns[key]))
+		if remaining > 0:
+			_ability_cooldowns[str(key)] = remaining
 	_opportunity_reaction_available = bool(state.get("reaction_available", false))
 	_equipped_items.clear()
 	_runtime_stats_initialized = true
@@ -1279,16 +1312,50 @@ func spend_movement(cost: float) -> bool:
 	return true
 
 
+## Begin an ability turn. TurnManager separates ticking from replenishment so
+## hazards and Reassemble cannot skip or double-tick a cooldown.
 func reset_ability_action() -> void:
-	_ability_available = current_health > 0 and not is_bone_pile
+	advance_ability_cooldowns()
+	reset_action_points()
+
+
+func reset_action_points() -> void:
+	action_points = AP_PER_TURN if current_health > 0 and not is_bone_pile else 0
 	ability_availability_changed.emit(ability_available)
 
 
-func spend_ability_action() -> bool:
-	if not ability_available:
+func reset_combat_abilities() -> void:
+	action_points = 0
+	_ability_cooldowns.clear()
+	ability_availability_changed.emit(ability_available)
+
+
+func advance_ability_cooldowns() -> void:
+	for key in _ability_cooldowns.keys():
+		var remaining := int(_ability_cooldowns[key]) - 1
+		if remaining <= 0:
+			_ability_cooldowns.erase(key)
+		else:
+			_ability_cooldowns[key] = remaining
+	ability_availability_changed.emit(ability_available)
+
+
+func spend_action_points(cost: int) -> bool:
+	if not can_use_abilities() or cost <= 0 or action_points < cost:
 		return false
-	_ability_available = false
-	ability_availability_changed.emit(false)
+	action_points -= cost
+	ability_availability_changed.emit(ability_available)
+	return true
+
+
+## Commit AP and cooldown together before notifying UI or starting delivery.
+func spend_ability_action(ability: AbilityDefinition) -> bool:
+	if not can_activate_ability(ability):
+		return false
+	action_points -= ability.get_ap_cost()
+	if ability.get_cooldown_turns() > 0:
+		_ability_cooldowns[ability.get_cooldown_key()] = ability.get_cooldown_turns()
+	ability_availability_changed.emit(ability_available)
 	return true
 
 
@@ -1378,7 +1445,7 @@ func apply_damage(amount: int) -> bool:
 	_show_damage_number(damage_taken)
 	_sync_map_presence()
 	if current_health == 0 and not _defeat_emitted:
-		_ability_available = false
+		action_points = 0
 		ability_availability_changed.emit(false)
 		_opportunity_reaction_available = false
 		opportunity_reaction_availability_changed.emit(false)
@@ -1395,7 +1462,7 @@ func _collapse_to_bones(effect: ReassemblePassiveEffect) -> void:
 	current_health = effect.pile_health
 	_active_statuses.clear()
 	_remaining_movement = 0.0
-	_ability_available = false
+	action_points = 0
 	_opportunity_reaction_available = false
 	_publish_form_change()
 

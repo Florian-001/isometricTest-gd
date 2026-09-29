@@ -145,7 +145,7 @@ func test_runtime_state_round_trip_preserves_actions_status_sources_and_equipmen
 	unit.reset_movement()
 	unit.spend_movement(1.5)
 	unit.reset_ability_action()
-	unit.spend_ability_action()
+	unit.spend_action_points(unit.action_points)
 	unit.reset_opportunity_reaction()
 	unit.spend_opportunity_reaction()
 	var burning := load("res://resources/statuses/burning.tres") as StatusEffectDefinition

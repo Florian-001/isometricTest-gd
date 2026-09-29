@@ -73,7 +73,7 @@ func _run() -> void:
 	_check(succeeded, "a clear Charge should complete")
 	_check(caster.grid_cell == Vector2i(5, 2), "Charge should leave the caster adjacent to the target")
 	_check(target.current_health == 100 - target_damage, "Charge should resolve its normal centralized damage")
-	_check(not caster.ability_available, "Charge should consume the normal ability action")
+	_check(caster.action_points == 1 and caster.get_ability_cooldown(charge) == 1, "Charge should consume the normal ability action")
 	_check(is_equal_approx(caster.remaining_movement, movement_before), "Charge steps and terrain costs should not consume movement points")
 	_check(caster.current_health == 100 - reactor_damage, "Charge should trigger an opportunity attack when leaving reach")
 	_check(not reactor.opportunity_reaction_available, "the reacting unit should consume its opportunity reaction")

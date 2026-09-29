@@ -661,7 +661,7 @@ func test_action_first_preserves_movement_when_the_action_is_spent() -> void:
 	var counter := _make_damage_ability("Short Counter", AbilityDefinition.DeliveryType.PROJECTILE, 1.0, 20)
 	var enemy := _make_unit(false, Vector2i(3, 2), 3.0, [shot], _profile())
 	var target := _make_unit(true, Vector2i(3, 3), 0.0, [counter])
-	enemy.spend_ability_action()
+	enemy.spend_action_points(enemy.action_points)
 	var plan := _choose(enemy, [enemy, target], Vector2i(7, 6))
 
 	assert_eq(plan.ability, null, "a spent action should not fabricate an ability plan")
@@ -680,7 +680,7 @@ func test_spent_action_pursues_the_next_useful_support_position() -> void:
 	var wounded_ally := _make_unit(false, Vector2i(5, 1), 0.0, [])
 	var opponent := _make_unit(true, Vector2i(1, 5), 0.0, [])
 	wounded_ally.current_health = 50
-	healer.spend_ability_action()
+	healer.spend_action_points(healer.action_points)
 
 	var plan := _choose(healer, [healer, wounded_ally, opponent], Vector2i(7, 7))
 	assert_eq(plan.sequence, EnemyTurnPlan.Sequence.MOVE_ONLY, "a spent action should preserve active setup movement")

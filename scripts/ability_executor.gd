@@ -45,7 +45,7 @@ func execute(
 ) -> bool:
 	if not can_execute(caster, ability, selected_cell, units, grid, targeting, wall_cells):
 		return false
-	if not caster.spend_ability_action():
+	if not caster.spend_ability_action(ability):
 		return false
 	return await _perform(
 		caster,
@@ -129,7 +129,7 @@ func can_execute_targets(
 	targeting: AbilityTargeting,
 	wall_cells: Dictionary = {}
 ) -> bool:
-	if (not is_instance_valid(caster) or not caster.ability_available
+	if (not is_instance_valid(caster) or not caster.can_activate_ability(ability)
 		or ability == null or not ability.selects_per_hit()
 		or selected_targets.size() != ability.get_hit_count()):
 		return false
@@ -174,7 +174,7 @@ func execute_targets(
 	# Spending the action emits signals that clear the controller's selection array.
 	var locked_targets: Array[TacticalCharacter] = selected_targets.duplicate()
 	var first_cell := locked_targets[0].grid_cell
-	if not caster.spend_ability_action():
+	if not caster.spend_ability_action(ability):
 		return false
 	_active_resolutions += 1
 	var reaction_context := {"allow_counters": true, "defenders": []}
@@ -366,7 +366,7 @@ func can_execute(
 	return (
 		is_instance_valid(caster)
 		and ability != null and not ability.selects_per_hit()
-		and caster.ability_available
+		and caster.can_activate_ability(ability)
 		and _can_execute_base(
 			caster,
 			ability,

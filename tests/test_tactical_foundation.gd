@@ -1310,7 +1310,7 @@ func test_opportunity_attack_selection_reach_reaction_and_round_reset() -> void:
 		"a spent reaction should not trigger again during the round"
 	)
 	attacker.reset_ability_action()
-	attacker.spend_ability_action()
+	attacker.spend_action_points(attacker.action_points)
 	attacker.reset_opportunity_reaction()
 	assert_false(attacker.ability_available, "resetting a reaction must not restore the normal action")
 	assert_true(
@@ -1519,8 +1519,8 @@ func test_ability_action_resets_only_on_active_turn() -> void:
 	assert_true(friend_a.ability_available, "the active unit should receive its ability action")
 	assert_false(enemy.ability_available, "upcoming enemies should not reset early")
 	assert_false(friend_b.ability_available, "upcoming friendlies should not reset early")
-	assert_true(friend_a.spend_ability_action(), "the first cast should consume the action")
-	assert_false(friend_a.spend_ability_action(), "a second cast in the same turn should be rejected")
+	assert_true(friend_a.spend_action_points(friend_a.action_points), "the first cast should consume the action")
+	assert_false(friend_a.spend_action_points(friend_a.action_points), "a second cast in the same turn should be rejected")
 	friend_a.spend_movement(2.0)
 	assert_true(is_equal_approx(friend_a.remaining_movement, 4.0), "casting should not consume movement")
 	manager.end_current_turn()
@@ -1556,7 +1556,7 @@ func test_ability_bar_populates_and_disables_after_cast() -> void:
 	bar.rebuild(unit, true)
 	assert_false(entries.get_child(0).disabled, "a matching Ranged weapon enables Arrow")
 	assert_true(entries.get_child(1).disabled, "a Ranged weapon leaves Strike unavailable")
-	unit.spend_ability_action()
+	unit.spend_action_points(unit.action_points)
 	bar.rebuild(unit, true)
 	assert_true(entries.get_child(0).disabled, "ability buttons disable after the action is spent")
 

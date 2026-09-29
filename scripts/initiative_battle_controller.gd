@@ -65,6 +65,7 @@ var enable_dev_tools := true
 @onready var inventory_screen: InventoryScreen = $HUD/InventoryScreen
 @onready var return_to_levels_dialog: ConfirmationDialog = $HUD/ReturnToLevelsDialog
 @onready var end_turn_button: Button = $HUD/EndTurnButton
+@onready var action_points_label: Label = $HUD/ActionPointsLabel
 @onready var dev_button: Button = $HUD/TopRightActions/DevButton
 @onready var dev_mode_panel: DevModePanel = $HUD/DevModePanel
 @onready var dev_terrain_editor: DevTerrainEditor = $DevTerrainEditor
@@ -847,7 +848,7 @@ func _on_ability_selected(ability: AbilityDefinition) -> void:
 		_movement_locked
 		or not turn_manager.is_player_turn()
 		or not is_instance_valid(caster)
-		or not caster.ability_available
+		or not caster.can_activate_ability(ability)
 		or ability == null
 		or not ability.can_be_used_by(caster)
 		or not caster.get_abilities().has(ability)
@@ -1053,7 +1054,7 @@ func _begin_ability_cast(target_cell: Vector2i) -> void:
 		return
 	var caster := _selected_character
 	var ability := _selected_ability
-	if caster != turn_manager.current_unit or not caster.ability_available:
+	if caster != turn_manager.current_unit or not caster.can_activate_ability(_selected_ability):
 		return
 
 	_set_movement_locked(true)
@@ -1137,31 +1138,34 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 		return
 	grid.show_reachable(unit.grid_cell, {})
 
-	var plan := _enemy_ai_planner.choose_plan(
-		unit,
-		_characters,
-		_pathfinder,
-		_ability_targeting,
-		_get_wall_cells(),
-		terrain.get_definitions(),
-		turn_manager.get_rotating_order()
-	)
-	_update_ai_debug(unit, plan)
-	var executed := await _execute_enemy_plan(unit, plan)
-	if not executed and unit == turn_manager.current_unit and unit.current_health > 0 and not unit.is_bone_pile:
-		# Signals or future dynamic effects can make a forecast stale. Replan once from
-		# the live state; a second invalidation safely ends the turn.
-		plan = _enemy_ai_planner.choose_plan(
-			unit,
-			_characters,
-			_pathfinder,
-			_ability_targeting,
-			_get_wall_cells(),
-			terrain.get_definitions(),
-			turn_manager.get_rotating_order()
-		)
-		_update_ai_debug(unit, plan, "Replanned")
-		await _execute_enemy_plan(unit, plan)
+	var invalidations := 0
+	var decisions := 0
+	while (not _combat_over and is_instance_valid(unit) and unit == turn_manager.current_unit
+		and unit.can_use_abilities()):
+		var plan := _enemy_ai_planner.choose_plan(
+			unit, _characters, _pathfinder, _ability_targeting, _get_wall_cells(),
+			terrain.get_definitions(), turn_manager.get_rotating_order())
+		if decisions > 0 and (plan == null or plan.sequence == EnemyTurnPlan.Sequence.HOLD):
+			break
+		_update_ai_debug(unit, plan, "Replanned" if invalidations > 0 else "Continued" if decisions > 0 else "")
+		if plan == null or plan.sequence == EnemyTurnPlan.Sequence.HOLD:
+			break
+		var ap_before := unit.action_points
+		var movement_before := unit.remaining_movement
+		var executed := await _execute_enemy_plan(unit, plan, true)
+		decisions += 1
+		if not is_instance_valid(unit) or unit != turn_manager.current_unit:
+			break
+		if not executed:
+			# Retry one stale forecast per turn; paid casts remain paid on interruption.
+			invalidations += 1
+			if invalidations > 1:
+				break
+			continue
+		if plan.ability == null:
+			break
+		if unit.action_points >= ap_before and unit.remaining_movement >= movement_before:
+			break
 
 	grid.clear_overlays()
 	if unit == turn_manager.current_unit:
@@ -1173,7 +1177,7 @@ func _finish_enemy_turn(unit: TacticalCharacter) -> void:
 		turn_manager.end_current_turn()
 
 
-func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
+func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan, replan_after_cast := false) -> bool:
 	if unit != turn_manager.current_unit or plan == null:
 		return false
 	if not plan.pre_cast_path.is_empty():
@@ -1211,6 +1215,8 @@ func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan) -> bool:
 		)
 		if not cast_succeeded:
 			return false
+		if replan_after_cast:
+			return unit == turn_manager.current_unit
 
 	if not plan.post_cast_path.is_empty() and unit.current_health > 0:
 		var post_destination := plan.post_cast_path[plan.post_cast_path.size() - 1]
@@ -1862,7 +1868,7 @@ func _on_unit_movement_changed(_remaining: float, _maximum: float, unit: Tactica
 
 func _on_unit_ability_availability_changed(_available: bool, unit: TacticalCharacter) -> void:
 	if unit == turn_manager.current_unit:
-		if not _available and _selected_ability != null:
+		if _selected_ability != null and not unit.can_activate_ability(_selected_ability):
 			_cancel_ability_targeting()
 		_refresh_ability_bar()
 		_update_turn_hud()
@@ -1908,6 +1914,11 @@ func _refresh_ability_bar() -> void:
 func _update_turn_hud() -> void:
 	if turn_manager == null or end_turn_button == null:
 		return
+	if action_points_label != null:
+		var active := turn_manager.current_unit
+		action_points_label.visible = not _combat_over and is_instance_valid(active)
+		if is_instance_valid(active):
+			action_points_label.text = "AP %d / %d" % [active.action_points, TacticalCharacter.AP_PER_TURN]
 	if _combat_over:
 		end_turn_button.text = "Battle Ended"
 		end_turn_button.disabled = true

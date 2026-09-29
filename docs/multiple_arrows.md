@@ -2,7 +2,7 @@
 
 **Archer level 3** unlocks Multiple Arrows after Focus at level 2. Select the ability, choose exactly three enemy targets, then press **Fire**. The same unit can occupy multiple slots. Each numbered slot shows the unit name and grid position; **Remove** deletes that selection and compacts the remaining order.
 
-Each arrow uses the existing Shoot formula: equipped ranged weapon damage plus 60% effective Dexterity, rounded by the existing damage calculator, with passive weapon bonuses and on-hit weapon statuses. Range is 5 weighted grid units; walls block targeting and delivery. The cast spends one ability action and no movement points, with no additional cooldown or resource cost.
+Each arrow uses the existing Shoot formula: equipped ranged weapon damage plus 60% effective Dexterity, rounded by the existing damage calculator, with passive weapon bonuses and on-hit weapon statuses. Range is 5 weighted grid units; walls block targeting and delivery. The complete cast costs 1 AP with a 1-turn cooldown and no movement points. All three arrows share that cost; the ability becomes ready on the caster's next turn. See [AP and cooldown rules](ability_ap_cooldowns.md).
 
 Arrows resolve sequentially in selection order. A dead, removed, or invalid target is skipped without replacing it. A target that moves away during flight cannot redirect damage to the unit occupying its old cell. The remaining arrows stop if the caster becomes unable to act. An interrupted cast retains its spent action.
 

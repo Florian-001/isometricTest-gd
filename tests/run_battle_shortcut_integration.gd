@@ -120,7 +120,7 @@ func _test_battle_keyboard_flow() -> void:
 	_send_key(KEY_9)
 	_check(battle._selected_ability == null, "an empty shortcut slot is harmless")
 
-	caster.spend_ability_action()
+	caster.spend_action_points(caster.action_points)
 	_send_key(KEY_1)
 	_check(battle._selected_ability == null, "disabled abilities cannot be selected by shortcut")
 	caster.reset_ability_action()

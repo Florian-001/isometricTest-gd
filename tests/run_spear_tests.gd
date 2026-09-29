@@ -169,7 +169,7 @@ func _test_delivery_and_ai() -> void:
 		var old_position := caster.global_position
 		check(await executor.execute(caster, strike, target.grid_cell, units, grid, targeting), "extended Strike completes real melee delivery")
 		check(target.current_health == old_health - 15 and caster.global_position.is_equal_approx(old_position), "spear applies Strength plus five damage and returns from lunge")
-		check(not caster.ability_available and caster.opportunity_reaction_available, "normal spear attack spends action only")
+		check(caster.action_points == 1 and caster.opportunity_reaction_available, "normal spear attack spends action only")
 	caster.equip_item(long_sword)
 	caster.reset_ability_action()
 	check(not executor.can_execute(caster, strike, target.grid_cell, units, grid, targeting), "Long Sword cannot attack extended target")
@@ -188,7 +188,7 @@ func _test_delivery_and_ai() -> void:
 
 
 func _test_reactions() -> void:
-	caster.spend_ability_action()
+	caster.spend_action_points(caster.action_points)
 	caster.reset_opportunity_reaction()
 	var adjacent := caster.grid_cell + Vector2i(1, 0)
 	var farther := caster.grid_cell + Vector2i(2, 0)

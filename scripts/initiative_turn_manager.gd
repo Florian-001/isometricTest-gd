@@ -23,6 +23,7 @@ func start_combat(units: Array[TacticalCharacter]) -> void:
 		_scene_indices[unit] = index
 		if not _is_living(unit):
 			continue
+		unit.reset_combat_abilities()
 		turn_order.append(unit)
 
 	_sort_turn_order()
@@ -188,6 +189,8 @@ func _start_current_turn() -> void:
 	if not _is_living(starting_unit):
 		return
 	var was_bone_pile := starting_unit.is_bone_pile
+	# Cooldowns advance even when hazards, stun or bones prevent actions.
+	starting_unit.advance_ability_cooldowns()
 	starting_unit.expire_turn_start_statuses()
 	turn_starting.emit(starting_unit)
 	if current_unit != starting_unit:
@@ -205,7 +208,7 @@ func _start_current_turn() -> void:
 		call_deferred("_advance_defeated_current_unit", starting_unit)
 		return
 	starting_unit.reset_movement()
-	starting_unit.reset_ability_action()
+	starting_unit.reset_action_points()
 	turn_started.emit(starting_unit)
 
 

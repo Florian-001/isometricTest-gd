@@ -117,7 +117,7 @@ func _run() -> void:
 	active_before_restart.reset_movement()
 	active_before_restart.spend_movement(1.0)
 	active_before_restart.reset_ability_action()
-	active_before_restart.spend_ability_action()
+	active_before_restart.spend_action_points(active_before_restart.action_points)
 	active_before_restart.reset_opportunity_reaction()
 	active_before_restart.spend_opportunity_reaction()
 	var runtime_item: ItemDefinition

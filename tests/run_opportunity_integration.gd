@@ -54,7 +54,7 @@ func _run() -> void:
 	fast.reset_opportunity_reaction()
 	slow.reset_opportunity_reaction()
 	fast.reset_ability_action()
-	fast.spend_ability_action()
+	fast.spend_action_points(fast.action_points)
 	surrounded.reset_movement()
 	var attack_order: Array[String] = []
 	_executor.ability_started.connect(func(caster: TacticalCharacter, _ability, _cell):

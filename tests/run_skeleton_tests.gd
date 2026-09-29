@@ -101,7 +101,7 @@ func _test_enemy(entry: Dictionary) -> void:
 		var health_before := target.current_health
 		var succeeded := await executor.execute(actor, attack, cell, units, grid, targeting, {})
 		_check(succeeded and health_before - target.current_health == entry.damage, "%s deals exactly %d damage at valid range %s" % [entry.id, entry.damage, cell])
-		_check(not actor.ability_available, "%s attack spends its ability action" % entry.id)
+		_check(actor.action_points == 1, "%s attack spends its ability action" % entry.id)
 	actor.reset_ability_action()
 	var outside := Vector2i(3, 1) if entry.type == ItemDefinition.WeaponType.MELEE else Vector2i(7, 1)
 	target.set_grid_cell_immediate(outside)

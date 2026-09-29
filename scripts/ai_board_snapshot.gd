@@ -12,6 +12,8 @@ var unit_max_health: Dictionary = {}
 var unit_constitutions: Dictionary = {}
 var unit_movement_ranges: Dictionary = {}
 var unit_remaining_movement: Dictionary = {}
+var unit_action_points: Dictionary = {}
+var unit_ability_cooldowns: Dictionary = {}
 var unit_opportunity_reactions: Dictionary = {}
 var unit_statuses: Dictionary = {}
 var unit_stunned: Dictionary = {}
@@ -40,6 +42,8 @@ static func from_battle(
 		snapshot.unit_constitutions[unit] = unit.get_effective_stat(UnitStat.Type.CONSTITUTION)
 		snapshot.unit_movement_ranges[unit] = unit.get_movement_range()
 		snapshot.unit_remaining_movement[unit] = unit._remaining_movement
+		snapshot.unit_action_points[unit] = unit.action_points
+		snapshot.unit_ability_cooldowns[unit] = unit.get_ability_cooldowns()
 		snapshot.unit_opportunity_reactions[unit] = unit._opportunity_reaction_available
 		var statuses: Dictionary = {}
 		for active_status in unit.get_active_statuses():
@@ -72,6 +76,8 @@ func duplicate_state() -> AIBoardSnapshot:
 	result.unit_constitutions = unit_constitutions.duplicate()
 	result.unit_movement_ranges = unit_movement_ranges.duplicate()
 	result.unit_remaining_movement = unit_remaining_movement.duplicate()
+	result.unit_action_points = unit_action_points.duplicate()
+	result.unit_ability_cooldowns = unit_ability_cooldowns.duplicate(true)
 	result.unit_opportunity_reactions = unit_opportunity_reactions.duplicate()
 	result.unit_stunned = unit_stunned.duplicate()
 	result.unit_bone_piles = unit_bone_piles.duplicate()
@@ -125,6 +131,8 @@ func get_max_health(unit: TacticalCharacter) -> int:
 func set_health(unit: TacticalCharacter, value: int) -> void:
 	if unit_health.has(unit):
 		unit_health[unit] = clampi(value, 0, get_max_health(unit))
+		if unit_health[unit] == 0:
+			unit_action_points[unit] = 0
 
 
 ## Forecast a single damage/healing event, preserving the same unit on collapse.
@@ -144,6 +152,7 @@ func apply_health_delta(unit: TacticalCharacter, delta: int) -> int:
 		unit_constitutions[unit] = unit._calculate_effective_stat(UnitStat.Type.CONSTITUTION, true, false)
 		unit_movement_ranges[unit] = unit._calculate_effective_stat(UnitStat.Type.MOVEMENT_RANGE, true, false)
 		unit_remaining_movement[unit] = 0.0
+		unit_action_points[unit] = 0
 		unit_opportunity_reactions[unit] = false
 	else:
 		set_health(unit, after)
@@ -185,6 +194,42 @@ func spend_movement(unit: TacticalCharacter, cost: float) -> bool:
 		return false
 	unit_remaining_movement[unit] = maxf(0.0, remaining - cost)
 	return true
+
+
+func get_action_points(unit: TacticalCharacter) -> int:
+	return int(unit_action_points.get(unit, 0))
+
+
+func get_ability_cooldown(unit: TacticalCharacter, ability: AbilityDefinition) -> int:
+	return int(unit_ability_cooldowns.get(unit, {}).get(ability.get_cooldown_key(), 0))
+
+
+func can_afford_ability(unit: TacticalCharacter, ability: AbilityDefinition) -> bool:
+	return (ability != null and is_living(unit) and not is_incapacitated(unit)
+		and get_action_points(unit) >= ability.get_ap_cost() and get_ability_cooldown(unit, ability) == 0)
+
+
+func spend_ability_action(unit: TacticalCharacter, ability: AbilityDefinition) -> bool:
+	if not can_afford_ability(unit, ability):
+		return false
+	unit_action_points[unit] = get_action_points(unit) - ability.get_ap_cost()
+	if not unit_ability_cooldowns.has(unit):
+		unit_ability_cooldowns[unit] = {}
+	if ability.get_cooldown_turns() > 0:
+		unit_ability_cooldowns[unit][ability.get_cooldown_key()] = ability.get_cooldown_turns()
+	return true
+
+
+func start_ability_turn(unit: TacticalCharacter) -> void:
+	unit_action_points[unit] = TacticalCharacter.AP_PER_TURN if is_living(unit) and not is_bone_pile(unit) else 0
+	var cooldowns: Dictionary = unit_ability_cooldowns.get(unit, {})
+	for key in cooldowns.keys():
+		var remaining := int(cooldowns[key]) - 1
+		if remaining <= 0:
+			cooldowns.erase(key)
+		else:
+			cooldowns[key] = remaining
+	unit_ability_cooldowns[unit] = cooldowns
 
 
 func can_use_opportunity_reaction(unit: TacticalCharacter) -> bool:

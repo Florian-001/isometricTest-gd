@@ -7,7 +7,7 @@ enable it there or reopen the project.
 ## Tables
 
 **Active Abilities** discovers all `AbilityDefinition` resource files recursively
-under `resources`, including player and enemy abilities. The overview shows name,
+under `resources`, including player and enemy abilities. The overview shows name, AP cost, cooldown turns,
 ability type, primary effect, damage type, innate damage, base healing, scaling
 source and percentage, hit count, range, and area size. **Columns…** exposes weapon
 requirements, targeting, delivery, movement, status assignments, effect summaries,

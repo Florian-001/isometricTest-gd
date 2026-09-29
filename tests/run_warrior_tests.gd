@@ -155,7 +155,7 @@ func _test_areas() -> void:
 	check(adjacent.current_health == old_health - 9 and diagonal.current_health == old_health - 9, "Stomp applies weapon 4 + Strength 5 to both enemies")
 	check(adjacent.current_health == predicted.get_health(adjacent) and diagonal.current_health == predicted.get_health(diagonal), "area AI agrees with runtime")
 	check(ally.current_health == old_health and caster.current_health == old_health and outside.current_health == old_health, "Stomp excludes allies, self and out-of-range units")
-	check(not caster.ability_available and caster.remaining_movement == movement, "Stomp costs one ability action and no movement")
+	check(caster.action_points == 1 and caster.remaining_movement == movement, "Stomp costs one ability action and no movement")
 	check(not adjacent.is_stunned(), "Stomp does not stun")
 	caster.reset_ability_action()
 	caster.set_dev_equipment(ItemDefinition.EquipmentSlot.WEAPON, null)
@@ -189,7 +189,8 @@ func _test_multi() -> void:
 	check(impacts == 2 and health_changes == [before - 8, before - 16], "two animations cause two distinct damage events")
 	check(refreshes[0] == 2 and target.get_active_statuses().size() == 1, "weapon status applies on each hit and refreshes without stacking")
 	check(target.current_health == snapshot.get_health(target), "two-hit forecast equals runtime")
-	check(not caster.ability_available and caster.remaining_movement == movement, "both hits consume only one action")
+	check(caster.action_points == 1 and caster.remaining_movement == movement, "both hits consume only one action")
+	caster.reset_ability_action()
 	var bar := (load("res://scenes/ability_bar.tscn") as PackedScene).instantiate() as AbilityBar
 	arena.add_child(bar)
 	bar.rebuild(caster, true)

@@ -54,6 +54,10 @@ enum HitTargeting {
 
 @export_category("Ability")
 @export var display_name: String = "New Ability"
+## Paid once when an active cast commits, regardless of hit or target count.
+@export_range(1, 99, 1, "or_greater") var ap_cost: int = 1
+## Counts this unit's turn starts. A value of 1 is ready on its next turn.
+@export_range(0, 99, 1, "or_greater") var cooldown_turns: int = 1
 ## Controls weapon requirements and weapon-damage contribution. Delivery and Damage Type
 ## remain independent presentation and damage-classification settings.
 @export var ability_type: AbilityType = AbilityType.MAGIC:
@@ -161,6 +165,19 @@ func get_effective_area_span() -> int:
 
 func get_hit_count() -> int:
 	return maxi(1, hit_count)
+
+
+func get_ap_cost() -> int:
+	return maxi(1, ap_cost)
+
+
+func get_cooldown_turns() -> int:
+	return maxi(0, cooldown_turns)
+
+
+## Resource paths preserve identity through equipment swaps and exact saves.
+func get_cooldown_key() -> String:
+	return resource_path if not resource_path.is_empty() else "instance:%d" % get_instance_id()
 
 
 func selects_per_hit() -> bool:
@@ -645,6 +662,8 @@ func get_description(caster: TacticalCharacter = null) -> String:
 		get_effective_range(caster),
 		description,
 	]
+	if is_instance_valid(caster):
+		result += " | %d AP | CD %d turn(s)" % [get_ap_cost(), get_cooldown_turns()]
 	if caster_movement == CasterMovement.CHARGE_TO_TARGET:
 		result += " | Charges in a clear straight line and stops adjacent"
 	if caster_centered:

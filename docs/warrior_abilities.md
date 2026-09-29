@@ -12,13 +12,13 @@ Warrior class unlocks are authored in `resources/classes/warrior.tres`. Raise a 
 | 7 | Swipe | Weapon damage + 100% effective Strength to each enemy in a three-cell row immediately in front of the caster. |
 | 8 | Ram | 100% effective Strength to one orthogonally adjacent enemy, followed by up to 2 tiles of knockback. |
 
-All three abilities spend one normal ability action and no movement points. Stomp and Multi Attack require a melee weapon. There are no additional cooldowns or resource costs. Stomp does not stun; Taunt causes no damage or stun.
+All active Warrior abilities cost 1 AP and have a 1-turn cooldown, with no movement cost. Units receive 2 AP each turn; abilities become ready at the start of their next turn. See [AP and cooldown rules](ability_ap_cooldowns.md). Stomp and Multi Attack require a melee weapon. Stomp does not stun; Taunt causes no damage or stun.
 
-Counter and Swipe also spend one normal ability action, with no movement cost or cooldown. Counter works with any equipment, including unarmed; Swipe requires a melee weapon.
+Counter activation and Swipe each cost 1 AP with a 1-turn cooldown. Automatic counterattacks ignore AP and active-ability cooldowns. Counter works with any equipment, including unarmed; Swipe requires a melee weapon.
 
 ## Bloodlust
 
-Bloodlust requires a melee weapon and spends one ability action, with no movement cost or cooldown. Select one enemy within range 1.414, including diagonals subject to normal wall and corner blocking. Self, allies, and empty cells are invalid. Weapon reach bonuses do not extend it. The hit uses normal weapon damage, effective Strength, passive weapon bonuses, armor, and melee presentation. A surviving target receives weapon statuses and can Counter normally.
+Bloodlust requires a melee weapon and costs 1 AP with a 1-turn cooldown and no movement cost. Select one enemy within range 1.414, including diagonals subject to normal wall and corner blocking. Self, allies, and empty cells are invalid. Weapon reach bonuses do not extend it. The hit uses normal weapon damage, effective Strength, passive weapon bonuses, armor, and melee presentation. A surviving target receives weapon statuses and can Counter normally.
 
 An actual defeat from the ability's direct damage grants the living caster two applications of the existing Strength Up status. Each stack adds +1 Strength until battle ends, without a cap; an existing three stacks become five. The reward arrives after damage, before reactions and cast completion. Reassemble collapse is not a defeat; destroying the bone pile qualifies. Later damage over time, knockback collision damage, and separate Counter or opportunity attacks do not inherit Bloodlust's reward.
 
@@ -44,7 +44,7 @@ Each enemy in the row takes one Strike-strength hit. Allies and the caster are e
 
 ## Ram and knockback
 
-Ram spends one ability action, no movement, and has no cooldown. It works unarmed or with any equipment. Only effective Strength contributes damage: weapons do not add damage, passive weapon bonuses, weapon statuses, or reach. Select an enemy exactly one tile north, south, east, or west; allies, empty cells, diagonals, and self are invalid. The caster stays in place.
+Ram costs 1 AP with a 1-turn cooldown and no movement cost. It works unarmed or with any equipment. Only effective Strength contributes damage: weapons do not add damage, passive weapon bonuses, weapon statuses, or reach. Select an enemy exactly one tile north, south, east, or west; allies, empty cells, diagonals, and self are invalid. The caster stays in place.
 
 Damage applies at melee impact, then the surviving target is pushed up to two tiles directly away. A wall or board edge stops the push in the last valid cell and deals 1 damage to the target. Another unit stops it before the occupied cell and both units take 1 damage, regardless of faction. Armor absorbs collision damage normally. Each push has at most one collision; there is no chain push or continuation if the blocker dies. Defeated friendlies remain obstacles under the existing occupancy rules, but cannot take additional damage.
 

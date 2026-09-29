@@ -110,7 +110,7 @@ func _test_combat_and_ai() -> void:
 		var direction := Vector2i(signi(cell.x - 1), signi(cell.y - 1))
 		check(boar.grid_cell == cell - direction, "Charge lands next to its target")
 		check(before - target.current_health == 8 and target.current_health == snapshot.get_health(target), "Charge runtime damage matches preview and AI")
-		check(not boar.ability_available and is_equal_approx(boar.remaining_movement, movement_before), "Charge spends its action and preserves ordinary movement")
+		check(boar.action_points == 1 and is_equal_approx(boar.remaining_movement, movement_before), "Charge spends its action and preserves ordinary movement")
 	boar.set_grid_cell_immediate(Vector2i(1, 1))
 	target.set_grid_cell_immediate(Vector2i(5, 1))
 	boar.reset_ability_action()

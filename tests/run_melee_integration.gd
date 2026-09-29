@@ -62,7 +62,7 @@ func _run() -> void:
 	var damage_numbers := target.get_children().filter(func(child): return child.has_meta("damage_number"))
 	_check(damage_numbers.size() == 1, "Taking damage should create one floating damage number")
 	_check(damage_numbers[0].text == "-30", "The floating number should show the actual health lost")
-	_check(not caster.ability_available, "Strike should consume the ability action")
+	_check(caster.action_points == 1, "Strike should consume the ability action")
 	_check(caster.grid_cell == original_cell, "Strike must not change grid occupancy")
 	_check(caster.global_position.is_equal_approx(original_position), "The caster should return to its exact starting position")
 	_check(caster.current_facing == TacticalCharacter.Facing.RIGHT, "using an ability should face the caster toward a target on screen-right")

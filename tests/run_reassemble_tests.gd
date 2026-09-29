@@ -220,7 +220,7 @@ func _test_multiple_arrows() -> void:
 	var launches: Array = []
 	executor.projectile_delivery.projectile_launched.connect(func(_actor, _ability, cell): launches.append(cell))
 	var result := await executor.execute_targets(caster, ability, [unit, unit, unit], [caster, unit], grid, AbilityTargeting.new(grid.grid_size))
-	check(result and launches.size() == 2 and unit.current_health == 0 and not caster.ability_available, "Multiple Arrows collapses then destroys same identity and skips final arrow for one action")
+	check(result and launches.size() == 2 and unit.current_health == 0 and caster.action_points == 1, "Multiple Arrows collapses then destroys same identity and skips final arrow for one action")
 	executor.free()
 	caster.free()
 	unit.free()

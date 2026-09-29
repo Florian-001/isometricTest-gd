@@ -160,7 +160,7 @@ func _test_sequences() -> void:
 		for index in range(3):
 			check(enemies[index].current_health == initial_health - pattern.count(index) * 16, "damage matches selected arrow count")
 			check(enemies[index].get_active_statuses().size() == (1 if pattern.has(index) else 0), "weapon status reaches only selected living targets")
-		check(starts == 1 and finishes == 1 and not caster.ability_available and caster.remaining_movement == movement, "one action and one lifecycle pair, no movement cost")
+		check(starts == 1 and finishes == 1 and caster.action_points == 1 and caster.get_ability_cooldown(ability) == 1 and caster.remaining_movement == movement, "one action and one lifecycle pair, no movement cost")
 		check(not await _cast(caster, selected), "cannot cast a second time with the spent action")
 	_clear()
 	var caster := _unit(true, Vector2i(1, 1))
@@ -366,7 +366,7 @@ func _test_battle_ui() -> void:
 		if not battle._movement_locked:
 			break
 		await process_frame
-	check(first.current_health == maxi(0, health - 2 * damage) and not caster.ability_available, "real battle confirmation executes chosen arrows and spends action")
+	check(first.current_health == maxi(0, health - 2 * damage) and caster.action_points == 1 and caster.get_ability_cooldown(ability) == 1, "real battle confirmation executes chosen arrows and spends action")
 	check(not panel.visible and battle._selected_hit_targets.is_empty() and not battle._movement_locked, "cast clears panel and restores battle interaction")
 	caster.reset_ability_action()
 	battle._on_ability_selected(ability)

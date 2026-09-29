@@ -181,7 +181,7 @@ func _test_directions_and_equipment() -> void:
 			check(target.grid_cell == start + direction * 2 and actor.grid_cell == Vector2i(4, 4), "push target, caster stays")
 			check(passive_refreshes[0] >= 2, "each pushed tile refreshes positional passives")
 			check(entries[0] == 0 and target.starting_grid_cell == start and target.current_facing == facing, "forced movement preserves setup/facing and skips entry signals")
-			check(not actor.ability_available and actor.remaining_movement == movement and actor.opportunity_reaction_available, "caster spends only action")
+			check(actor.action_points == 1 and actor.remaining_movement == movement and actor.opportunity_reaction_available, "caster spends only action")
 			check(target.ability_available and target.remaining_movement == target_movement and target.opportunity_reaction_available, "target budgets unchanged")
 			var saved := target.capture_runtime_state()
 			target.set_forced_grid_cell(start)
@@ -286,7 +286,7 @@ func _test_counters() -> void:
 		var retaliates: bool = kind in ["blocked", "reach"]
 		check(started.size() == (2 if retaliates else 1), "Counter revalidates final position and original defender " + kind)
 		check(actor.current_health == actor.get_max_health() - (9 if retaliates else 0), "Counter damage " + kind)
-		check(target._opportunity_reaction_available and target._ability_available, "Counter preserves stored target budgets, including during stun")
+		check(target._opportunity_reaction_available and target.action_points == 2, "Counter preserves stored target budgets, including during stun")
 		_matches(snapshot, "counter " + kind)
 		_clear()
 

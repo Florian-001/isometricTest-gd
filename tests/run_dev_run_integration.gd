@@ -140,7 +140,7 @@ func _test_reload_flow(label: String) -> void:
 	for stack in range(3):
 		actor.apply_status(load("res://resources/statuses/strength_up.tres"))
 		actor.apply_status(load("res://resources/statuses/constitution_up.tres"))
-	actor.spend_ability_action()
+	actor.spend_action_points(actor.action_points)
 	actor.spend_movement(1.0)
 	enemy.apply_damage(3)
 	enemy.set_dev_stat_override(UnitStat.Type.STRENGTH, 27)
@@ -178,7 +178,7 @@ func _test_reload_flow(label: String) -> void:
 	actor.apply_damage(2)
 	enemy.apply_damage(4)
 	actor.apply_status(load("res://resources/statuses/slow.tres"))
-	actor.spend_ability_action()
+	actor.spend_action_points(actor.action_points)
 	battle.turn_manager.round_number = 3
 	var snapshot := battle.capture_save_payload(false)
 	var saved := ScenarioSaveStore.save_new(snapshot, DIRECTORY + "/scenarios")

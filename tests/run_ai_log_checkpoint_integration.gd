@@ -138,7 +138,7 @@ func _test_checkpoint_restore_and_branching() -> void:
 	enemy._set_runtime_grid_cell_immediate(Vector2i(0, 0))
 	enemy.apply_damage(5)
 	enemy.spend_movement(1.0)
-	enemy.spend_ability_action()
+	enemy.spend_action_points(enemy.action_points)
 	var burning := load("res://resources/statuses/burning.tres") as StatusEffectDefinition
 	var fireball := load("res://resources/abilities/fireball.tres") as AbilityDefinition
 	enemy.apply_status(burning, fireball, friendly)

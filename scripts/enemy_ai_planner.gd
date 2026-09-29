@@ -210,7 +210,7 @@ func _generate_candidates(
 		var abilities := actor.get_abilities()
 		for ability_index in range(abilities.size()):
 			var ability := abilities[ability_index]
-			if not _can_use_ability_in_snapshot(actor, ability, snapshot):
+			if not _can_activate_ability_in_snapshot(actor, ability, snapshot):
 				continue
 			var target_cells := _get_relevant_target_cells(
 				actor,
@@ -372,7 +372,7 @@ func _build_cast_candidate(
 	if not _is_valid_primary_target(actor, state.get_cell(actor), target_cell, ability, state, targeting):
 		return null
 	var primary := state.get_living_unit_at(target_cell)
-	var ability_score := _forecast_ability(
+	var ability_score := _forecast_active_ability(
 		actor,
 		ability,
 		target_cell,
@@ -521,13 +521,15 @@ func _get_best_future_action_route(
 	pathfinder: GridPathfinder,
 	targeting: AbilityTargeting
 ) -> Array[Vector2i]:
+	snapshot = snapshot.duplicate_state()
+	snapshot.start_ability_turn(actor)
 	var reachable := full_reachability["costs"] as Dictionary
 	var preference_costs := full_reachability["preference_costs"] as Dictionary
 	var best: Dictionary = {}
 	var abilities := actor.get_abilities()
 	for ability_index in range(abilities.size()):
 		var ability := abilities[ability_index]
-		if not _can_use_ability_in_snapshot(actor, ability, snapshot):
+		if not _can_activate_ability_in_snapshot(actor, ability, snapshot):
 			continue
 		for target_cell in _get_relevant_target_cells(actor, ability, snapshot, targeting):
 			for origin in _sorted_cells(reachable.keys()):
@@ -752,6 +754,17 @@ func get_knockback_preview(caster: TacticalCharacter, ability: AbilityDefinition
 	_forecast_ability(caster, ability, target_cell, snapshot.duplicate_state(), targeting,
 		EnemyAIProfile.new(), true, preview)
 	return preview.knockbacks
+
+
+## Active casts pay once; effect forecasts are also shared by resource-free reactions.
+func _forecast_active_ability(caster: TacticalCharacter, ability: AbilityDefinition,
+	target_cell: Vector2i, snapshot: AIBoardSnapshot, targeting: AbilityTargeting,
+	profile: EnemyAIProfile) -> float:
+	if not _can_activate_ability_in_snapshot(caster, ability, snapshot):
+		return 0.0
+	if not snapshot.spend_ability_action(caster, ability):
+		return 0.0
+	return _forecast_ability(caster, ability, target_cell, snapshot, targeting, profile)
 
 
 func _forecast_ability(
@@ -1170,10 +1183,13 @@ func _estimate_unit_action_against_target(
 ) -> Dictionary:
 	if not snapshot.is_living(unit) or not snapshot.is_living(target):
 		return {"score": 0.0, "damage": 0, "value": 0.0}
+	# This estimates the responder's upcoming turn, not its spent current AP.
+	snapshot = snapshot.duplicate_state()
+	snapshot.start_ability_turn(unit)
 	var usable_abilities: Array[AbilityDefinition] = []
 	for ability in unit.get_abilities():
 		if (
-			_can_use_ability_in_snapshot(unit, ability, snapshot)
+			_can_activate_ability_in_snapshot(unit, ability, snapshot)
 			and (
 				ability.has_target_flag(AbilityDefinition.TargetFlags.ENEMY)
 				or ability.has_target_flag(AbilityDefinition.TargetFlags.CELL)
@@ -1232,7 +1248,7 @@ func _estimate_unit_action_against_target(
 				action_state.set_cell(unit, origin)
 		var before := action_state.get_health(target)
 		var armor_before := action_state.get_armor(target)
-		var score := _forecast_ability(
+		var score := _forecast_active_ability(
 			unit,
 			ability,
 			origin if ability.caster_centered else target_cell,
@@ -1268,6 +1284,7 @@ func _get_best_opposing_reply(
 	var best_reply := 0.0
 	for responder in snapshot.get_living_opponents(acting_unit):
 		var turn_state := snapshot.duplicate_state()
+		turn_state.start_ability_turn(responder)
 		turn_state.expire_turn_start_statuses(responder)
 		var turn_start_score := _forecast_terrain_trigger(
 			responder,
@@ -1300,7 +1317,7 @@ func _estimate_best_exact_action(
 ) -> float:
 	var abilities: Array[AbilityDefinition] = []
 	for ability in unit.get_abilities():
-		if _can_use_ability_in_snapshot(unit, ability, snapshot):
+		if _can_activate_ability_in_snapshot(unit, ability, snapshot):
 			abilities.append(ability)
 	if abilities.is_empty():
 		return 0.0
@@ -1349,7 +1366,7 @@ func _estimate_best_exact_action(
 				path_score = float(path_result["score"])
 			best = maxf(
 				best,
-				path_score + _forecast_ability(
+				path_score + _forecast_active_ability(
 					unit,
 					ability,
 					target_cell,
@@ -1386,7 +1403,7 @@ func _simulate_plan(
 	var result := initial_state.duplicate_state()
 	_forecast_terrain_path(actor, plan.pre_cast_path, result, profile, targeting, pathfinder)
 	if plan.ability != null and result.is_living(actor):
-		_forecast_ability(actor, plan.ability, plan.target_cell, result, targeting, profile)
+		_forecast_active_ability(actor, plan.ability, plan.target_cell, result, targeting, profile)
 	if result.is_living(actor):
 		_forecast_terrain_path(actor, plan.post_cast_path, result, profile, targeting, pathfinder)
 	return result
@@ -1931,7 +1948,7 @@ func _estimate_immediate_cast_value_from_cell(
 ) -> float:
 	var best := 0.0
 	for ability in actor.get_abilities():
-		if not _can_use_ability_in_snapshot(actor, ability, snapshot):
+		if not _can_activate_ability_in_snapshot(actor, ability, snapshot):
 			continue
 		if ability.caster_centered:
 			if _is_valid_primary_target(actor, cell, cell, ability, snapshot, targeting):
@@ -1959,11 +1976,13 @@ func _estimate_future_value(
 	if _future_value_cache.has(key):
 		last_cache_hit_count += 1
 		return float(_future_value_cache[key])
+	snapshot = snapshot.duplicate_state()
+	snapshot.start_ability_turn(actor)
 	var best := _estimate_immediate_cast_value_from_cell(actor, cell, snapshot, targeting)
 	var taunter := snapshot.get_taunt_target(actor)
 	var movement := snapshot.get_movement_range(actor) if not snapshot.is_incapacitated(actor) else 0.0
 	for ability in actor.get_abilities():
-		if not _can_use_ability_in_snapshot(actor, ability, snapshot):
+		if not _can_activate_ability_in_snapshot(actor, ability, snapshot):
 			continue
 		for unit in snapshot.units:
 			if taunter != null and unit != taunter:
@@ -2108,6 +2127,11 @@ func _can_use_ability_in_snapshot(
 	return ability.has_compatible_equipment(unit)
 
 
+func _can_activate_ability_in_snapshot(unit: TacticalCharacter, ability: AbilityDefinition,
+	snapshot: AIBoardSnapshot) -> bool:
+	return _can_use_ability_in_snapshot(unit, ability, snapshot) and snapshot.can_afford_ability(unit, ability)
+
+
 func _get_snapshot_caster_movement_path(
 	caster: TacticalCharacter,
 	caster_cell: Vector2i,
@@ -2196,7 +2220,7 @@ func _get_snapshot_key(snapshot: AIBoardSnapshot) -> String:
 				int(bool(status_state.get("processed_this_turn", false))),
 				source.get_instance_id() if is_instance_valid(source) else 0,
 			])
-		parts.append("%s:%s:%d:%d:%.3f:%d:%s" % [
+		parts.append("%s:%s:%d:%d:%.3f:%d:%s:%d:%s" % [
 			unit.get_instance_id(),
 			snapshot.get_cell(unit),
 			snapshot.get_health(unit),
@@ -2204,6 +2228,8 @@ func _get_snapshot_key(snapshot: AIBoardSnapshot) -> String:
 			snapshot.get_remaining_movement(unit),
 			int(snapshot.can_use_opportunity_reaction(unit)),
 			",".join(status_parts),
+			snapshot.get_action_points(unit),
+			str(snapshot.unit_ability_cooldowns.get(unit, {})),
 		])
 	return "|".join(parts)
 

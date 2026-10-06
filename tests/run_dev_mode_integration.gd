@@ -1,5 +1,7 @@
 extends SceneTree
 
+const GridPathfinderScript = preload("res://scripts/grid_pathfinder.gd")
+
 var _failures: Array[String] = []
 
 
@@ -421,7 +423,8 @@ func _test_enemy_removal_and_save_round_trip() -> void:
 	)
 	var blocked := battle._get_blocked_cells(active)
 	_check(not blocked.has(vacated_cell), "a removed enemy no longer blocks movement")
-	var path := battle._pathfinder.find_path(active.grid_cell, vacated_cell, INF, blocked)
+	var pathfinder := battle.get("_pathfinder") as GridPathfinderScript
+	var path: Array[Vector2i] = pathfinder.find_path(active.grid_cell, vacated_cell, INF, blocked)
 	_check(not path.is_empty() and path[path.size() - 1] == vacated_cell, "the vacated enemy cell is traversable")
 
 	active._set_runtime_grid_cell_immediate(vacated_cell)

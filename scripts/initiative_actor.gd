@@ -56,6 +56,7 @@ signal class_progression_changed
 
 @export_category("Tactical AI")
 ## Optional per-unit AI override, also used for friendly units in Auto Battle.
+## Empty inherits the enemy archetype's profile, or resources/ai/general_ai.tres as fallback.
 @export var enemy_ai_profile: EnemyAIProfile:
 	set(value):
 		enemy_ai_profile = value

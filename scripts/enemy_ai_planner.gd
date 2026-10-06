@@ -7,11 +7,6 @@ const MAX_AREA_CENTERS_PER_ABILITY := 2
 const MAX_CANDIDATES := 32
 const MAX_CAST_CANDIDATES := 12
 const EXACT_REPLY_LIMIT := 3
-const FUTURE_VALUE_WEIGHT := 0.25
-const SHARED_PRESSURE_WEIGHT := 0.25
-const IMMEDIATE_DEFEAT_RATIO := 0.25
-const SETUP_DEFEAT_RATIO := 0.125
-const FRIENDLY_DAMAGE_PENALTY := 2.0
 const MeleeDeliveryScript = preload("res://scripts/melee_delivery.gd")
 const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_system.gd")
 const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
@@ -58,9 +53,7 @@ func choose_plan(
 		last_planning_duration_ms = Time.get_ticks_msec() - planning_started
 		return EnemyTurnPlan.new()
 
-	var profile := actor.get_enemy_ai_profile()
-	if profile == null:
-		profile = EnemyAIProfile.new()
+	var profile := _resolve_profile(actor)
 	var snapshot := AIBoardSnapshot.from_battle(
 		units,
 		pathfinder.grid_size,
@@ -122,6 +115,13 @@ func choose_plan(
 	ranked_candidates = candidates
 	last_planning_duration_ms = Time.get_ticks_msec() - planning_started
 	return candidates[0]
+
+
+func _resolve_profile(actor: TacticalCharacter, profile: EnemyAIProfile = null) -> EnemyAIProfile:
+	if profile != null:
+		return profile
+	var assigned := actor.get_enemy_ai_profile()
+	return assigned if assigned != null else EnemyAIProfile.get_default()
 
 
 func _reset_metrics() -> void:
@@ -199,7 +199,7 @@ func _generate_candidates(
 	var reachable := reachable_result["costs"] as Dictionary
 
 	var hold := EnemyTurnPlan.new()
-	_finalize_plan(hold, actor, start, snapshot, targeting, include_position)
+	_finalize_plan(hold, actor, start, snapshot, targeting, include_position, profile)
 	_plan_state_cache[hold] = snapshot.duplicate_state()
 	_append_unique(candidates, seen, hold, start)
 	if snapshot.is_incapacitated(actor):
@@ -216,7 +216,8 @@ func _generate_candidates(
 				actor,
 				ability,
 				snapshot,
-				targeting
+				targeting,
+				profile
 			)
 			for target_cell in target_cells:
 				var origins := _select_cast_origins(
@@ -225,7 +226,8 @@ func _generate_candidates(
 					target_cell,
 					reachable,
 					snapshot,
-					targeting
+					targeting,
+					profile
 				)
 				for origin in origins:
 					descriptors.append({
@@ -240,7 +242,8 @@ func _generate_candidates(
 							ability,
 							target_cell,
 							snapshot,
-							targeting
+							targeting,
+							profile
 						),
 					})
 
@@ -409,7 +412,7 @@ func _build_cast_candidate(
 		var target_order_index := _initiative_order.find(primary)
 		if target_order_index >= 0:
 			plan.target_turn_order_index = target_order_index
-	_finalize_plan(plan, actor, start, state, targeting, include_position)
+	_finalize_plan(plan, actor, start, state, targeting, include_position, profile)
 	_plan_state_cache[plan] = state.duplicate_state()
 	return plan
 
@@ -446,7 +449,8 @@ func _build_cast_move_candidate(
 		movement_start,
 		reachability["costs"] as Dictionary,
 		cast_state,
-		targeting
+		targeting,
+		profile
 	)
 	if destination == movement_start:
 		return null
@@ -471,7 +475,7 @@ func _build_cast_move_candidate(
 	plan.movement_cost = pathfinder.get_path_cost(actual_path, PassiveAbilityResolver.ignores_movement_modifiers(actor))
 	plan.terrain_score += float(forecast["score"])
 	plan.effect_score += float(forecast["score"])
-	_finalize_plan(plan, actor, start, post_state, targeting, include_position)
+	_finalize_plan(plan, actor, start, post_state, targeting, include_position, profile)
 	_plan_state_cache[plan] = post_state.duplicate_state()
 	return plan
 
@@ -501,7 +505,8 @@ func _build_pursuit_candidate(
 		full_reachability,
 		snapshot,
 		pathfinder,
-		targeting
+		targeting,
+		profile
 	)
 	var turn_path := _trim_path_to_budget(route, movement_budget, pathfinder, PassiveAbilityResolver.ignores_movement_modifiers(actor))
 	if turn_path.size() < 2:
@@ -527,7 +532,8 @@ func _get_best_future_action_route(
 	full_reachability: Dictionary,
 	snapshot: AIBoardSnapshot,
 	pathfinder: GridPathfinder,
-	targeting: AbilityTargeting
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile
 ) -> Array[Vector2i]:
 	snapshot = snapshot.duplicate_state()
 	snapshot.start_ability_turn(actor)
@@ -539,7 +545,7 @@ func _get_best_future_action_route(
 		var ability := abilities[ability_index]
 		if not _can_activate_ability_in_snapshot(actor, ability, snapshot):
 			continue
-		for target_cell in _get_relevant_target_cells(actor, ability, snapshot, targeting):
+		for target_cell in _get_relevant_target_cells(actor, ability, snapshot, targeting, profile):
 			for origin in _sorted_cells(reachable.keys()):
 				if origin == start or not _is_valid_primary_target(
 					actor,
@@ -556,7 +562,8 @@ func _get_best_future_action_route(
 					ability,
 					target_cell,
 					snapshot,
-					targeting
+					targeting,
+					profile
 				)
 				if rough_value <= COST_EPSILON and snapshot.get_taunt_target(actor) == null:
 					continue
@@ -700,7 +707,7 @@ func _build_move_candidate(
 	plan.movement_cost = pathfinder.get_path_cost(actual_path, PassiveAbilityResolver.ignores_movement_modifiers(actor))
 	plan.terrain_score = float(forecast["score"])
 	plan.effect_score = plan.terrain_score
-	_finalize_plan(plan, actor, start, state, targeting, include_position)
+	_finalize_plan(plan, actor, start, state, targeting, include_position, profile)
 	_plan_state_cache[plan] = state.duplicate_state()
 	return plan
 
@@ -725,13 +732,14 @@ func _finalize_plan(
 	start: Vector2i,
 	snapshot: AIBoardSnapshot,
 	targeting: AbilityTargeting,
-	include_position: bool
+	include_position: bool,
+	profile: EnemyAIProfile
 ) -> void:
 	var end_cell := snapshot.get_cell(actor)
 	plan.cast_origin = plan.get_cast_cell(start)
 	plan.end_cell = end_cell
 	var future_score := (
-		_estimate_future_value(actor, end_cell, snapshot, targeting) * FUTURE_VALUE_WEIGHT
+		_estimate_future_value(actor, end_cell, snapshot, targeting, profile) * profile.future_value_weight
 		if include_position and snapshot.is_living(actor)
 		else 0.0
 	)
@@ -917,7 +925,7 @@ func _forecast_ability(
 	if recipients.is_empty():
 		for additional_effect in ability.effects:
 			if ability.should_apply_additional_effect(additional_effect):
-				score += additional_effect.ai_utility_hint
+				score += additional_effect.ai_utility_hint * profile.utility_weight
 		return score
 
 	var counter_defenders: Array[TacticalCharacter] = []
@@ -939,13 +947,14 @@ func _forecast_ability(
 
 func _forecast_hit_status(caster: TacticalCharacter, target: TacticalCharacter,
 	status: StatusEffectDefinition, snapshot: AIBoardSnapshot, per_hit: bool,
-	base_utility: float = 0.0) -> Dictionary:
+	base_utility: float = 0.0, profile: EnemyAIProfile = null) -> Dictionary:
+	profile = _resolve_profile(caster, profile)
 	var estimate := snapshot.forecast_status_application(caster, target, status, base_utility)
 	if per_hit and status != null and status.effect == StatusEffectDefinition.Effect.DAMAGE_EACH_TURN:
 		# Turn-start damage has tactical value, but cannot kill a recipient between hits.
 		var future_damage := -int(estimate.get("health_delta", 0)) - int(estimate.get("armor_delta", 0))
-		estimate["utility_hint"] = float(estimate.get("utility_hint", 0.0)) + future_damage * (
-			1.0 if target.is_friendly() != caster.is_friendly() else -FRIENDLY_DAMAGE_PENALTY)
+		estimate["deferred_damage_score"] = future_damage * profile.damage_weight * (
+			1.0 if target.is_friendly() != caster.is_friendly() else -profile.friendly_damage_penalty)
 		estimate["health_delta"] = 0
 		estimate["armor_delta"] = 0
 	return estimate
@@ -974,7 +983,9 @@ func _forecast_recipient_hit(caster: TacticalCharacter, recipient: TacticalChara
 					recipient,
 					ability.status_effect,
 					snapshot,
-					ability.selects_per_hit()
+					ability.selects_per_hit(),
+					0.0,
+					profile
 				),
 				profile,
 				snapshot
@@ -995,7 +1006,7 @@ func _forecast_recipient_hit(caster: TacticalCharacter, recipient: TacticalChara
 				var collision := DamageCalculator.resolve_damage(knockback.collision_damage,
 					snapshot.get_health(victim), snapshot.get_armor(victim))
 				score += _score_effect_estimate(caster, victim, collision, profile, snapshot)
-			score += knockback.ai_utility_hint
+			score += knockback.ai_utility_hint * profile.utility_weight
 			continue
 		var before := snapshot.get_health(recipient)
 		var estimate: Dictionary
@@ -1007,7 +1018,8 @@ func _forecast_recipient_hit(caster: TacticalCharacter, recipient: TacticalChara
 				status_application.status_effect,
 				snapshot,
 				ability.selects_per_hit(),
-				status_application.ai_utility_hint
+				status_application.ai_utility_hint,
+				profile
 			)
 		elif additional_effect is DamageEffectDefinition:
 			estimate = (additional_effect as DamageEffectDefinition).estimate_for_ability(
@@ -1030,7 +1042,7 @@ func _forecast_recipient_hit(caster: TacticalCharacter, recipient: TacticalChara
 		score += _score_effect_estimate(
 			caster,
 			recipient,
-			_forecast_hit_status(caster, recipient, weapon_status, snapshot, ability.selects_per_hit()),
+			_forecast_hit_status(caster, recipient, weapon_status, snapshot, ability.selects_per_hit(), 0.0, profile),
 			profile,
 			snapshot
 		)
@@ -1060,7 +1072,7 @@ func _forecast_kill_reward(caster: TacticalCharacter, recipient: TacticalCharact
 	var score := 0.0
 	for _application in range(ability.get_on_kill_status_applications()):
 		score += _score_effect_estimate(caster, caster,
-			_forecast_hit_status(caster, caster, ability.on_kill_status, snapshot, ability.selects_per_hit()), profile, snapshot)
+			_forecast_hit_status(caster, caster, ability.on_kill_status, snapshot, ability.selects_per_hit(), 0.0, profile), profile, snapshot)
 	return score
 
 
@@ -1104,9 +1116,10 @@ func _score_effect_estimate(
 	caster: TacticalCharacter,
 	recipient: TacticalCharacter,
 	estimate: Dictionary,
-	_profile: EnemyAIProfile,
+	profile: EnemyAIProfile,
 	snapshot: AIBoardSnapshot
 ) -> float:
+	profile = _resolve_profile(caster, profile)
 	var before := snapshot.get_health(recipient)
 	var applied := snapshot.apply_effect_estimate(recipient, estimate)
 	var actual_delta := int(applied.health_delta)
@@ -1114,17 +1127,17 @@ func _score_effect_estimate(
 	var is_opponent := recipient.is_friendly() != caster.is_friendly()
 	var score := 0.0
 	if actual_delta < 0 or armor_damage > 0:
-		var damage := float(-mini(0, actual_delta) + armor_damage)
+		var damage := float(-mini(0, actual_delta) + armor_damage) * profile.damage_weight
 		if is_opponent:
 			score += damage
 			if not snapshot.is_living(recipient) and before > 0:
-				score += snapshot.get_max_health(recipient) * IMMEDIATE_DEFEAT_RATIO
+				score += snapshot.get_max_health(recipient) * profile.immediate_defeat_ratio
 		else:
-			score -= damage * FRIENDLY_DAMAGE_PENALTY
+			score -= damage * profile.friendly_damage_penalty
 			if not snapshot.is_living(recipient) and before > 0:
-				score -= snapshot.get_max_health(recipient) * IMMEDIATE_DEFEAT_RATIO
+				score -= snapshot.get_max_health(recipient) * profile.immediate_defeat_ratio
 	if actual_delta > 0:
-		var healing := float(actual_delta)
+		var healing := float(actual_delta) * profile.healing_weight
 		if is_opponent:
 			score -= healing
 		else:
@@ -1133,7 +1146,8 @@ func _score_effect_estimate(
 				/ float(maxi(1, snapshot.get_max_health(recipient)))
 			)
 			score += healing * missing_ratio
-	score += float(estimate.get("utility_hint", 0.0))
+	score += float(estimate.get("utility_hint", 0.0)) * profile.utility_weight
+	score += float(estimate.get("deferred_damage_score", 0.0))
 	return score
 
 
@@ -1167,9 +1181,9 @@ func _apply_coordination_scores(
 			)
 			var followup_value := maxf(0.0, float(followup.get("value", 0.0)))
 			var followup_damage := maxi(0, int(followup.get("damage", 0)))
-			coordination += SHARED_PRESSURE_WEIGHT * minf(followup_value, float(remaining_pools))
+			coordination += profile.shared_pressure_weight * minf(followup_value, float(remaining_pools))
 			if remaining > 0 and followup_damage >= remaining_pools:
-				coordination += initial_state.get_max_health(target) * SETUP_DEFEAT_RATIO
+				coordination += initial_state.get_max_health(target) * profile.setup_defeat_ratio
 		plan.coordination_score = coordination
 		plan.immediate_score += coordination
 		plan.total_score = plan.immediate_score
@@ -1385,7 +1399,7 @@ func _estimate_unit_action_against_target(
 		var after := action_state.get_health(target)
 		var damage := maxi(0, before + armor_before - after - action_state.get_armor(target))
 		var defeat_bonus := (
-			action_state.get_max_health(target) * IMMEDIATE_DEFEAT_RATIO
+			action_state.get_max_health(target) * profile.immediate_defeat_ratio
 			if after == 0 and before > 0
 			else 0.0
 		)
@@ -1459,7 +1473,7 @@ func _estimate_best_exact_action(
 	var reachable := reachability["costs"] as Dictionary
 	var best := 0.0
 	for ability in abilities:
-		for target_cell in _get_relevant_target_cells(unit, ability, snapshot, targeting):
+		for target_cell in _get_relevant_target_cells(unit, ability, snapshot, targeting, profile):
 			var origin := _get_cheapest_valid_origin(
 				unit,
 				ability,
@@ -1678,23 +1692,24 @@ func _score_terrain_estimate(
 	unit: TacticalCharacter,
 	estimate: Dictionary,
 	snapshot: AIBoardSnapshot,
-	_profile: EnemyAIProfile
+	profile: EnemyAIProfile
 ) -> float:
+	profile = _resolve_profile(unit, profile)
 	var before := snapshot.get_health(unit)
 	var applied := snapshot.apply_effect_estimate(unit, estimate)
 	var after := before + int(applied.health_delta)
 	var armor_damage := -mini(0, int(applied.armor_delta))
-	var score := float(estimate.get("utility_hint", 0.0))
+	var score := float(estimate.get("utility_hint", 0.0)) * profile.utility_weight
 	if after < before or armor_damage > 0:
-		score -= float(maxi(0, before - after) + armor_damage) * FRIENDLY_DAMAGE_PENALTY
+		score -= float(maxi(0, before - after) + armor_damage) * profile.damage_weight * profile.friendly_damage_penalty
 		if not snapshot.is_living(unit):
-			score -= snapshot.get_max_health(unit) * IMMEDIATE_DEFEAT_RATIO
+			score -= snapshot.get_max_health(unit) * profile.immediate_defeat_ratio
 	if after > before:
 		var missing_ratio := (
 			float(snapshot.get_max_health(unit) - before)
 			/ float(maxi(1, snapshot.get_max_health(unit)))
 		)
-		score += float(after - before) * missing_ratio
+		score += float(after - before) * missing_ratio * profile.healing_weight
 	return score
 
 
@@ -1724,8 +1739,10 @@ func _get_relevant_target_cells(
 	caster: TacticalCharacter,
 	ability: AbilityDefinition,
 	snapshot: AIBoardSnapshot,
-	targeting: AbilityTargeting
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile = null
 ) -> Array[Vector2i]:
+	profile = _resolve_profile(caster, profile)
 	var taunter := snapshot.get_taunt_target(caster)
 	var special_cells: Array[Vector2i] = []
 	if taunter != null and not ability.has_damage():
@@ -1773,8 +1790,8 @@ func _get_relevant_target_cells(
 			continue
 		ranked_units.append(unit)
 	ranked_units.sort_custom(func(a: TacticalCharacter, b: TacticalCharacter) -> bool:
-		var priority_a := _rough_unit_priority(caster, a, ability, snapshot)
-		var priority_b := _rough_unit_priority(caster, b, ability, snapshot)
+		var priority_a := _rough_unit_priority(caster, a, ability, snapshot, Vector2i(-1, -1), profile)
+		var priority_b := _rough_unit_priority(caster, b, ability, snapshot, Vector2i(-1, -1), profile)
 		if not is_equal_approx(priority_a, priority_b):
 			return priority_a > priority_b
 		return snapshot.units.find(a) < snapshot.units.find(b)
@@ -1799,8 +1816,8 @@ func _get_relevant_target_cells(
 					snapshot
 				)
 		centers.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-			var value_a := _rough_cast_value(caster, snapshot.get_cell(caster), ability, a, snapshot, targeting)
-			var value_b := _rough_cast_value(caster, snapshot.get_cell(caster), ability, b, snapshot, targeting)
+			var value_a := _rough_cast_value(caster, snapshot.get_cell(caster), ability, a, snapshot, targeting, profile)
+			var value_b := _rough_cast_value(caster, snapshot.get_cell(caster), ability, b, snapshot, targeting, profile)
 			if not is_equal_approx(value_a, value_b):
 				return value_a > value_b
 			return _cell_less(a, b)
@@ -1835,16 +1852,18 @@ func _rough_unit_priority(
 	target: TacticalCharacter,
 	ability: AbilityDefinition,
 	snapshot: AIBoardSnapshot,
-	origin := Vector2i(-1, -1)
+	origin := Vector2i(-1, -1),
+	profile: EnemyAIProfile = null
 ) -> float:
+	profile = _resolve_profile(caster, profile)
 	var health := snapshot.get_health(target)
 	var score := 0.0
 	if ability.effect == AbilityDefinition.PrimaryEffect.DAMAGE:
 		var durability := health + snapshot.get_armor(target)
 		var damage := mini(durability, ability.calculate_damage(caster, snapshot, origin))
-		score += damage
+		score += damage * profile.damage_weight
 		if damage >= durability and (snapshot.is_bone_pile(target) or snapshot.unit_reassembly_effects.get(target) == null):
-			score += snapshot.get_max_health(target) * IMMEDIATE_DEFEAT_RATIO
+			score += snapshot.get_max_health(target) * profile.immediate_defeat_ratio
 	elif ability.effect == AbilityDefinition.PrimaryEffect.HEAL:
 		var healing := mini(
 			snapshot.get_max_health(target) - health,
@@ -1854,13 +1873,13 @@ func _rough_unit_priority(
 			float(snapshot.get_max_health(target) - health)
 			/ float(maxi(1, snapshot.get_max_health(target)))
 		)
-		score += healing * missing_ratio
+		score += healing * missing_ratio * profile.healing_weight
 	if ability.effect == AbilityDefinition.PrimaryEffect.CLEANSE:
-		score += float(snapshot.estimate_cleanse(caster, target).utility_hint)
+		score += float(snapshot.estimate_cleanse(caster, target).utility_hint) * profile.utility_weight
 	if ability.status_effect != null:
 		score += float(
 			ability.status_effect.estimate_for_ai(caster, target, health).get("utility_hint", 0.0)
-		)
+		) * profile.utility_weight
 	return score
 
 
@@ -1870,8 +1889,10 @@ func _rough_cast_value(
 	ability: AbilityDefinition,
 	target_cell: Vector2i,
 	snapshot: AIBoardSnapshot,
-	targeting: AbilityTargeting
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile = null
 ) -> float:
+	profile = _resolve_profile(caster, profile)
 	var effect_origin := caster_cell
 	if ability.moves_caster():
 		var movement_path := _get_snapshot_caster_movement_path(
@@ -1901,15 +1922,15 @@ func _rough_cast_value(
 		):
 			continue
 		recipients += 1
-		var value := _rough_unit_priority(caster, unit, ability, snapshot, effect_origin)
-		score += value if unit.is_friendly() != caster.is_friendly() or ability.effect != AbilityDefinition.PrimaryEffect.DAMAGE else -value * FRIENDLY_DAMAGE_PENALTY
+		var value := _rough_unit_priority(caster, unit, ability, snapshot, effect_origin, profile)
+		score += value if unit.is_friendly() != caster.is_friendly() or ability.effect != AbilityDefinition.PrimaryEffect.DAMAGE else -value * profile.friendly_damage_penalty
 		for effect in ability.effects:
 			if ability.should_apply_additional_effect(effect):
-				score += effect.ai_utility_hint
+				score += effect.ai_utility_hint * profile.utility_weight
 	if recipients == 0:
 		for effect in ability.effects:
 			if ability.should_apply_additional_effect(effect):
-				score += effect.ai_utility_hint
+				score += effect.ai_utility_hint * profile.utility_weight
 	return score
 
 
@@ -1919,7 +1940,8 @@ func _select_cast_origins(
 	target_cell: Vector2i,
 	reachable: Dictionary,
 	snapshot: AIBoardSnapshot,
-	targeting: AbilityTargeting
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile
 ) -> Array[Vector2i]:
 	var valid: Array[Vector2i] = []
 	if ability.caster_centered:
@@ -1940,7 +1962,7 @@ func _select_cast_origins(
 	var best_offensive := cheapest
 	var best_offensive_score := -INF
 	for cell in valid:
-		var offensive_score := _estimate_future_value(caster, cell, snapshot, targeting)
+		var offensive_score := _estimate_future_value(caster, cell, snapshot, targeting, profile)
 		if (
 			offensive_score > best_offensive_score + COST_EPSILON
 			or (
@@ -2037,15 +2059,17 @@ func _select_best_offensive_destination(
 	start: Vector2i,
 	reachable: Dictionary,
 	snapshot: AIBoardSnapshot,
-	targeting: AbilityTargeting
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile = null
 ) -> Vector2i:
+	profile = _resolve_profile(actor, profile)
 	var best := start
-	var best_score := _estimate_future_value(actor, start, snapshot, targeting)
+	var best_score := _estimate_future_value(actor, start, snapshot, targeting, profile)
 	var best_cost := 0.0
 	for cell in _sorted_cells(reachable.keys()):
 		if cell == start:
 			continue
-		var score := _estimate_future_value(actor, cell, snapshot, targeting)
+		var score := _estimate_future_value(actor, cell, snapshot, targeting, profile)
 		var cost := float(reachable[cell])
 		if (
 			score > best_score + COST_EPSILON
@@ -2067,7 +2091,8 @@ func _estimate_immediate_cast_value_from_cell(
 	actor: TacticalCharacter,
 	cell: Vector2i,
 	snapshot: AIBoardSnapshot,
-	targeting: AbilityTargeting
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile
 ) -> float:
 	var best := 0.0
 	for ability in actor.get_abilities():
@@ -2075,7 +2100,7 @@ func _estimate_immediate_cast_value_from_cell(
 			continue
 		if ability.caster_centered:
 			if _is_valid_primary_target(actor, cell, cell, ability, snapshot, targeting):
-				best = maxf(best, _rough_cast_value(actor, cell, ability, cell, snapshot, targeting))
+				best = maxf(best, _rough_cast_value(actor, cell, ability, cell, snapshot, targeting, profile))
 			continue
 		for unit in snapshot.units:
 			if not snapshot.is_living(unit) or not _is_relevant_candidate_unit(actor, unit, ability):
@@ -2084,7 +2109,7 @@ func _estimate_immediate_cast_value_from_cell(
 			if _is_valid_primary_target(actor, cell, target_cell, ability, snapshot, targeting):
 				best = maxf(
 					best,
-					_rough_unit_priority(actor, unit, ability, snapshot)
+					_rough_unit_priority(actor, unit, ability, snapshot, Vector2i(-1, -1), profile)
 				)
 	return best
 
@@ -2093,15 +2118,16 @@ func _estimate_future_value(
 	actor: TacticalCharacter,
 	cell: Vector2i,
 	snapshot: AIBoardSnapshot,
-	targeting: AbilityTargeting
+	targeting: AbilityTargeting,
+	profile: EnemyAIProfile
 ) -> float:
-	var key := "%s|%s|%s" % [_get_snapshot_key(snapshot), actor.get_instance_id(), cell]
+	var key := "%s|%s|%s|%s" % [_get_snapshot_key(snapshot), actor.get_instance_id(), cell, profile.get_instance_id()]
 	if _future_value_cache.has(key):
 		last_cache_hit_count += 1
 		return float(_future_value_cache[key])
 	snapshot = snapshot.duplicate_state()
 	snapshot.start_ability_turn(actor)
-	var best := _estimate_immediate_cast_value_from_cell(actor, cell, snapshot, targeting)
+	var best := _estimate_immediate_cast_value_from_cell(actor, cell, snapshot, targeting, profile)
 	var taunter := snapshot.get_taunt_target(actor)
 	var movement := snapshot.get_movement_range(actor) if not snapshot.is_incapacitated(actor) else 0.0
 	for ability in actor.get_abilities():
@@ -2120,7 +2146,7 @@ func _estimate_future_value(
 			var access_ratio := 1.0 if gap <= COST_EPSILON else maxf(0.25, 1.0 - gap / maxf(1.0, movement))
 			best = maxf(
 				best,
-				_rough_unit_priority(actor, unit, ability, snapshot) * access_ratio
+				_rough_unit_priority(actor, unit, ability, snapshot, Vector2i(-1, -1), profile) * access_ratio
 			)
 	_future_value_cache[key] = best
 	return best

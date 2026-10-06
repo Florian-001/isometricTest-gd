@@ -1427,7 +1427,9 @@ func _update_ai_debug(
 	status: String = "Chosen"
 ) -> void:
 	var effective_profile := unit.get_enemy_ai_profile()
-	var profile_name := effective_profile.display_name if effective_profile != null else "General AI"
+	if effective_profile == null:
+		effective_profile = EnemyAIProfile.get_default()
+	var profile_name := effective_profile.display_name
 	var lines: Array[String] = [
 		"Round %d · %s · %s" % [turn_manager.round_number, unit.name, profile_name],
 		"%s in %d ms: %s" % [status, _enemy_ai_planner.last_planning_duration_ms, plan.get_debug_summary()],

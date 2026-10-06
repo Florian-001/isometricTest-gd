@@ -72,7 +72,7 @@ func _run() -> void:
 	_check(not second_battle.unit_names_visible, "a new map should inherit the session name preference")
 	_check(not second_battle.names_button.button_pressed, "the inherited hidden state should update the HUD toggle")
 	_check(second_battle.general_inventory.get_items().size() == 9, "a new level should receive fresh General Inventory contents including both two-handed melee weapons")
-	_check(second_battle.grid.grid_size == Vector2i(12, 12), "Goblin Skirmish should use a 12x12 grid")
+	_check(second_battle.grid.grid_size == Vector2i(24, 24), "Goblin Skirmish should use a 24x24 grid")
 	_check(second_battle.terrain.get_child_count() == 0, "Goblin Skirmish should have no special tiles")
 	_check(second_battle.walls_container.get_child_count() == 0, "Goblin Skirmish should have no walls")
 

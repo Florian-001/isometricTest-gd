@@ -185,7 +185,8 @@ func _test_layout_and_saved_rosters() -> void:
 	actor.free()
 	spawns.enemy_cells.append(spawns.friendly_cells[0])
 	_check(not spawns.validate_layout(map.get_grid(), map.get_walls(), 2).is_empty(), "Cross-faction spawn overlap is rejected")
-	spawns.enemy_cells = [Vector2i(15, 0), Vector2i(15, 0)]
+	var outside_cell := Vector2i(map.get_grid().grid_size.x, 0)
+	spawns.enemy_cells = [outside_cell, outside_cell]
 	_check(spawns.validate_layout(map.get_grid(), map.get_walls()).size() >= 3, "Duplicate and out-of-bounds cells are reported")
 	map.free()
 	var rng := RandomNumberGenerator.new()

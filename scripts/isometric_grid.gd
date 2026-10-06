@@ -2,7 +2,7 @@
 class_name IsometricGrid
 extends Node2D
 
-@export var grid_size: Vector2i = Vector2i(12, 12):
+@export var grid_size: Vector2i = Vector2i(24, 24):
 	set(value):
 		grid_size = Vector2i(maxi(1, value.x), maxi(1, value.y))
 		queue_redraw()

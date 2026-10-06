@@ -199,7 +199,7 @@ func test_schema_rejects_duplicate_ids_missing_factions_and_map_mismatches() -> 
 	one_faction.setup.units.remove_at(1)
 	assert_false(ScenarioSaveStore.validate_payload(one_faction).ok, "a setup without both factions should be rejected")
 	var wrong_map_shape := payload.duplicate(true)
-	wrong_map_shape.setup.grid_size = [11, 12]
+	wrong_map_shape.setup.grid_size = [23, 24]
 	assert_false(ScenarioSaveStore.validate_payload(wrong_map_shape).ok, "saved geometry should match its map definition")
 	var missing_resource := payload.duplicate(true)
 	missing_resource.setup.units[0].abilities = ["res://resources/abilities/missing.tres"]
@@ -320,7 +320,7 @@ func _fresh_payload() -> Dictionary:
 			"saved_at": "",
 		},
 		"setup": {
-			"grid_size": [12, 12],
+			"grid_size": [24, 24],
 			"wall_cells": [],
 			"units": [
 				_setup_for("res://scenes/friendlies/friend_a.tscn", "friendly", Vector2i(4, 9)),

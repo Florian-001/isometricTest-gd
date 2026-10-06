@@ -16,6 +16,9 @@ extends Resource
 ## Multiplies damage value when an action or terrain damages this unit or its allies.
 ## 2 means allied damage costs twice as much as the same damage to an opponent rewards.
 @export_range(0.0, 10.0, 0.05, "or_greater") var friendly_damage_penalty: float = 2.0
+## Fixed bonus points for each opponent defeated, in addition to Immediate Defeat Ratio.
+## 20 adds 20 points per kill regardless of maximum HP. Zero preserves existing scoring.
+@export_range(0.0, 100.0, 1.0, "or_greater") var kill_weight: float = 0.0
 ## Fraction of the defeated unit's maximum HP added as a bonus, or subtracted for allied defeat.
 ## 0.25 awards 10 extra points for defeating an opponent with 40 maximum HP.
 @export_range(0.0, 1.0, 0.025, "or_greater") var immediate_defeat_ratio: float = 0.25

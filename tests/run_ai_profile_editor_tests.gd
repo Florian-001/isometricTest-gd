@@ -5,6 +5,7 @@ const VALUES := {
 	"healing_weight": 3.0,
 	"utility_weight": 4.0,
 	"friendly_damage_penalty": 5.0,
+	"kill_weight": 20.0,
 	"immediate_defeat_ratio": 0.5,
 	"future_value_weight": 0.75,
 	"shared_pressure_weight": 0.5,
@@ -57,7 +58,7 @@ func _run() -> void:
 	if loaded != null:
 		for key in VALUES:
 			check(is_equal_approx(loaded.get(key), VALUES[key]), "Inspector edit persists for %s" % key)
-	check(original.damage_weight == 1.0 and original.healing_weight == 1.0,
+	check(original.damage_weight == 1.0 and original.healing_weight == 1.0 and original.kill_weight == 0.0,
 		"editing a duplicate preserves the shared profile")
 	await _test_class_and_unit_assignment(loaded)
 	print("AI_PROFILE_EDITOR_TESTS_%s: %d checks, %d failures" % [
@@ -87,7 +88,7 @@ func _test_class_and_unit_assignment(ai: EnemyAIProfile) -> void:
 	var class_path := "res://.godot/ai_profile_validation/inspector_class.tres"
 	check(ResourceSaver.save(definition, class_path) == OK, "Inspector-edited class profile saves")
 	var restored_class := ResourceLoader.load(class_path, "", ResourceLoader.CACHE_MODE_IGNORE) as CharacterClassDefinition
-	check(restored_class != null and restored_class.ai_profile.healing_weight == 3.0,
+	check(restored_class != null and restored_class.ai_profile.healing_weight == 3.0 and restored_class.ai_profile.kill_weight == 20.0,
 		"class profile assignment survives resource reload")
 	var actor := (load("res://scenes/friendlies/cleric.tscn") as PackedScene).instantiate() as TacticalCharacter
 	root.add_child(actor)
@@ -105,7 +106,7 @@ func _test_class_and_unit_assignment(ai: EnemyAIProfile) -> void:
 	check(ResourceSaver.save(scene, scene_path) == OK, "Inspector-edited unit saves")
 	var restored_scene := ResourceLoader.load(scene_path, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
 	var restored := restored_scene.instantiate() as TacticalCharacter
-	check(restored.ai_profile_override != null and restored.ai_profile_override.healing_weight == 3.0,
+	check(restored.ai_profile_override != null and restored.ai_profile_override.healing_weight == 3.0 and restored.ai_profile_override.kill_weight == 20.0,
 		"unit override assignment survives scene reload")
 	fields = await _inspector_fields(actor)
 	if fields.has("ai_profile_override"):

@@ -1131,7 +1131,7 @@ func _score_effect_estimate(
 		if is_opponent:
 			score += damage
 			if not snapshot.is_living(recipient) and before > 0:
-				score += snapshot.get_max_health(recipient) * profile.immediate_defeat_ratio
+				score += snapshot.get_max_health(recipient) * profile.immediate_defeat_ratio + profile.kill_weight
 		else:
 			score -= damage * profile.friendly_damage_penalty
 			if not snapshot.is_living(recipient) and before > 0:
@@ -1399,7 +1399,7 @@ func _estimate_unit_action_against_target(
 		var after := action_state.get_health(target)
 		var damage := maxi(0, before + armor_before - after - action_state.get_armor(target))
 		var defeat_bonus := (
-			action_state.get_max_health(target) * profile.immediate_defeat_ratio
+			action_state.get_max_health(target) * profile.immediate_defeat_ratio + profile.kill_weight
 			if after == 0 and before > 0
 			else 0.0
 		)
@@ -1864,6 +1864,8 @@ func _rough_unit_priority(
 		score += damage * profile.damage_weight
 		if damage >= durability and (snapshot.is_bone_pile(target) or snapshot.unit_reassembly_effects.get(target) == null):
 			score += snapshot.get_max_health(target) * profile.immediate_defeat_ratio
+			if health > 0 and target.is_friendly() != caster.is_friendly():
+				score += profile.kill_weight
 	elif ability.effect == AbilityDefinition.PrimaryEffect.HEAL:
 		var healing := mini(
 			snapshot.get_max_health(target) - health,

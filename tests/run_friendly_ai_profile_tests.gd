@@ -95,8 +95,11 @@ func _test_precedence() -> void:
 	archetype.ai_profile = null
 	check(enemy.get_ai_profile() == EnemyAIProfile.get_default(), "empty enemy archetype uses General AI")
 	for id in ["warrior", "archer", "wizard", "cleric"]:
-		check((load("res://resources/classes/%s.tres" % id) as CharacterClassDefinition).ai_profile == null,
-			"existing %s class assignment remains empty" % id)
+		var authored := load("res://resources/classes/%s.tres" % id) as CharacterClassDefinition
+		var inherited := unit(true, Vector2i(1, 1))
+		inherited.definition.starting_class = authored
+		var expected := authored.ai_profile if authored.ai_profile != null else EnemyAIProfile.get_default()
+		check(inherited.get_ai_profile() == expected, "authored %s class profile resolves without a unit override" % id)
 
 
 func _test_decisions() -> void:

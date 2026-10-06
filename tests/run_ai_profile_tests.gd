@@ -5,6 +5,7 @@ const DEFAULTS := {
 	"healing_weight": 1.0,
 	"utility_weight": 1.0,
 	"friendly_damage_penalty": 2.0,
+	"kill_weight": 0.0,
 	"immediate_defeat_ratio": 0.25,
 	"future_value_weight": 0.25,
 	"shared_pressure_weight": 0.25,

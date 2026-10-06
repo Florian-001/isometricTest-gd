@@ -39,6 +39,7 @@ scoring values into a save. New class profile fields default to empty.
 | Healing Weight | 1 | Multiplies actual healing value, retaining the missing-health fraction for allied healing. |
 | Utility Weight | 1 | Multiplies signed status, Cleanse, custom-effect, and terrain utility. |
 | Friendly Damage Penalty | 2 | Multiplies damage value lost when harming this unit or its allies. |
+| Kill Weight | 0 | Fixed bonus points per opponent defeated, added to the maximum-HP-based defeat bonus. |
 | Immediate Defeat Ratio | 0.25 | Adds this fraction of an opponent's maximum HP for a defeat; allied defeats lose the bonus. |
 | Future Value Weight | 0.25 | Multiplies estimated next-turn action value from the final position. |
 | Shared Pressure Weight | 0.25 | Rewards damage that allies can follow up before the opponent's next turn. |
@@ -46,8 +47,18 @@ scoring values into a save. New class profile fields default to empty.
 
 For example, increase Healing Weight to make support units favor healing, or
 increase Immediate Defeat Ratio to favor finishing opponents. A ratio of `0.25`
-means 25%; a weight of `2` doubles its contribution. Zero disables that scoring
+means 25%; a multiplier of `2` doubles its contribution. Zero disables that scoring
 contribution. Defeat and effect-utility bonuses are independent of Damage Weight.
+
+**Kill Weight** adds fixed points, rather than multiplying another score. The
+opponent defeat bonus is `maximum HP × Immediate Defeat Ratio + Kill Weight`.
+With Kill Weight `20` and Immediate Defeat Ratio `0.25`, defeating an opponent
+with 40 maximum HP adds 30 points on top of actual damage value. Each defeated
+opponent earns the bonus once, including area and multi-hit attacks. A skeleton
+collapsing into a living bone pile earns no kill bonus; destroying the pile does.
+The flat bonus does not change friendly-fire or terrain penalties, and it is
+excluded from allied follow-up value to avoid duplicated teamwork rewards.
+Existing profiles inherit Kill Weight `0`; no profile or save migration is needed.
 
 Individual effects retain their own **AI Utility Hint** fields, and statuses have
 **AI Forecast → Affected Unit AI Utility**. Utility Weight scales those authored
@@ -63,23 +74,30 @@ cast; these controls do not add an exhaustive multi-action search.
 
 ```text
 godot --headless --path . --script res://tests/run_ai_profile_tests.gd
+godot --headless --path . --script res://tests/run_kill_weight_tests.gd
 godot --headless --path . --script res://tests/run_friendly_ai_profile_tests.gd
 godot --headless --editor --path . --script res://tests/run_ai_profile_editor_tests.gd
 ```
 
 The runtime suite covers defaults, resource persistence, both factions' ability
 choices, profile inheritance, target shortlisting, terrain, position/team scoring,
-and per-hit damage-over-time forecasts. The editor suite edits all eight fields
+and per-hit damage-over-time forecasts. The editor suite edits all nine fields
 through their actual Inspector controls and verifies the saved resource reloads.
 It also assigns, clears, saves, and reloads class profiles and unit overrides.
 The friendly suite covers allocation order, skipped classes, overrides, runtime
 changes, legacy scene assignments, healing decisions and control handoffs, plus
 validated run/scenario saves, restarts, and both inherited and overridden AI checkpoints.
+The kill-weight suite covers fixed/additive bonuses, both factions' finishing
+choices, shortlisting, area/repeated hits, bone piles, unchanged allied/terrain
+penalties, teamwork deduplication, and counter/opportunity forecast signs.
 
-Validated on Godot 4.7.1: 77 profile checks, 91 friendly profile checks, 38 Inspector
-checks, 162 Auto Battle checks, 91 AP/cooldown checks, class Inspector assignment,
-run-state tests, template integration, and AI checkpoint/enemy-AI integration pass.
-The class runtime suite retains the same 35 unlock/loadout assertions found before
-this change; the active-AI runner retains its existing disengagement assertion.
-Editor shutdown still reports the project's known allocation warnings. Logs and
-baseline comparisons for this change are under `.godot/friendly_ai_validation/`.
+Validated on Godot 4.7.1: 82 profile checks, 47 kill-weight checks, 91 friendly
+profile checks, 41 Inspector checks, 162 Auto Battle checks, 78 Reassemble checks,
+and AI checkpoint/enemy-AI integration pass. The active-AI runner retains its
+existing disengagement assertion. The AP/cooldown suite passes 90 of 91 checks;
+its authored-default assertion expects Fireball to cost 1 AP with cooldown 1,
+while the current authored resource uses 2 AP and cooldown 2. That failure also
+occurs in an isolated pre-feature copy with the current authored data.
+Editor shutdown still reports the project's known allocation warnings. Kill Weight
+logs and the baseline project are under `.godot/kill_weight_validation/`; prior
+class-profile verification logs remain under `.godot/friendly_ai_validation/`.

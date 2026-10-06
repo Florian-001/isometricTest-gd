@@ -120,7 +120,7 @@ func choose_plan(
 func _resolve_profile(actor: TacticalCharacter, profile: EnemyAIProfile = null) -> EnemyAIProfile:
 	if profile != null:
 		return profile
-	var assigned := actor.get_enemy_ai_profile()
+	var assigned := actor.get_ai_profile()
 	return assigned if assigned != null else EnemyAIProfile.get_default()
 
 

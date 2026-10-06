@@ -8,6 +8,11 @@ extends Resource
 @export var ability_unlocks: Array[ClassAbilityUnlock] = []
 @export_tool_button("Validate Class") var validate_button: Callable = _print_validation
 
+@export_category("Auto Battle")
+## Optional priorities for friendly Auto Battle. The first allocated class with a profile wins.
+## A unit's Tactical AI override takes priority; an empty field allows later classes or General AI.
+@export var ai_profile: EnemyAIProfile
+
 
 func get_sorted_unlocks() -> Array[ClassAbilityUnlock]:
 	var result: Array[ClassAbilityUnlock] = []

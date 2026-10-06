@@ -59,6 +59,60 @@ func _run() -> void:
 			check(is_equal_approx(loaded.get(key), VALUES[key]), "Inspector edit persists for %s" % key)
 	check(original.damage_weight == 1.0 and original.healing_weight == 1.0,
 		"editing a duplicate preserves the shared profile")
+	await _test_class_and_unit_assignment(loaded)
 	print("AI_PROFILE_EDITOR_TESTS_%s: %d checks, %d failures" % [
 		"OK" if failures.is_empty() else "FAILED", checks, failures.size()])
 	quit(0 if failures.is_empty() else 1)
+
+
+func _inspector_fields(object: Object) -> Dictionary:
+	EditorInterface.inspect_object(object)
+	for _frame in range(8):
+		await process_frame
+	var fields := {}
+	for field in EditorInterface.get_inspector().find_children("*", "EditorProperty", true, false):
+		fields[field.get_edited_property()] = field
+	return fields
+
+
+func _test_class_and_unit_assignment(ai: EnemyAIProfile) -> void:
+	var definition := (load("res://resources/classes/warrior.tres") as CharacterClassDefinition).duplicate() as CharacterClassDefinition
+	var fields: Dictionary = await _inspector_fields(definition)
+	check(fields.has("ai_profile"), "class Inspector exposes Auto Battle AI Profile")
+	if fields.has("ai_profile"):
+		fields.ai_profile.emit_changed("ai_profile", ai)
+		for _frame in range(4):
+			await process_frame
+	check(definition.ai_profile == ai, "class profile assigns through Inspector")
+	var class_path := "res://.godot/ai_profile_validation/inspector_class.tres"
+	check(ResourceSaver.save(definition, class_path) == OK, "Inspector-edited class profile saves")
+	var restored_class := ResourceLoader.load(class_path, "", ResourceLoader.CACHE_MODE_IGNORE) as CharacterClassDefinition
+	check(restored_class != null and restored_class.ai_profile.healing_weight == 3.0,
+		"class profile assignment survives resource reload")
+	var actor := (load("res://scenes/friendlies/cleric.tscn") as PackedScene).instantiate() as TacticalCharacter
+	root.add_child(actor)
+	fields = await _inspector_fields(actor)
+	check(fields.has("ai_profile_override"), "unit Inspector exposes Tactical AI AI Profile Override")
+	check(not fields.has("enemy_ai_profile"), "legacy alias is hidden in Inspector")
+	if fields.has("ai_profile_override"):
+		fields.ai_profile_override.emit_changed("ai_profile_override", ai)
+		for _frame in range(4):
+			await process_frame
+	check(actor.ai_profile_override == ai and actor.enemy_ai_profile == ai, "unit Inspector assignment updates compatibility alias")
+	var scene := PackedScene.new()
+	check(scene.pack(actor) == OK, "Inspector-edited unit packs")
+	var scene_path := "res://.godot/ai_profile_validation/inspector_unit.tscn"
+	check(ResourceSaver.save(scene, scene_path) == OK, "Inspector-edited unit saves")
+	var restored_scene := ResourceLoader.load(scene_path, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	var restored := restored_scene.instantiate() as TacticalCharacter
+	check(restored.ai_profile_override != null and restored.ai_profile_override.healing_weight == 3.0,
+		"unit override assignment survives scene reload")
+	fields = await _inspector_fields(actor)
+	if fields.has("ai_profile_override"):
+		fields.ai_profile_override.emit_changed("ai_profile_override", null)
+		for _frame in range(4):
+			await process_frame
+	check(actor.ai_profile_override == null, "Inspector can clear the unit override for inheritance")
+	EditorInterface.inspect_object(null)
+	actor.free()
+	restored.free()

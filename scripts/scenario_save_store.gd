@@ -312,6 +312,7 @@ static func validate_payload(input: Dictionary) -> Dictionary:
 				errors.append("Units %s and %s share a cell." % [occupied[key], unit_id])
 			occupied[key] = unit_id
 		errors.append_array(PassiveLoadout.validate_setup(unit))
+		errors.append_array(EnemyAIProfile.validate_setup(unit))
 		_validate_resource_paths(unit.get("abilities", []), "ability", errors)
 		_validate_resource_paths(unit.get("equipment", []), "item", errors)
 		_validate_resource_paths(unit.get("legacy_equipment", []), "item", errors)

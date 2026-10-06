@@ -6,11 +6,32 @@ and **Team Scoring**. Hover each field for its meaning. Save the resource after
 editing, then run a battle and inspect **Dev → AI Log** to compare decisions.
 
 To give a unit different priorities, duplicate the profile and save it as another
-`.tres`. Assign it to the unit's **Tactical AI → Enemy AI Profile** field. Enemy
-archetypes also expose **Enemy AI → AI Profile**. A per-unit override takes
-priority over the archetype. Units without either use `general_ai.tres`, including
-friendly units in Auto Battle. Editing a shared resource affects every unit that
-uses it.
+`.tres`. Assign it to the unit's **Tactical AI → AI Profile Override** field, or
+open a friendly class resource and assign **Auto Battle → AI Profile**. Enemy
+archetypes expose **Enemy AI → AI Profile**. Editing a shared resource affects
+every unit that uses it.
+
+Friendly Auto Battle uses the unit override first, then the **first class in its
+allocation list with a configured profile**, then `general_ai.tres`. Empty class
+profiles are skipped. For example, Warrior (empty), Cleric (support), Wizard
+(damage) uses the Cleric profile; moving Wizard before Cleric uses Wizard's.
+Levels do not determine priority and profiles are not blended. An empty allocation
+list inherits the template's Starting Class. Class/profile changes affect the
+next automated decision. Manual friendly turns remain manual while Auto Battle
+is off. Enemies use the unit override, then their archetype profile, then General AI.
+
+`TacticalCharacter.get_ai_profile()` returns the resolved profile. The hidden
+`enemy_ai_profile` property and `get_enemy_ai_profile()` remain compatibility
+aliases, so existing scene assignments and script calls work. Re-saving a scene
+writes the new `ai_profile_override` property.
+
+Run, scenario, restart, and AI checkpoint snapshots store only the explicit
+override's resource reference. Save custom profiles as `.tres` assets (or as
+authored scene subresources) before saving a battle; unsaved runtime overrides
+are rejected. An absent snapshot field preserves the scene's assignment; an
+empty reference clears it and enables inheritance. Inherited profiles continue
+to resolve from class resources, including later edits, rather than copying their
+scoring values into a save. New class profile fields default to empty.
 
 | Inspector field | Default | Effect |
 | --- | --- | --- |
@@ -42,6 +63,7 @@ cast; these controls do not add an exhaustive multi-action search.
 
 ```text
 godot --headless --path . --script res://tests/run_ai_profile_tests.gd
+godot --headless --path . --script res://tests/run_friendly_ai_profile_tests.gd
 godot --headless --editor --path . --script res://tests/run_ai_profile_editor_tests.gd
 ```
 
@@ -49,9 +71,15 @@ The runtime suite covers defaults, resource persistence, both factions' ability
 choices, profile inheritance, target shortlisting, terrain, position/team scoring,
 and per-hit damage-over-time forecasts. The editor suite edits all eight fields
 through their actual Inspector controls and verifies the saved resource reloads.
+It also assigns, clears, saves, and reloads class profiles and unit overrides.
+The friendly suite covers allocation order, skipped classes, overrides, runtime
+changes, legacy scene assignments, healing decisions and control handoffs, plus
+validated run/scenario saves, restarts, and both inherited and overridden AI checkpoints.
 
-Validated on Godot 4.7.1: 77 profile checks, 27 Inspector checks, 162 Auto Battle
-checks, 91 AP/cooldown checks, and enemy-AI battle integration pass. The active-AI
-runner retains the same disengagement assertion seen before this change. Armor's
-120 assertions pass, followed by the previously documented Godot shutdown crash
-(`0xc0000005`). Validation logs are under `.godot/ai_profile_validation/`.
+Validated on Godot 4.7.1: 77 profile checks, 91 friendly profile checks, 38 Inspector
+checks, 162 Auto Battle checks, 91 AP/cooldown checks, class Inspector assignment,
+run-state tests, template integration, and AI checkpoint/enemy-AI integration pass.
+The class runtime suite retains the same 35 unlock/loadout assertions found before
+this change; the active-AI runner retains its existing disengagement assertion.
+Editor shutdown still reports the project's known allocation warnings. Logs and
+baseline comparisons for this change are under `.godot/friendly_ai_validation/`.

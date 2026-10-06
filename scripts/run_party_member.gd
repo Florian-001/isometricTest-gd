@@ -39,6 +39,8 @@ static func from_data(data: Dictionary) -> RunPartyMember:
 	member.id = str(data.get("id", ""))
 	member.display_name = str(data.get("name", ""))
 	member.setup = data.setup.duplicate(true)
+	if not EnemyAIProfile.validate_setup(member.setup).is_empty():
+		return null
 	if not PassiveLoadout.validate_setup(member.setup).is_empty():
 		return null
 	if str(member.setup.get("id", "")) != member.id or not member.setup.get("stat_overrides") is Dictionary:

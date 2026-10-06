@@ -10,6 +10,8 @@ Every friendly class has **Strike** when unarmed (100% effective Strength) or eq
 
 Set **Starting Class** on a friendly Character Template. A character inherits that class at level 1. To customize one character, edit its **Friendly Class Progression → Class Level Overrides** array. Each `CharacterClassLevel` entry contains a class resource and invested level. An empty array inherits the template; a populated array replaces it.
 
+Class resources also expose an optional **Auto Battle → AI Profile**, using the same `EnemyAIProfile` resources and scoring controls as enemies. During Auto Battle, the unit's **Tactical AI → AI Profile Override** takes priority, followed by the first class in allocation order with a configured profile, then General AI. Empty class profiles are skipped; profiles are not blended and levels do not determine priority. Reordering or changing classes affects the next automated action. Class profiles default to empty and do not affect manual control. See [AI scoring](ai_scoring.md) for examples and save behavior.
+
 FriendA and the run Archer start as Archer 1. FriendB and the Vanguard start as Warrior 1. The generic adventurer template starts as Warrior; the spellcaster template starts as Wizard. The default run still has two characters.
 
 Total level is the sum of class levels: **Warrior 2 / Wizard 1 is level 3**, with Strike, Charge, Bloodlust, and Ice Shard when equipped with a melee weapon. Class levels do not increase each other. Any combination of classes is allowed, without prerequisites. Level changes grant no stat bonuses or equipment restrictions. Levels beyond the final unlock are valid.

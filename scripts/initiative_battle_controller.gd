@@ -1426,7 +1426,7 @@ func _update_ai_debug(
 	plan: EnemyTurnPlan,
 	status: String = "Chosen"
 ) -> void:
-	var effective_profile := unit.get_enemy_ai_profile()
+	var effective_profile := unit.get_ai_profile()
 	if effective_profile == null:
 		effective_profile = EnemyAIProfile.get_default()
 	var profile_name := effective_profile.display_name

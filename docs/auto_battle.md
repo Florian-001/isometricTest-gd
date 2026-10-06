@@ -12,7 +12,9 @@ Both sides' AI can use Select Per Hit abilities, including Multiple Arrows. Each
 
 AP and cooldowns are paid once for the complete cast. Forecasts account for immediate health and armor changes, statuses, weapon passives, on-kill buffs, and knockback. Turn-start damage from statuses has tactical value but does not damage recipients between arrows. Counter reactions resolve once per surviving eligible defender after the complete cast. Execution locks recipients to unit identities, validates the full list before paying its cost, and skips invalid later recipients without replacing them.
 
-`TacticalBattle.set_auto_battle_enabled(bool)` updates the toggle and schedules a safe control handoff. `auto_battle_enabled` defaults to `false` and is not serialized. The existing per-unit `enemy_ai_profile` override also applies to friendly Auto Battle and appears under **Tactical AI** in the Inspector. No enemy abilities are added automatically.
+`TacticalBattle.set_auto_battle_enabled(bool)` updates the toggle and schedules a safe control handoff. `auto_battle_enabled` defaults to `false` and is not serialized. Assign a profile under the unit's **Tactical AI → AI Profile Override** or the class resource's **Auto Battle → AI Profile**. Friendly priority is unit override → first allocated class with a profile → General AI. Empty classes are skipped; allocation order, rather than level, determines the inherited profile. The planner resolves the profile again for each action. The hidden `enemy_ai_profile` alias still accepts existing scenes and callers. No enemy abilities are added automatically.
+
+Setup snapshots preserve the explicit override's saved resource reference across runs, scenarios, restarts, and AI checkpoints. An empty reference enables inheritance; older snapshots without the field preserve the authored scene assignment. Inherited profiles stay attached to class resources, so later resource edits remain effective. See [AI scoring](ai_scoring.md) for scoring controls and assignment examples.
 
 ## Verification
 

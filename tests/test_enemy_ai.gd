@@ -32,12 +32,15 @@ func test_profile_resources_and_configuration_warnings() -> void:
 	assert_false(FileAccess.file_exists("res://resources/ai/ranged_ai.tres"), "the obsolete Ranged profile should be removed")
 
 	var enemy := _make_unit(false, Vector2i.ZERO, 4.0, [])
-	assert_true(enemy._get_configuration_warnings().size() > 0, "an enemy without an AI profile should warn in the Inspector")
+	assert_eq(enemy.get_ai_profile(), general_profile, "an enemy without a configured profile should resolve General AI")
+	assert_true(enemy._get_configuration_warnings().is_empty(), "General AI fallback is a valid enemy configuration")
 	enemy.enemy_ai_profile = general_profile
-	assert_true(enemy._get_configuration_warnings().is_empty(), "attaching a profile should resolve the enemy warning")
+	assert_true(enemy._get_configuration_warnings().is_empty(), "legacy profile assignment remains a valid configuration")
 	var friendly := _make_unit(true, Vector2i.ONE, 4.0, [])
+	friendly.definition.starting_class = load("res://resources/classes/warrior.tres") as CharacterClassDefinition
 	friendly.enemy_ai_profile = general_profile
-	assert_true(friendly._get_configuration_warnings().size() > 0, "friendly units should warn that enemy AI is ignored")
+	assert_eq(friendly.get_ai_profile(), general_profile, "legacy friendly profile assignment is used for Auto Battle")
+	assert_true(friendly._get_configuration_warnings().is_empty(), "friendly AI profiles are valid with a configured class")
 	var bundled_definition := EnemyDefinition.new()
 	bundled_definition.ai_profile = general_profile
 	var bundled_enemy := track(TacticalCharacterScript.new()) as TacticalCharacter

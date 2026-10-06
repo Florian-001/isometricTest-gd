@@ -56,12 +56,20 @@ signal class_progression_changed
 
 @export_category("Tactical AI")
 ## Optional per-unit AI override, also used for friendly units in Auto Battle.
-## Empty inherits the enemy archetype's profile, or resources/ai/general_ai.tres as fallback.
-@export var enemy_ai_profile: EnemyAIProfile:
+## Empty inherits the first allocated class with a profile, or the enemy archetype's profile.
+## Units without an inherited profile use resources/ai/general_ai.tres.
+@export var ai_profile_override: EnemyAIProfile:
 	set(value):
-		enemy_ai_profile = value
+		ai_profile_override = value
 		if Engine.is_editor_hint():
 			update_configuration_warnings()
+
+## Compatibility alias for existing scenes and callers. Only the neutral field is serialized.
+var enemy_ai_profile: EnemyAIProfile:
+	get:
+		return ai_profile_override
+	set(value):
+		ai_profile_override = value
 
 @export_category("Unit Stats")
 ## Set to zero or higher to override the template's Constitution for this unit.
@@ -403,12 +411,21 @@ func _get_facing_texture() -> Texture2D:
 	return facing_right_texture if facing_right_texture != null else facing_left_texture
 
 
-func get_enemy_ai_profile() -> EnemyAIProfile:
-	if enemy_ai_profile != null:
-		return enemy_ai_profile
-	if definition is EnemyDefinition:
+## Resolve each decision so allocation changes immediately affect automated actions.
+func get_ai_profile() -> EnemyAIProfile:
+	if ai_profile_override != null:
+		return ai_profile_override
+	if is_friendly():
+		for entry in get_class_levels():
+			if entry != null and entry.character_class != null and entry.character_class.ai_profile != null:
+				return entry.character_class.ai_profile
+	elif definition is EnemyDefinition and (definition as EnemyDefinition).ai_profile != null:
 		return (definition as EnemyDefinition).ai_profile
-	return null
+	return EnemyAIProfile.get_default()
+
+
+func get_enemy_ai_profile() -> EnemyAIProfile:
+	return get_ai_profile()
 
 
 func get_movement_range() -> float:
@@ -1130,6 +1147,11 @@ func capture_setup_state() -> Dictionary:
 		"scene": scene_file_path,
 		"definition": definition.resource_path if definition != null else "",
 		"faction": int(definition.faction) if definition != null else -1,
+		# Reject unsaved runtime resources instead of silently saving them as a cleared override.
+		"ai_profile_override": (
+			"" if ai_profile_override == null else
+			ai_profile_override.resource_path if not ai_profile_override.resource_path.is_empty() else null
+		),
 		"cell": [starting_grid_cell.x, starting_grid_cell.y],
 		"initial_facing": int(initial_facing),
 		"stat_overrides": {
@@ -1157,6 +1179,13 @@ func apply_setup_state(state: Dictionary) -> void:
 	var definition_path := str(state.get("definition", ""))
 	if ResourceLoader.exists(definition_path):
 		definition = load(definition_path) as CharacterDefinition
+	if state.has("ai_profile_override"):
+		var profile_errors := EnemyAIProfile.validate_setup(state)
+		if profile_errors.is_empty():
+			var profile_path: String = state["ai_profile_override"]
+			ai_profile_override = load(profile_path) as EnemyAIProfile if not profile_path.is_empty() else null
+		else:
+			push_error("Invalid AI profile setup: %s" % " ".join(profile_errors))
 	if is_friendly() and state.has("class_levels"):
 		var class_errors := CharacterClassProgression.validate_data(state["class_levels"])
 		if class_errors.is_empty():
@@ -1550,8 +1579,6 @@ func _get_configuration_warnings() -> PackedStringArray:
 		warnings.append_array(CharacterClassProgression.validate_levels(get_class_levels()))
 	if definition == null:
 		warnings.append("Assign a Character Template before running the battle.")
-	elif definition.faction == CharacterDefinition.Faction.ENEMY and get_enemy_ai_profile() == null:
-		warnings.append("Enemy units need an Enemy AI Profile to take tactical actions.")
 	var configured: Array[ItemDefinition] = []
 	if use_complete_equipment_override:
 		configured.assign(complete_equipment_overrides)

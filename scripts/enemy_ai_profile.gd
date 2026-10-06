@@ -31,6 +31,20 @@ extends Resource
 @export_range(0.0, 1.0, 0.025, "or_greater") var setup_defeat_ratio: float = 0.125
 
 
-## Shared fallback for units without a per-unit or enemy-archetype profile, including Auto Battle.
+## Shared fallback for units without a unit, class, or enemy-archetype profile.
 static func get_default() -> EnemyAIProfile:
 	return load("res://resources/ai/general_ai.tres") as EnemyAIProfile
+
+
+## Old snapshots omit this key; an empty reference explicitly enables inheritance.
+static func validate_setup(setup: Dictionary) -> Array[String]:
+	if not setup.has("ai_profile_override"):
+		return []
+	var path: Variant = setup["ai_profile_override"]
+	if not path is String:
+		return ["AI profile override must be a saved resource reference or an empty string."]
+	if path.is_empty():
+		return []
+	if not ResourceLoader.exists(path) or not load(path) is EnemyAIProfile:
+		return ["Invalid AI profile override resource: %s." % path]
+	return []

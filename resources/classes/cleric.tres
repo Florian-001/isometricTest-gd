@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="CharacterClassDefinition" format=3 uid="uid://cs3nmgs4bnpyo"]
 
+[ext_resource type="Resource" uid="uid://bhk0702fp2yw5" path="res://resources/ai/healer_ai.tres" id="7_t3wra"]
 [ext_resource type="Resource" uid="uid://7wlmmxsy6gcc" path="res://resources/abilities/heal.tres" id="ability_0"]
 [ext_resource type="Resource" uid="uid://coxj05o5g75fi" path="res://resources/abilities/focus.tres" id="ability_1"]
 [ext_resource type="Resource" uid="uid://d17q7fv47avlu" path="res://resources/abilities/beam.tres" id="ability_2"]
@@ -20,6 +21,7 @@ required_level = 2
 [sub_resource type="Resource" id="Unlock_2"]
 script = ExtResource("unlock")
 ability = ExtResource("ability_2")
+required_level = 2
 
 [sub_resource type="Resource" id="UnlockEmpower"]
 script = ExtResource("unlock")
@@ -36,3 +38,4 @@ script = ExtResource("class")
 class_id = &"cleric"
 display_name = "Cleric"
 ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_0"), SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("UnlockEmpower"), SubResource("UnlockCleanse")])
+ai_profile = ExtResource("7_t3wra")

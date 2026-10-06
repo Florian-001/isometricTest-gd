@@ -4,3 +4,4 @@
 
 [resource]
 script = ExtResource("1_profile")
+kill_weight = 20.0

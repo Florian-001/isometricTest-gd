@@ -6,10 +6,11 @@
 [resource]
 script = ExtResource("1_ability")
 display_name = "Fireball"
-ability_type = 2
+ap_cost = 2
+cooldown_turns = 2
 effect = 1
 damage_type = 1
-innate_damage = 20
+innate_damage = 10
 scaling_stat = 3
 range = 8.0
 delivery_type = 0

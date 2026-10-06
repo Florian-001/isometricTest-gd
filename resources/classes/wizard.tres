@@ -11,6 +11,7 @@
 [sub_resource type="Resource" id="Unlock_0"]
 script = ExtResource("unlock")
 ability = ExtResource("ability_0")
+required_level = 2
 
 [sub_resource type="Resource" id="Unlock_1"]
 script = ExtResource("unlock")
@@ -25,7 +26,6 @@ required_level = 3
 [sub_resource type="Resource" id="Unlock_3"]
 script = ExtResource("unlock")
 ability = ExtResource("ability_3")
-required_level = 4
 
 [sub_resource type="Resource" id="Unlock_4"]
 script = ExtResource("unlock")

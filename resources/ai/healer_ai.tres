@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="EnemyAIProfile" format=3 uid="uid://bhk0702fp2yw5"]
+
+[ext_resource type="Script" uid="uid://cs2gq4qhfmybf" path="res://scripts/enemy_ai_profile.gd" id="1_ha6hk"]
+
+[resource]
+script = ExtResource("1_ha6hk")
+healing_weight = 5.0

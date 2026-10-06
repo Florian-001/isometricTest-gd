@@ -73,6 +73,32 @@ func get_cells_in_range_from(caster_cell: Vector2i, ability: AbilityDefinition, 
 	return range_cells
 
 
+## Positioning preview includes empty cells and ignores AP and cooldown availability.
+func get_attack_preview_cells_from(
+	caster: TacticalCharacter,
+	caster_cell: Vector2i,
+	ability: AbilityDefinition,
+	wall_cells: Dictionary = {}
+) -> Dictionary:
+	var preview_cells: Dictionary = {}
+	if not _is_living(caster) or ability == null or not ability.can_be_used_by(caster) or not _is_in_bounds(caster_cell):
+		return preview_cells
+	var range_cells := get_cells_in_range_from(caster_cell, ability, caster)
+	for cell: Vector2i in range_cells:
+		if cell == caster_cell or wall_cells.has(cell):
+			continue
+		if ability.shape == AbilityDefinition.Shape.LINE_TO_MAX_RANGE:
+			if not get_affected_cells(caster_cell, cell, ability, wall_cells, caster).has(cell):
+				continue
+		elif not _line_of_sight.has_line_of_sight(caster_cell, cell, wall_cells):
+			continue
+		if (ability.delivery_type == AbilityDefinition.DeliveryType.MELEE
+			and not MeleeDeliveryScript.can_reach(caster_cell, cell, wall_cells, ability.get_effective_melee_reach(caster))):
+			continue
+		preview_cells[cell] = range_cells[cell]
+	return preview_cells
+
+
 func is_valid_primary_target(
 	caster: TacticalCharacter,
 	selected_cell: Vector2i,

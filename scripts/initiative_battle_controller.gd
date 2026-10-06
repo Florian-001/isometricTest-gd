@@ -810,6 +810,7 @@ func _refresh_reachable_cells() -> void:
 	):
 		clear_selection()
 		return
+	_has_hovered_cell = false
 	_pathfinder.set_grid_size(grid.grid_size)
 	_reachable_cells = _pathfinder.get_reachable(
 		_selected_character.grid_cell,
@@ -838,6 +839,14 @@ func _update_hover(global_mouse: Vector2) -> void:
 	)
 	if path.size() > 1:
 		grid.show_path(cell, path)
+		var attack := _selected_character.get_basic_attack_ability()
+		var attack_cells: Dictionary = {}
+		if attack != null and _selected_character.get_abilities().has(attack):
+			_ability_targeting.set_grid_size(grid.grid_size)
+			attack_cells = _ability_targeting.get_attack_preview_cells_from(
+				_selected_character, cell, attack, _get_wall_cells()
+			)
+		grid.show_movement_attack_preview(attack_cells)
 	else:
 		grid.clear_path()
 
@@ -1770,6 +1779,8 @@ func _on_character_equipment_changed(
 func _on_character_class_progression_changed(character: TacticalCharacter) -> void:
 	if character == _selected_character and _selected_ability != null and not character.get_abilities().has(_selected_ability):
 		_cancel_ability_targeting()
+	if character == _selected_character and not _movement_locked and _selected_ability == null:
+		_refresh_reachable_cells()
 	if character == turn_manager.current_unit:
 		_refresh_ability_bar()
 		_update_turn_hud()
@@ -1863,6 +1874,8 @@ func _end_defeated_current_unit(character: TacticalCharacter) -> void:
 
 func _on_unit_movement_changed(_remaining: float, _maximum: float, unit: TacticalCharacter) -> void:
 	if unit == turn_manager.current_unit:
+		if unit == _selected_character and not _movement_locked and _selected_ability == null:
+			_refresh_reachable_cells()
 		_update_turn_hud()
 
 

@@ -46,6 +46,7 @@ extends Node2D
 
 @export_group("Movement Overlay")
 @export var reachable_color: Color = Color(0.16, 0.78, 0.88, 0.38)
+@export var movement_attack_color: Color = Color(1.0, 0.40, 0.08, 0.55)
 @export var selected_color: Color = Color(0.20, 0.52, 1.0, 0.65)
 @export var hover_color: Color = Color(1.0, 0.78, 0.18, 0.68)
 @export var path_color: Color = Color("ffd65a")
@@ -66,6 +67,7 @@ var _reachable_cells: Dictionary = {}
 var _has_hover := false
 var _hover_cell := Vector2i.ZERO
 var _path_cells: Array[Vector2i] = []
+var _movement_attack_cells: Dictionary = {}
 var _ability_mode := false
 var _ability_range_cells: Dictionary = {}
 var _ability_target_cells: Dictionary = {}
@@ -153,6 +155,7 @@ func get_local_bounds() -> Rect2:
 
 func show_reachable(selected_cell: Vector2i, reachable_cells: Dictionary) -> void:
 	_clear_ability_state()
+	clear_path()
 	_has_selection = true
 	_selected_cell = selected_cell
 	_reachable_cells = reachable_cells.duplicate()
@@ -170,17 +173,26 @@ func show_path(hover_cell: Vector2i, path_cells: Array[Vector2i]) -> void:
 	queue_redraw()
 
 
+func show_movement_attack_preview(range_cells: Dictionary) -> void:
+	if _movement_attack_cells == range_cells:
+		return
+	_movement_attack_cells = range_cells.duplicate()
+	queue_redraw()
+
+
 func clear_path() -> void:
-	if not _has_hover and _path_cells.is_empty():
+	if not _has_hover and _path_cells.is_empty() and _movement_attack_cells.is_empty():
 		return
 	_has_hover = false
 	_path_cells.clear()
+	_movement_attack_cells.clear()
 	queue_redraw()
 
 
 func clear_overlays() -> void:
 	if (not _has_selection and not _has_hover and not _ability_mode
 		and _reachable_cells.is_empty() and _path_cells.is_empty()
+		and _movement_attack_cells.is_empty()
 		and _ability_range_cells.is_empty() and _ability_target_cells.is_empty()
 		and _ability_area_cells.is_empty() and _ability_trajectory_cells.is_empty()
 		and not _ability_hover_valid):
@@ -189,6 +201,7 @@ func clear_overlays() -> void:
 	_has_hover = false
 	_reachable_cells.clear()
 	_path_cells.clear()
+	_movement_attack_cells.clear()
 	_clear_ability_state()
 	queue_redraw()
 
@@ -203,6 +216,7 @@ func show_ability_targets(
 	_reachable_cells.clear()
 	_has_hover = false
 	_path_cells.clear()
+	_movement_attack_cells.clear()
 	_ability_mode = true
 	_ability_range_cells = range_cells.duplicate()
 	_ability_target_cells = valid_target_cells.duplicate()
@@ -258,6 +272,9 @@ func _draw() -> void:
 		for reachable_cell: Vector2i in _reachable_cells.keys():
 			if is_in_bounds(reachable_cell):
 				_draw_cell(reachable_cell, reachable_color)
+		for attack_cell: Vector2i in _movement_attack_cells:
+			if is_in_bounds(attack_cell):
+				_draw_cell(attack_cell, movement_attack_color)
 
 	if _has_selection and is_in_bounds(_selected_cell):
 		_draw_cell(_selected_cell, selected_color)

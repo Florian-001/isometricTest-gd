@@ -72,6 +72,7 @@ func test_grid_render_cache_reuses_geometry_for_overlays() -> void:
 	var lines := grid._grid_line_points.duplicate()
 	grid.show_reachable(Vector2i.ZERO, {Vector2i.ONE: 1.414})
 	grid.show_path(Vector2i.ONE, [Vector2i.ZERO, Vector2i.ONE])
+	grid.show_movement_attack_preview({Vector2i(2, 1): 1.0})
 	grid.clear_path()
 	grid.clear_path()
 	grid.show_ability_targets(Vector2i.ZERO, {Vector2i.ONE: 1.414})
@@ -1153,6 +1154,85 @@ func test_grid_separates_cast_range_from_valid_targets() -> void:
 
 	assert_eq(grid._ability_range_cells.size(), 3, "the overlay should retain every cell within cast range")
 	assert_eq(grid._ability_target_cells.size(), 1, "valid click targets should remain a separate highlighted subset")
+
+
+func test_attack_preview_uses_hypothetical_origin_and_equipment_range() -> void:
+	var caster := _make_unit(true, Vector2i.ZERO, 6.0)
+	caster.use_complete_equipment_override = true
+	caster.unequip_item(ItemDefinition.EquipmentSlot.WEAPON)
+	var targeting := AbilityTargeting.new(Vector2i(10, 10))
+	var origin := Vector2i(3, 3)
+	var strike := caster.get_basic_attack_ability()
+	var unarmed := targeting.get_attack_preview_cells_from(caster, origin, strike)
+	assert_eq(unarmed.size(), 8, "unarmed range should cover eight empty neighboring cells")
+	assert_true(unarmed.has(Vector2i(4, 4)), "exact 1.414 diagonal boundary should be included")
+	assert_false(unarmed.has(origin), "the hypothetical caster cell is not an attack cell")
+	assert_false(unarmed.has(Vector2i(1, 0)), "range should originate at the destination, not the current unit position")
+	assert_eq(caster.grid_cell, Vector2i.ZERO, "preview must not move the caster")
+	assert_eq(targeting.get_attack_preview_cells_from(caster, Vector2i.ZERO, strike).size(), 3, "range should clip at board corners")
+	var shorter := strike.duplicate() as AbilityDefinition
+	shorter.range = 1.413
+	assert_false(targeting.get_attack_preview_cells_from(caster, origin, shorter).has(Vector2i(4, 4)), "fractional diagonal boundary must not round up")
+	shorter.target_flags = AbilityDefinition.TargetFlags.ENEMY
+	assert_true(targeting.get_attack_preview_cells_from(caster, origin, shorter).has(Vector2i(4, 3)), "empty cells should appear for enemy-only attacks too")
+
+	caster.equip_item(load("res://resources/items/weapons/iron_sword.tres"))
+	assert_eq(targeting.get_attack_preview_cells_from(caster, origin, strike), unarmed, "ordinary swords should preserve adjacent reach")
+	caster.equip_item(load("res://resources/items/weapons/spear.tres"))
+	var spear_cells := targeting.get_attack_preview_cells_from(caster, origin, strike)
+	assert_true(spear_cells.has(Vector2i(5, 4)), "spear's bonus should include the 2.414 boundary")
+	assert_false(spear_cells.has(Vector2i(5, 5)), "spear's bonus should not reach a 2.828 diagonal")
+	var wall := {Vector2i(4, 3): true}
+	var blocked := targeting.get_attack_preview_cells_from(caster, origin, strike, wall)
+	assert_false(blocked.has(Vector2i(4, 3)), "walls cannot be highlighted")
+	assert_false(blocked.has(Vector2i(5, 3)), "walls should block extended melee reach")
+	assert_false(blocked.has(Vector2i(4, 4)), "melee should not reach around blocked diagonal corners")
+	assert_true(blocked.has(Vector2i(3, 4)), "unblocked cells should remain highlighted")
+
+	caster.equip_item(load("res://resources/items/weapons/short_bow.tres"))
+	var shoot := caster.get_basic_attack_ability()
+	var bow_cells := targeting.get_attack_preview_cells_from(caster, origin, shoot)
+	assert_true(bow_cells.has(Vector2i(8, 3)), "bow preview should use Shoot's five-cell range")
+	assert_false(bow_cells.has(Vector2i(9, 3)), "bow preview should exclude cells beyond range")
+	assert_false(targeting.get_attack_preview_cells_from(caster, origin, shoot, wall).has(Vector2i(5, 3)), "ranged preview should respect line of sight")
+	caster.reset_action_points()
+	assert_true(caster.spend_ability_action(shoot), "fixture should place Shoot on cooldown")
+	caster.spend_action_points(caster.action_points)
+	assert_eq(targeting.get_attack_preview_cells_from(caster, origin, shoot), bow_cells, "AP exhaustion and cooldown should not hide positioning range")
+	assert_eq(caster.action_points, 0, "preview must not alter action points")
+	assert_eq(caster.get_ability_cooldown(shoot), shoot.get_cooldown_turns(), "preview must not alter cooldown")
+	assert_true(targeting.get_attack_preview_cells_from(caster, Vector2i(-1, 0), shoot).is_empty(), "out-of-bounds origins should not produce a preview")
+	assert_true(targeting.get_attack_preview_cells_from(caster, origin, null).is_empty(), "missing attacks should not produce a preview")
+
+
+func test_grid_movement_attack_preview_preserves_and_clears_overlays() -> void:
+	var grid := track(IsometricGrid.new()) as IsometricGrid
+	var destination := Vector2i.ONE
+	var reachable := {destination: 1.414}
+	var path: Array[Vector2i] = [Vector2i.ZERO, destination]
+	var attack_cells := {Vector2i(2, 1): 1.0}
+	grid.show_reachable(Vector2i.ZERO, reachable)
+	grid.show_path(destination, path)
+	grid.show_movement_attack_preview(attack_cells)
+	assert_eq(grid._reachable_cells, reachable, "attack preview should retain movement range")
+	assert_eq(grid._path_cells, path, "attack preview should retain movement path")
+	assert_false(grid._ability_mode, "movement preview should not select an ability")
+	attack_cells.clear()
+	assert_eq(grid._movement_attack_cells.size(), 1, "preview should own its cell data")
+	grid.clear_path()
+	assert_true(grid._movement_attack_cells.is_empty(), "invalid hover should clear attack preview with the path")
+	assert_eq(grid._reachable_cells, reachable, "invalid hover should retain movement range")
+	grid.show_movement_attack_preview({destination: 1.0})
+	grid.show_reachable(Vector2i.ZERO, reachable)
+	assert_true(grid._movement_attack_cells.is_empty(), "movement range refresh should remove obsolete attack preview")
+	grid.show_movement_attack_preview({destination: 1.0})
+	grid.show_ability_targets(Vector2i.ZERO, {destination: 1.0})
+	assert_true(grid._movement_attack_cells.is_empty(), "ability targeting should clear movement attack preview")
+	grid.show_reachable(Vector2i.ZERO, reachable)
+	grid.show_movement_attack_preview({destination: 1.0})
+	grid.clear_overlays()
+	assert_true(grid._movement_attack_cells.is_empty(), "deselection should clear attack preview")
+	assert_true(_has_editor_property(grid, &"movement_attack_color"), "preview color should be configurable in the Inspector")
 
 
 func test_ability_shapes_and_grid_clipping() -> void:

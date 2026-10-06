@@ -54,8 +54,8 @@ signal class_progression_changed
 			notify_property_list_changed()
 		queue_redraw()
 
-@export_category("Enemy AI")
-## Optional per-unit override. EnemyDefinition resources provide the normal bundled profile.
+@export_category("Tactical AI")
+## Optional per-unit AI override, also used for friendly units in Auto Battle.
 @export var enemy_ai_profile: EnemyAIProfile:
 	set(value):
 		enemy_ai_profile = value
@@ -1551,8 +1551,6 @@ func _get_configuration_warnings() -> PackedStringArray:
 		warnings.append("Assign a Character Template before running the battle.")
 	elif definition.faction == CharacterDefinition.Faction.ENEMY and get_enemy_ai_profile() == null:
 		warnings.append("Enemy units need an Enemy AI Profile to take tactical actions.")
-	elif definition.faction == CharacterDefinition.Faction.FRIENDLY and get_enemy_ai_profile() != null:
-		warnings.append("Enemy AI Profile is ignored because this unit is friendly.")
 	var configured: Array[ItemDefinition] = []
 	if use_complete_equipment_override:
 		configured.assign(complete_equipment_overrides)

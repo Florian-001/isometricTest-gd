@@ -1288,7 +1288,7 @@ func test_enemy_controller_has_no_planning_or_preview_delays() -> void:
 	assert_false(source.contains("enemy_path_preview_delay"), "enemy path previews should not add an artificial delay")
 	assert_false(source.contains("enemy_ability_preview_delay"), "enemy ability previews should not add an artificial delay")
 	assert_false(source.contains("_show_enemy_ability_preview"), "enemy abilities should execute without a preview overlay")
-	assert_true(source.contains("call_deferred(\"_finish_enemy_turn\", unit)"), "instant enemy turns should advance through a guarded deferred callback")
+	assert_true(source.contains("_finish_ai_turn.call_deferred(unit, generation)"), "instant enemy turns should advance through a guarded deferred callback")
 	assert_true(source.contains("last_candidate_generation_duration_ms"), "Dev history should expose candidate-generation timing")
 	assert_true(source.contains("last_threat_evaluation_duration_ms"), "Dev history should expose threat-evaluation timing")
 	assert_true(source.contains("last_candidate_count"), "Dev history should expose the candidate count")

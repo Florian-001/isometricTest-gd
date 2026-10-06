@@ -13,6 +13,8 @@ enum Sequence {
 var sequence: Sequence = Sequence.HOLD
 var pre_cast_path: Array[Vector2i] = []
 var post_cast_path: Array[Vector2i] = []
+## Ordered, identity-locked recipients for Select Per Hit casts.
+var selected_targets: Array[TacticalCharacter] = []
 var ability: AbilityDefinition
 var target_cell := Vector2i(-1, -1)
 var cast_origin := Vector2i(-1, -1)
@@ -81,6 +83,11 @@ func get_debug_summary() -> String:
 	var action := get_sequence_name()
 	if ability != null:
 		action += " %s from %s @ %s" % [ability.display_name, cast_origin, target_cell]
+	if not selected_targets.is_empty():
+		var names: Array[String] = []
+		for target in selected_targets:
+			names.append(str(target.name) if is_instance_valid(target) else "removed")
+		action += " hits [%s]" % ", ".join(names)
 	action += " -> %s" % end_cell
 	var exact_reply_text := (
 		"%.2f exact reply ignored" % counterplay_score

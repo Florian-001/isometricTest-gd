@@ -28,7 +28,7 @@ The target panel creates slots from Hit Count and scrolls for larger counts. `ca
 
 The existing single-cell `execute()` and `can_execute()` reject Select Per Hit abilities. Start/finish signals still occur once per cast; their cell is the first selected unit's cell at confirmation. Individual projectile signals expose each delivered arrow.
 
-Enemy loadouts are unchanged. The current AI stores one target cell per plan, so per-hit-selection abilities are excluded from its cast candidates, including developer overrides. Automatic target allocation is not implemented.
+Enemy AI and friendly Auto Battle both support per-hit-selection abilities. The shared planner builds a complete ordered list of legal recipients, choosing each hit by its marginal value after forecasting preceding hits. It can concentrate repeated hits or spread them after a predicted defeat. Distinct-target settings, faction rules, range, walls, equipment, and taunt still apply. Casts without enough legal recipients are excluded. Enemy loadouts are unchanged; enemies use these abilities when assigned through their normal loadout or developer overrides. See [Auto Battle](auto_battle.md).
 
 ## Verification
 
@@ -39,4 +39,4 @@ godot --headless --path . --script res://tests/run_multiple_arrows_tests.gd
 godot --headless --editor --path . --script res://tests/run_multiple_arrows_editor_tests.gd
 ```
 
-The combat suite covers distinct and repeated selections, validation, damage, status/passive effects, interruptions, removed recipients, alternate deliveries, class unlocks, resource persistence, AI exclusion, and real battle controls. The editor suite changes the actual Inspector controls and checks save/reload. Run the combat suite without `--headless` and append `-- --capture` to render a 1280×720 preview under `.godot/multiple_arrows_validation/`.
+The combat suite covers distinct and repeated selections, validation, damage, status/passive effects, interruptions, removed recipients, alternate deliveries, class unlocks, resource persistence, automatic AI selections, and real battle controls. The editor suite changes the actual Inspector controls and checks save/reload. Run the combat suite without `--headless` and append `-- --capture` to render a 1280×720 preview under `.godot/multiple_arrows_validation/`.

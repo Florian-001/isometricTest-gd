@@ -255,7 +255,7 @@ func _test_ai() -> void:
 	_unit(true, Vector2i(3, 1))
 	var planner := EnemyAIPlanner.new()
 	var plan := planner.choose_plan(actor, units, GridPathfinder.new(grid.grid_size), targeting)
-	check(plan == null or plan.ability != ability, "AI never emits an incomplete per-hit cast")
+	check(plan != null and plan.ability == ability and plan.selected_targets.size() == ability.get_hit_count() and _can_cast(actor, plan.selected_targets), "AI emits a complete executable per-hit cast")
 
 
 func _capture(name: String) -> void:

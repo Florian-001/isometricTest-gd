@@ -371,6 +371,12 @@ func _build_cast_candidate(
 			return null
 	if not _is_valid_primary_target(actor, state.get_cell(actor), target_cell, ability, state, targeting):
 		return null
+	var selected_targets: Array[TacticalCharacter] = []
+	if ability.selects_per_hit():
+		selected_targets = _select_per_hit_targets(actor, ability, state, targeting, profile)
+		if selected_targets.size() != ability.get_hit_count():
+			return null
+		target_cell = state.get_cell(selected_targets[0])
 	var primary := state.get_living_unit_at(target_cell)
 	var ability_score := _forecast_active_ability(
 		actor,
@@ -378,7 +384,8 @@ func _build_cast_candidate(
 		target_cell,
 		state,
 		targeting,
-		profile
+		profile,
+		selected_targets
 	)
 	if ability_score <= COST_EPSILON and snapshot.get_taunt_target(actor) == null:
 		return null
@@ -393,6 +400,7 @@ func _build_cast_candidate(
 	plan.ability = ability
 	plan.ability_index = int(descriptor["ability_index"])
 	plan.target_cell = target_cell
+	plan.selected_targets = selected_targets
 	plan.movement_cost = pathfinder.get_path_cost(actual_path, PassiveAbilityResolver.ignores_movement_modifiers(actor))
 	plan.effect_score = ability_score + terrain_score
 	plan.terrain_score = terrain_score
@@ -756,15 +764,94 @@ func get_knockback_preview(caster: TacticalCharacter, ability: AbilityDefinition
 	return preview.knockbacks
 
 
+## Per-hit casts validate every slot at the planned origin before committing.
+func _legal_hit_targets(caster: TacticalCharacter, ability: AbilityDefinition,
+	snapshot: AIBoardSnapshot, targeting: AbilityTargeting) -> Array[TacticalCharacter]:
+	var result: Array[TacticalCharacter] = []
+	for unit in snapshot.units:
+		if snapshot.is_living(unit) and _is_valid_primary_target(caster, snapshot.get_cell(caster),
+			snapshot.get_cell(unit), ability, snapshot, targeting):
+			result.append(unit)
+	result.sort_custom(func(a: TacticalCharacter, b: TacticalCharacter) -> bool:
+		var a_order := _initiative_order.find(a)
+		var b_order := _initiative_order.find(b)
+		if a_order < 0:
+			a_order = snapshot.units.size()
+		if b_order < 0:
+			b_order = snapshot.units.size()
+		return a_order < b_order if a_order != b_order else snapshot.units.find(a) < snapshot.units.find(b)
+	)
+	return result
+
+
+func _select_per_hit_targets(caster: TacticalCharacter, ability: AbilityDefinition,
+	snapshot: AIBoardSnapshot, targeting: AbilityTargeting,
+	profile: EnemyAIProfile) -> Array[TacticalCharacter]:
+	var selected: Array[TacticalCharacter] = []
+	var legal := _legal_hit_targets(caster, ability, snapshot, targeting)
+	if legal.is_empty() or (not ability.allow_repeated_targets and legal.size() < ability.get_hit_count()):
+		return selected
+	var state := snapshot.duplicate_state()
+	var rewarded: Dictionary = {}
+	for _hit in range(ability.get_hit_count()):
+		var best: TacticalCharacter
+		var best_score := -INF
+		var best_state: AIBoardSnapshot
+		var best_rewards: Dictionary = {}
+		for target in legal:
+			if not ability.allow_repeated_targets and selected.has(target):
+				continue
+			var trial := state.duplicate_state()
+			var rewards := rewarded.duplicate()
+			var score := 0.0
+			if _can_use_ability_in_snapshot(caster, ability, trial) and trial.is_living(target) and _is_valid_primary_target(
+				caster, trial.get_cell(caster), trial.get_cell(target), ability, trial, targeting):
+				score = _forecast_recipient_hit(caster, target, ability, trial, profile, {}, rewards)
+			if best == null or score > best_score + COST_EPSILON:
+				best = target
+				best_score = score
+				best_state = trial
+				best_rewards = rewards
+		selected.append(best)
+		state = best_state
+		rewarded = best_rewards
+	return selected
+
+
+func _forecast_selected_hits(caster: TacticalCharacter, ability: AbilityDefinition,
+	selected: Array[TacticalCharacter], snapshot: AIBoardSnapshot,
+	targeting: AbilityTargeting, profile: EnemyAIProfile, allow_counters: bool) -> float:
+	var score := 0.0
+	var defenders: Array[TacticalCharacter] = []
+	var rewarded: Dictionary = {}
+	for target in selected:
+		if not _can_use_ability_in_snapshot(caster, ability, snapshot):
+			break
+		if not snapshot.is_living(target) or not _is_valid_primary_target(caster,
+			snapshot.get_cell(caster), snapshot.get_cell(target), ability, snapshot, targeting):
+			continue
+		if allow_counters and ability.has_damage() and PassiveAbilityResolver.has_counter(target, snapshot) and not defenders.has(target):
+			defenders.append(target)
+		score += _forecast_recipient_hit(caster, target, ability, snapshot, profile, {}, rewarded)
+	if allow_counters:
+		score += _forecast_counters(caster, defenders, snapshot, targeting, profile)
+	return score
+
+
 ## Active casts pay once; effect forecasts are also shared by resource-free reactions.
 func _forecast_active_ability(caster: TacticalCharacter, ability: AbilityDefinition,
 	target_cell: Vector2i, snapshot: AIBoardSnapshot, targeting: AbilityTargeting,
-	profile: EnemyAIProfile) -> float:
+	profile: EnemyAIProfile, selected_targets: Array[TacticalCharacter] = []) -> float:
 	if not _can_activate_ability_in_snapshot(caster, ability, snapshot):
 		return 0.0
+	if ability.selects_per_hit():
+		if selected_targets.is_empty():
+			selected_targets = _select_per_hit_targets(caster, ability, snapshot, targeting, profile)
+		if selected_targets.size() != ability.get_hit_count():
+			return 0.0
 	if not snapshot.spend_ability_action(caster, ability):
 		return 0.0
-	return _forecast_ability(caster, ability, target_cell, snapshot, targeting, profile)
+	return _forecast_ability(caster, ability, target_cell, snapshot, targeting, profile, true, {}, selected_targets)
 
 
 func _forecast_ability(
@@ -775,10 +862,15 @@ func _forecast_ability(
 	targeting: AbilityTargeting,
 	profile: EnemyAIProfile,
 	allow_counters: bool = true,
-	preview: Dictionary = {}
+	preview: Dictionary = {},
+	selected_targets: Array[TacticalCharacter] = []
 ) -> float:
 	if not _can_use_ability_in_snapshot(caster, ability, snapshot):
 		return 0.0
+	if ability.selects_per_hit():
+		if selected_targets.is_empty():
+			selected_targets = _select_per_hit_targets(caster, ability, snapshot, targeting, profile)
+		return _forecast_selected_hits(caster, ability, selected_targets, snapshot, targeting, profile, allow_counters)
 	var caster_cell := snapshot.get_cell(caster)
 	var score := 0.0
 	if ability.moves_caster():
@@ -839,82 +931,116 @@ func _forecast_ability(
 			if (allow_counters and ability.has_damage() and snapshot.is_living(recipient)
 				and PassiveAbilityResolver.has_counter(recipient, snapshot) and not counter_defenders.has(recipient)):
 				counter_defenders.append(recipient)
-			var bonus_pending := ability.effect != AbilityDefinition.PrimaryEffect.DAMAGE
-			if ability.has_primary_effect() and snapshot.is_living(recipient):
-				var primary_estimate := (
-					snapshot.forecast_cleanse(caster, recipient)
-					if ability.effect == AbilityDefinition.PrimaryEffect.CLEANSE
-					else ability.estimate_primary_effect_for_ai(caster, recipient, snapshot.get_health(recipient), false, snapshot)
-				)
-				score += _score_effect_estimate(caster, recipient, primary_estimate, profile, snapshot)
-				if ability.effect == AbilityDefinition.PrimaryEffect.DAMAGE and not snapshot.is_living(recipient):
-					score += _forecast_kill_reward(caster, recipient, ability, snapshot, profile, rewarded_defeats)
-				if snapshot.is_living(recipient) and ability.status_effect != null:
-					score += _score_effect_estimate(
-						caster,
-						recipient,
-						snapshot.forecast_status_application(
-							caster,
-							recipient,
-							ability.status_effect
-						),
-						profile,
-						snapshot
-					)
-			for additional_effect in ability.effects:
-				if (
-					not snapshot.is_living(recipient)
-					or not ability.should_apply_additional_effect(additional_effect)
-				):
-					continue
-				if additional_effect is KnockbackEffectDefinition:
-					var knockback := additional_effect as KnockbackEffectDefinition
-					var push := KnockbackSystem.snapshot_trace(caster, recipient, knockback, snapshot)
-					if preview.has("knockbacks"):
-						preview.knockbacks.append(push)
-					snapshot.set_cell(recipient, push.landing)
-					for victim in KnockbackSystem.collision_recipients(recipient, push):
-						var collision := DamageCalculator.resolve_damage(knockback.collision_damage,
-							snapshot.get_health(victim), snapshot.get_armor(victim))
-						score += _score_effect_estimate(caster, victim, collision, profile, snapshot)
-					score += knockback.ai_utility_hint
-					continue
-				var before := snapshot.get_health(recipient)
-				var estimate: Dictionary
-				if additional_effect is ApplyStatusEffectDefinition:
-					var status_application := additional_effect as ApplyStatusEffectDefinition
-					estimate = snapshot.forecast_status_application(
-						caster,
-						recipient,
-						status_application.status_effect,
-						status_application.ai_utility_hint
-					)
-				elif additional_effect is DamageEffectDefinition:
-					estimate = (additional_effect as DamageEffectDefinition).estimate_for_ability(
-						caster,
-						recipient,
-						before,
-						ability,
-						ability.get_passive_damage_bonus(caster, snapshot) if bonus_pending else 0,
-						snapshot.get_armor(recipient),
-						snapshot
-					)
-					bonus_pending = false
-				else:
-					estimate = additional_effect.estimate_with_armor(caster, recipient, before, snapshot.get_armor(recipient))
-				score += _score_effect_estimate(caster, recipient, estimate, profile, snapshot)
-				if additional_effect is DamageEffectDefinition and not snapshot.is_living(recipient):
-					score += _forecast_kill_reward(caster, recipient, ability, snapshot, profile, rewarded_defeats)
-			var weapon_status := ability.get_weapon_status_effect(caster)
-			if snapshot.is_living(recipient) and weapon_status != null:
-				score += _score_effect_estimate(
+			score += _forecast_recipient_hit(caster, recipient, ability, snapshot, profile, preview, rewarded_defeats)
+	if allow_counters:
+		score += _forecast_counters(caster, counter_defenders, snapshot, targeting, profile)
+	return score
+
+
+func _forecast_hit_status(caster: TacticalCharacter, target: TacticalCharacter,
+	status: StatusEffectDefinition, snapshot: AIBoardSnapshot, per_hit: bool,
+	base_utility: float = 0.0) -> Dictionary:
+	var estimate := snapshot.forecast_status_application(caster, target, status, base_utility)
+	if per_hit and status != null and status.effect == StatusEffectDefinition.Effect.DAMAGE_EACH_TURN:
+		# Turn-start damage has tactical value, but cannot kill a recipient between hits.
+		var future_damage := -int(estimate.get("health_delta", 0)) - int(estimate.get("armor_delta", 0))
+		estimate["utility_hint"] = float(estimate.get("utility_hint", 0.0)) + future_damage * (
+			1.0 if target.is_friendly() != caster.is_friendly() else -FRIENDLY_DAMAGE_PENALTY)
+		estimate["health_delta"] = 0
+		estimate["armor_delta"] = 0
+	return estimate
+
+
+func _forecast_recipient_hit(caster: TacticalCharacter, recipient: TacticalCharacter,
+	ability: AbilityDefinition, snapshot: AIBoardSnapshot, profile: EnemyAIProfile,
+	preview: Dictionary, rewarded_defeats: Dictionary) -> float:
+	var score := 0.0
+	var bonus_pending := ability.effect != AbilityDefinition.PrimaryEffect.DAMAGE
+	if ability.has_primary_effect() and snapshot.is_living(recipient):
+		var primary_estimate := (
+			snapshot.forecast_cleanse(caster, recipient)
+			if ability.effect == AbilityDefinition.PrimaryEffect.CLEANSE
+			else ability.estimate_primary_effect_for_ai(caster, recipient, snapshot.get_health(recipient), false, snapshot)
+		)
+		score += _score_effect_estimate(caster, recipient, primary_estimate, profile, snapshot)
+		if ability.effect == AbilityDefinition.PrimaryEffect.DAMAGE and not snapshot.is_living(recipient):
+			score += _forecast_kill_reward(caster, recipient, ability, snapshot, profile, rewarded_defeats)
+		if snapshot.is_living(recipient) and ability.status_effect != null:
+			score += _score_effect_estimate(
+				caster,
+				recipient,
+				_forecast_hit_status(
 					caster,
 					recipient,
-					snapshot.forecast_status_application(caster, recipient, weapon_status),
-					profile,
-					snapshot
-				)
-	if allow_counters and not counter_defenders.is_empty():
+					ability.status_effect,
+					snapshot,
+					ability.selects_per_hit()
+				),
+				profile,
+				snapshot
+			)
+	for additional_effect in ability.effects:
+		if (
+			not snapshot.is_living(recipient)
+			or not ability.should_apply_additional_effect(additional_effect)
+		):
+			continue
+		if additional_effect is KnockbackEffectDefinition:
+			var knockback := additional_effect as KnockbackEffectDefinition
+			var push := KnockbackSystem.snapshot_trace(caster, recipient, knockback, snapshot)
+			if preview.has("knockbacks"):
+				preview.knockbacks.append(push)
+			snapshot.set_cell(recipient, push.landing)
+			for victim in KnockbackSystem.collision_recipients(recipient, push):
+				var collision := DamageCalculator.resolve_damage(knockback.collision_damage,
+					snapshot.get_health(victim), snapshot.get_armor(victim))
+				score += _score_effect_estimate(caster, victim, collision, profile, snapshot)
+			score += knockback.ai_utility_hint
+			continue
+		var before := snapshot.get_health(recipient)
+		var estimate: Dictionary
+		if additional_effect is ApplyStatusEffectDefinition:
+			var status_application := additional_effect as ApplyStatusEffectDefinition
+			estimate = _forecast_hit_status(
+				caster,
+				recipient,
+				status_application.status_effect,
+				snapshot,
+				ability.selects_per_hit(),
+				status_application.ai_utility_hint
+			)
+		elif additional_effect is DamageEffectDefinition:
+			estimate = (additional_effect as DamageEffectDefinition).estimate_for_ability(
+				caster,
+				recipient,
+				before,
+				ability,
+				ability.get_passive_damage_bonus(caster, snapshot) if bonus_pending else 0,
+				snapshot.get_armor(recipient),
+				snapshot
+			)
+			bonus_pending = false
+		else:
+			estimate = additional_effect.estimate_with_armor(caster, recipient, before, snapshot.get_armor(recipient))
+		score += _score_effect_estimate(caster, recipient, estimate, profile, snapshot)
+		if additional_effect is DamageEffectDefinition and not snapshot.is_living(recipient):
+			score += _forecast_kill_reward(caster, recipient, ability, snapshot, profile, rewarded_defeats)
+	var weapon_status := ability.get_weapon_status_effect(caster)
+	if snapshot.is_living(recipient) and weapon_status != null:
+		score += _score_effect_estimate(
+			caster,
+			recipient,
+			_forecast_hit_status(caster, recipient, weapon_status, snapshot, ability.selects_per_hit()),
+			profile,
+			snapshot
+		)
+	return score
+
+
+func _forecast_counters(caster: TacticalCharacter, counter_defenders: Array[TacticalCharacter],
+	snapshot: AIBoardSnapshot, targeting: AbilityTargeting, profile: EnemyAIProfile) -> float:
+	var score := 0.0
+	if not counter_defenders.is_empty():
 		for defender in OpportunityAttackSystemScript.get_initiative_order(snapshot.units):
 			if not snapshot.is_living(caster):
 				break
@@ -934,7 +1060,7 @@ func _forecast_kill_reward(caster: TacticalCharacter, recipient: TacticalCharact
 	var score := 0.0
 	for _application in range(ability.get_on_kill_status_applications()):
 		score += _score_effect_estimate(caster, caster,
-			snapshot.forecast_status_application(caster, caster, ability.on_kill_status), profile, snapshot)
+			_forecast_hit_status(caster, caster, ability.on_kill_status, snapshot, ability.selects_per_hit()), profile, snapshot)
 	return score
 
 
@@ -1403,7 +1529,7 @@ func _simulate_plan(
 	var result := initial_state.duplicate_state()
 	_forecast_terrain_path(actor, plan.pre_cast_path, result, profile, targeting, pathfinder)
 	if plan.ability != null and result.is_living(actor):
-		_forecast_active_ability(actor, plan.ability, plan.target_cell, result, targeting, profile)
+		_forecast_active_ability(actor, plan.ability, plan.target_cell, result, targeting, profile, plan.selected_targets)
 	if result.is_living(actor):
 		_forecast_terrain_path(actor, plan.post_cast_path, result, profile, targeting, pathfinder)
 	return result
@@ -1602,9 +1728,6 @@ func _get_relevant_target_cells(
 ) -> Array[Vector2i]:
 	var taunter := snapshot.get_taunt_target(caster)
 	var special_cells: Array[Vector2i] = []
-	# AI plans currently carry one cell, not an ordered list of unit selections.
-	if ability.selects_per_hit():
-		return special_cells
 	if taunter != null and not ability.has_damage():
 		return special_cells
 	if ability.shape == AbilityDefinition.Shape.LINE_IN_FRONT:
@@ -2121,8 +2244,7 @@ func _can_use_ability_in_snapshot(
 	snapshot: AIBoardSnapshot
 ) -> bool:
 	if (ability == null or not snapshot.is_living(unit) or snapshot.is_incapacitated(unit)
-		or not ability.get_targeting_configuration_error().is_empty()
-		or (ability.selects_per_hit() and not unit.is_friendly())):
+		or not ability.get_targeting_configuration_error().is_empty()):
 		return false
 	return ability.has_compatible_equipment(unit)
 
@@ -2249,6 +2371,7 @@ func _copy_plan(source: EnemyTurnPlan) -> EnemyTurnPlan:
 	result.sequence = source.sequence
 	result.pre_cast_path = source.pre_cast_path.duplicate()
 	result.post_cast_path = source.post_cast_path.duplicate()
+	result.selected_targets = source.selected_targets.duplicate()
 	result.ability = source.ability
 	result.target_cell = source.target_cell
 	result.cast_origin = source.cast_origin
@@ -2287,6 +2410,8 @@ func _append_unique(
 		plan.ability_index,
 		plan.target_cell,
 	]
+	for target in plan.selected_targets:
+		key += "|%d" % target.get_instance_id()
 	if seen.has(key):
 		return
 	seen[key] = true

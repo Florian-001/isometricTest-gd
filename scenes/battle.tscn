@@ -145,13 +145,21 @@ z_index = 10
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -520.0
+offset_left = -688.0
 offset_top = 118.0
 offset_right = -16.0
 offset_bottom = 158.0
 grow_horizontal = 0
 theme_override_constants/separation = 8
 alignment = 2
+
+[node name="AutoBattleButton" type="Button" parent="HUD/TopRightActions"]
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+tooltip_text = "Control friendly units with the battle AI. Switch off to return to manual control after the current action."
+theme_override_font_sizes/font_size = 15
+toggle_mode = true
+text = "Auto Battle: Off"
 
 [node name="DevButton" type="Button" parent="HUD/TopRightActions"]
 custom_minimum_size = Vector2(82, 40)

@@ -59,6 +59,7 @@ var enable_dev_tools := true
 @onready var target_selection_panel: AbilityTargetSelectionPanel = $HUD/AbilityTargetSelectionPanel
 @onready var general_inventory: GeneralInventory = $GeneralInventory
 @onready var names_button: Button = $HUD/TopRightActions/NamesButton
+@onready var auto_battle_button: Button = $HUD/TopRightActions/AutoBattleButton
 @onready var inventory_button: Button = $HUD/TopRightActions/InventoryButton
 @onready var restart_button: Button = $HUD/TopRightActions/RestartButton
 @onready var levels_button: Button = $HUD/TopRightActions/LevelsButton
@@ -111,6 +112,9 @@ var _pending_ai_history_cutoff := -1
 var _pending_ai_history_scroll_position := -1
 var initialization_succeeded := false
 var _token_view_enabled := false
+var auto_battle_enabled := false
+var _ai_turn_unit: TacticalCharacter
+var _ai_turn_generation := 0
 
 
 func _ready() -> void:
@@ -123,6 +127,7 @@ func _ready() -> void:
 	return_to_levels_dialog.confirmed.connect(_on_return_to_levels_confirmed)
 	return_to_levels_dialog.canceled.connect(_on_return_to_levels_canceled)
 	names_button.toggled.connect(_on_names_button_toggled)
+	auto_battle_button.toggled.connect(set_auto_battle_enabled)
 	if not _instantiate_battle_map():
 		_combat_over = true
 		_combat_result_text = "Invalid Level"
@@ -240,6 +245,8 @@ func _exit_tree() -> void:
 
 
 func shutdown_battle() -> void:
+	_ai_turn_generation += 1
+	_ai_turn_unit = null
 	_clear_hit_selection()
 	if _dev_open and get_tree() != null:
 		tactical_camera.set_dev_mode_pan_enabled(false)
@@ -432,6 +439,8 @@ func _restore_runtime_state(runtime: Dictionary) -> bool:
 		_movement_locked = true
 		return false
 	if not _combat_over and turn_manager.is_player_turn():
+		# Auto battle is transient, including restores of a friendly AI checkpoint.
+		_movement_locked = false
 		_selected_character = turn_manager.current_unit
 		_refresh_reachable_cells()
 	else:
@@ -694,6 +703,8 @@ func _process(_delta: float) -> void:
 		_queue_run_result()
 	if _dev_open or get_tree().paused:
 		return
+	if auto_battle_enabled and not _movement_locked and _ai_turn_unit == null:
+		_resume_unit_control(turn_manager.current_unit)
 	if target_selection_panel.visible and not _movement_locked:
 		_refresh_hit_target_selection()
 	if not _movement_locked and turn_manager.is_player_turn() and _has_mouse_screen_position:
@@ -1081,21 +1092,18 @@ func _begin_ability_cast(target_cell: Vector2i) -> void:
 	_finish_ability_cast(caster, cast_succeeded)
 
 
-func _finish_ability_cast(caster: TacticalCharacter, cast_succeeded: bool) -> void:
+func _finish_ability_cast(caster: TacticalCharacter, _cast_succeeded: bool) -> void:
 	_clear_hit_selection()
 	_selected_ability = null
 	_ability_range_cells.clear()
 	_ability_target_cells.clear()
 	_has_hovered_cell = false
 	ability_bar.set_selected(null)
-	if cast_succeeded and is_instance_valid(caster) and caster == turn_manager.current_unit and caster.current_health > 0:
-		_set_movement_locked(false)
-		_select_character(caster)
-	else:
-		_set_movement_locked(false)
+	if is_instance_valid(caster) and caster == turn_manager.current_unit and caster.current_health > 0:
+		_resume_unit_control(caster)
 	_refresh_ability_bar()
 	_update_turn_hud()
-	if is_instance_valid(caster) and caster.is_bone_pile and caster == turn_manager.current_unit:
+	if is_instance_valid(caster) and (caster.current_health <= 0 or caster.is_bone_pile) and caster == turn_manager.current_unit:
 		_end_defeated_current_unit.call_deferred(caster)
 
 
@@ -1119,12 +1127,8 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 		and moving_character.current_health > 0
 		and not moving_character.is_bone_pile
 	)
-	_set_movement_locked(not can_continue)
 	if can_continue:
-		_selected_character = moving_character
-		_has_hovered_cell = false
-		_refresh_reachable_cells()
-		_update_turn_hud()
+		_resume_unit_control(moving_character)
 	elif (
 		is_instance_valid(moving_character)
 		and moving_character == turn_manager.current_unit
@@ -1134,7 +1138,7 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 
 
 func _on_end_turn_pressed() -> void:
-	if _movement_locked or not turn_manager.is_player_turn():
+	if _movement_locked or auto_battle_enabled or _ai_turn_unit != null or not turn_manager.is_player_turn():
 		return
 	_set_movement_locked(true)
 	_selected_ability = null
@@ -1142,15 +1146,72 @@ func _on_end_turn_pressed() -> void:
 	turn_manager.end_current_turn()
 
 
+func set_auto_battle_enabled(value: bool) -> void:
+	auto_battle_enabled = value if not _combat_over else false
+	if not is_node_ready():
+		return
+	if auto_battle_enabled:
+		clear_selection()
+	_update_turn_hud()
+	if not _movement_locked and _ai_turn_unit == null:
+		_resume_unit_control(turn_manager.current_unit)
+
+
+func _is_ai_controlled(unit: TacticalCharacter) -> bool:
+	return is_instance_valid(unit) and (not unit.is_friendly() or auto_battle_enabled)
+
+
+func _resume_unit_control(unit: TacticalCharacter) -> void:
+	if (_combat_over or not is_instance_valid(unit) or unit != turn_manager.current_unit
+		or unit.current_health <= 0 or unit.is_bone_pile or _ai_turn_unit != null):
+		return
+	# Reloads enter the tree while the old Dev drawer still pauses it. Preparing
+	# controls is safe here; the AI runner waits for the tree to resume before acting.
+	if _dev_open or _ability_executor.is_resolving() or unit.is_moving:
+		return
+	if _is_ai_controlled(unit):
+		_ai_turn_unit = unit
+		_ai_turn_generation += 1
+		_set_movement_locked(true)
+		clear_selection()
+		_run_ai_unit_turn.call_deferred(unit, _ai_turn_generation)
+	else:
+		_set_movement_locked(false)
+		_select_character(unit)
+
+
 func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
-	if _combat_over or unit != turn_manager.current_unit:
+	if _ai_turn_unit != null or _combat_over or unit != turn_manager.current_unit:
+		return
+	_ai_turn_unit = unit
+	_ai_turn_generation += 1
+	_set_movement_locked(true)
+	await _run_ai_unit_turn(unit, _ai_turn_generation)
+
+
+func _ai_run_is_current(unit: TacticalCharacter, generation: int) -> bool:
+	return (is_inside_tree() and not _combat_over and generation == _ai_turn_generation
+		and is_instance_valid(unit) and unit == turn_manager.current_unit and unit == _ai_turn_unit)
+
+
+func _wait_for_ai_resume(unit: TacticalCharacter, generation: int) -> bool:
+	while _ai_run_is_current(unit, generation) and get_tree().paused:
+		await get_tree().process_frame
+	return _ai_run_is_current(unit, generation)
+
+
+func _run_ai_unit_turn(unit: TacticalCharacter, generation: int) -> void:
+	if not _ai_run_is_current(unit, generation):
 		return
 	grid.show_reachable(unit.grid_cell, {})
 
 	var invalidations := 0
 	var decisions := 0
-	while (not _combat_over and is_instance_valid(unit) and unit == turn_manager.current_unit
-		and unit.can_use_abilities()):
+	while _ai_run_is_current(unit, generation) and unit.can_use_abilities():
+		if not await _wait_for_ai_resume(unit, generation):
+			break
+		if not _is_ai_controlled(unit) or _dev_open_pending:
+			break
 		var plan := _enemy_ai_planner.choose_plan(
 			unit, _characters, _pathfinder, _ability_targeting, _get_wall_cells(),
 			terrain.get_definitions(), turn_manager.get_rotating_order())
@@ -1176,56 +1237,89 @@ func _run_enemy_unit_turn(unit: TacticalCharacter) -> void:
 		if unit.action_points >= ap_before and unit.remaining_movement >= movement_before:
 			break
 
-	grid.clear_overlays()
-	if unit == turn_manager.current_unit:
-		call_deferred("_finish_enemy_turn", unit)
+	if _ai_run_is_current(unit, generation):
+		grid.clear_overlays()
+		_finish_ai_turn.call_deferred(unit, generation)
+	elif generation == _ai_turn_generation:
+		_ai_turn_unit = null
 
 
-func _finish_enemy_turn(unit: TacticalCharacter) -> void:
-	if not _combat_over and unit == turn_manager.current_unit:
+func _finish_ai_turn(unit: TacticalCharacter, generation: int) -> void:
+	if not await _wait_for_ai_resume(unit, generation):
+		if generation == _ai_turn_generation:
+			_ai_turn_unit = null
+		return
+	_ai_turn_unit = null
+	if unit.current_health <= 0 or unit.is_bone_pile:
+		_end_defeated_current_unit(unit)
+	elif _dev_open_pending:
+		_restored_ai_turn_pending = true
+		_open_dev_mode()
+	elif not _is_ai_controlled(unit):
+		_resume_unit_control(unit)
+	else:
 		turn_manager.end_current_turn()
 
 
 func _execute_enemy_plan(unit: TacticalCharacter, plan: EnemyTurnPlan, replan_after_cast := false) -> bool:
+	var generation := _ai_turn_generation
 	if unit != turn_manager.current_unit or plan == null:
 		return false
 	if not plan.pre_cast_path.is_empty():
 		var pre_destination := plan.pre_cast_path[plan.pre_cast_path.size() - 1]
 		if not await _move_enemy_to(unit, pre_destination, plan.pre_cast_path):
 			return false
+		if replan_after_cast:
+			if not await _wait_for_ai_resume(unit, generation):
+				return false
+			if not _is_ai_controlled(unit) or _dev_open_pending:
+				return false
 
 	if plan.ability != null:
-		if not _enemy_ai_planner.respects_taunt(
-			unit, unit.grid_cell, plan.ability, plan.target_cell,
-			AIBoardSnapshot.from_battle(_characters, grid.grid_size, _get_wall_cells()),
-			_ability_targeting
-		):
-			return false
-		if not _ability_executor.can_execute(
-			unit,
-			plan.ability,
-			plan.target_cell,
-			_characters,
-			grid,
-			_ability_targeting,
-			_get_wall_cells()
-		):
-			return false
-		grid.clear_overlays()
-		var cast_succeeded := await _ability_executor.execute(
-			unit,
-			plan.ability,
-			plan.target_cell,
-			_characters,
-			grid,
-			_ability_targeting,
-			_get_wall_cells(),
-			Callable(self, "_before_ability_movement_step")
-		)
-		if not cast_succeeded:
-			return false
-		if replan_after_cast:
-			return unit == turn_manager.current_unit
+		if plan.ability.selects_per_hit():
+			var snapshot := AIBoardSnapshot.from_battle(_characters, grid.grid_size, _get_wall_cells())
+			for target in plan.selected_targets:
+				if not is_instance_valid(target) or not _enemy_ai_planner.respects_taunt(
+					unit, unit.grid_cell, plan.ability, target.grid_cell, snapshot, _ability_targeting):
+					return false
+			grid.clear_overlays()
+			if not await _ability_executor.execute_targets(unit, plan.ability, plan.selected_targets,
+				_characters, grid, _ability_targeting, _get_wall_cells()):
+				return false
+			if replan_after_cast:
+				return unit == turn_manager.current_unit
+		else:
+			if not _enemy_ai_planner.respects_taunt(
+				unit, unit.grid_cell, plan.ability, plan.target_cell,
+				AIBoardSnapshot.from_battle(_characters, grid.grid_size, _get_wall_cells()),
+				_ability_targeting
+			):
+				return false
+			if not _ability_executor.can_execute(
+				unit,
+				plan.ability,
+				plan.target_cell,
+				_characters,
+				grid,
+				_ability_targeting,
+				_get_wall_cells()
+			):
+				return false
+			grid.clear_overlays()
+			var cast_succeeded := await _ability_executor.execute(
+				unit,
+				plan.ability,
+				plan.target_cell,
+				_characters,
+				grid,
+				_ability_targeting,
+				_get_wall_cells(),
+				Callable(self, "_before_ability_movement_step")
+			)
+			if not cast_succeeded:
+				return false
+			if replan_after_cast:
+				return unit == turn_manager.current_unit
 
 	if not plan.post_cast_path.is_empty() and unit.current_health > 0:
 		var post_destination := plan.post_cast_path[plan.post_cast_path.size() - 1]
@@ -1264,7 +1358,7 @@ func _move_enemy_to(
 		return false
 	grid.clear_overlays()
 	await unit.move_along(path, Callable(self, "_before_character_movement_step"))
-	return unit.current_health > 0 and unit.grid_cell == destination
+	return is_instance_valid(unit) and unit.current_health > 0 and unit.grid_cell == destination
 
 
 func _before_character_movement_step(
@@ -1395,7 +1489,7 @@ func _is_dev_stable() -> bool:
 			return false
 	if _combat_over:
 		return _combat_finalized
-	return not _movement_locked and turn_manager.is_player_turn()
+	return (_restored_ai_turn_pending and _ai_turn_unit == null) or (not _movement_locked and turn_manager.is_player_turn())
 
 
 func report_reload_failed(message: String) -> void:
@@ -1457,10 +1551,8 @@ func _on_dev_play_requested() -> void:
 		if is_inside_tree() and not _dev_open:
 			get_tree().paused = false
 		return
-	var resume_restored_enemy := _restored_ai_turn_pending
 	_commit_pending_ai_history_branch()
 	_restored_ai_turn_pending = false
-	var restored_enemy := turn_manager.current_unit
 	tactical_camera.set_dev_mode_pan_enabled(false)
 	dev_terrain_editor.cancel_stroke()
 	grid.clear_dev_brush_preview()
@@ -1468,17 +1560,7 @@ func _on_dev_play_requested() -> void:
 	_dev_open = false
 	_set_dev_blocked_actions_disabled(false)
 	get_tree().paused = false
-	if (
-		resume_restored_enemy
-		and not _combat_over
-		and is_instance_valid(restored_enemy)
-		and restored_enemy == turn_manager.current_unit
-		and not restored_enemy.is_friendly()
-	):
-		_set_movement_locked(true)
-		call_deferred("_run_enemy_unit_turn", restored_enemy)
-	elif not _combat_over and turn_manager.is_player_turn():
-		_select_character(turn_manager.current_unit)
+	_resume_unit_control(turn_manager.current_unit)
 
 
 func _on_dev_save_requested(replace_path: String) -> void:
@@ -1687,6 +1769,7 @@ func _on_names_button_toggled(value: bool) -> void:
 
 
 func _set_dev_blocked_actions_disabled(disabled: bool) -> void:
+	auto_battle_button.disabled = disabled or _combat_over
 	dev_button.disabled = disabled
 	inventory_button.disabled = disabled
 	restart_button.disabled = disabled
@@ -1806,14 +1889,9 @@ func _on_turn_started(unit: TacticalCharacter) -> void:
 	_ability_range_cells.clear()
 	_ability_target_cells.clear()
 	turn_order_bar.rebuild(turn_manager.get_rotating_order(), unit)
-	if unit.is_friendly():
-		_set_movement_locked(false)
-		_select_character(unit)
-	else:
-		_set_movement_locked(true)
-		clear_selection()
-		grid.show_reachable(unit.grid_cell, {})
-		_run_enemy_unit_turn(unit)
+	_ai_turn_generation += 1
+	_ai_turn_unit = null
+	_resume_unit_control(unit)
 	_refresh_ability_bar()
 	_update_turn_hud()
 
@@ -1932,6 +2010,10 @@ func _update_turn_hud() -> void:
 		action_points_label.visible = not _combat_over and is_instance_valid(active)
 		if is_instance_valid(active):
 			action_points_label.text = "AP %d / %d" % [active.action_points, TacticalCharacter.AP_PER_TURN]
+	if auto_battle_button != null:
+		auto_battle_button.set_pressed_no_signal(auto_battle_enabled and not _combat_over)
+		auto_battle_button.text = "Auto Battle: On" if auto_battle_enabled and not _combat_over else "Auto Battle: Off"
+		auto_battle_button.disabled = _combat_over or _dev_open
 	if _combat_over:
 		end_turn_button.text = "Battle Ended"
 		end_turn_button.disabled = true
@@ -1943,8 +2025,8 @@ func _update_turn_hud() -> void:
 		return
 
 	if unit.is_friendly():
-		end_turn_button.text = "End Turn [Space]"
-		end_turn_button.disabled = _movement_locked
+		end_turn_button.text = "Auto Battle..." if auto_battle_enabled else "Finishing Action..." if _ai_turn_unit != null else "End Turn [Space]"
+		end_turn_button.disabled = _movement_locked or auto_battle_enabled or _ai_turn_unit != null
 	else:
 		end_turn_button.text = "Enemy Turn..."
 		end_turn_button.disabled = true

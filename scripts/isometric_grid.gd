@@ -4,19 +4,45 @@ extends Node2D
 
 @export var grid_size: Vector2i = Vector2i(24, 24):
 	set(value):
-		grid_size = Vector2i(maxi(1, value.x), maxi(1, value.y))
-		queue_redraw()
+		var clamped := Vector2i(maxi(1, value.x), maxi(1, value.y))
+		if grid_size == clamped:
+			return
+		grid_size = clamped
+		_invalidate_board_cache()
 
 @export var cell_size: Vector2 = Vector2(96.0, 48.0):
 	set(value):
-		cell_size = Vector2(maxf(8.0, value.x), maxf(4.0, value.y))
-		queue_redraw()
+		var clamped := Vector2(maxf(8.0, value.x), maxf(4.0, value.y))
+		if cell_size == clamped:
+			return
+		cell_size = clamped
+		_invalidate_board_cache()
 
 @export_group("Board Colors")
-@export var cell_color: Color = Color("17273b")
-@export var alternate_cell_color: Color = Color("1b3048")
-@export var grid_line_color: Color = Color("55718f")
-@export_range(0.5, 6.0, 0.5) var grid_line_width: float = 1.5
+@export var cell_color: Color = Color("17273b"):
+	set(value):
+		if cell_color == value:
+			return
+		cell_color = value
+		_invalidate_board_cache()
+@export var alternate_cell_color: Color = Color("1b3048"):
+	set(value):
+		if alternate_cell_color == value:
+			return
+		alternate_cell_color = value
+		_invalidate_board_cache()
+@export var grid_line_color: Color = Color("55718f"):
+	set(value):
+		if grid_line_color == value:
+			return
+		grid_line_color = value
+		queue_redraw()
+@export_range(0.5, 6.0, 0.5) var grid_line_width: float = 1.5:
+	set(value):
+		if grid_line_width == value:
+			return
+		grid_line_width = value
+		queue_redraw()
 
 @export_group("Movement Overlay")
 @export var reachable_color: Color = Color(0.16, 0.78, 0.88, 0.38)
@@ -47,6 +73,10 @@ var _ability_area_cells: Array[Vector2i] = []
 var _ability_trajectory_cells: Array[Vector2i] = []
 var _ability_hover_valid := false
 var _terrain_definitions: Dictionary = {}
+var _terrain_colors: Dictionary = {}
+var _board_mesh: ArrayMesh
+var _grid_line_points := PackedVector2Array()
+var _board_cache_dirty := true
 var _has_dev_brush_preview := false
 var _dev_brush_cell := Vector2i.ZERO
 var _dev_brush_color := Color(0.72, 0.78, 0.84, 0.58)
@@ -80,7 +110,14 @@ func is_in_bounds(cell: Vector2i) -> bool:
 
 func set_terrain_definitions(definitions: Dictionary) -> void:
 	_terrain_definitions = definitions.duplicate()
-	queue_redraw()
+	var colors: Dictionary = {}
+	for cell: Vector2i in _terrain_definitions:
+		var definition := get_terrain_definition(cell)
+		if definition != null:
+			colors[cell] = definition.tile_color
+	if colors != _terrain_colors:
+		_terrain_colors = colors
+		_invalidate_board_cache()
 
 
 func get_terrain_definition(cell: Vector2i) -> TileDefinition:
@@ -88,6 +125,9 @@ func get_terrain_definition(cell: Vector2i) -> TileDefinition:
 
 
 func show_dev_brush_preview(cell: Vector2i, color: Color, is_valid: bool) -> void:
+	if (_has_dev_brush_preview and _dev_brush_cell == cell
+		and _dev_brush_color == color and _dev_brush_valid == is_valid):
+		return
 	_has_dev_brush_preview = true
 	_dev_brush_cell = cell
 	_dev_brush_color = color
@@ -96,6 +136,8 @@ func show_dev_brush_preview(cell: Vector2i, color: Color, is_valid: bool) -> voi
 
 
 func clear_dev_brush_preview() -> void:
+	if not _has_dev_brush_preview:
+		return
 	_has_dev_brush_preview = false
 	queue_redraw()
 
@@ -119,6 +161,8 @@ func show_reachable(selected_cell: Vector2i, reachable_cells: Dictionary) -> voi
 
 
 func show_path(hover_cell: Vector2i, path_cells: Array[Vector2i]) -> void:
+	if _has_hover and _hover_cell == hover_cell and _path_cells == path_cells:
+		return
 	_has_hover = true
 	_hover_cell = hover_cell
 	_path_cells.clear()
@@ -127,12 +171,20 @@ func show_path(hover_cell: Vector2i, path_cells: Array[Vector2i]) -> void:
 
 
 func clear_path() -> void:
+	if not _has_hover and _path_cells.is_empty():
+		return
 	_has_hover = false
 	_path_cells.clear()
 	queue_redraw()
 
 
 func clear_overlays() -> void:
+	if (not _has_selection and not _has_hover and not _ability_mode
+		and _reachable_cells.is_empty() and _path_cells.is_empty()
+		and _ability_range_cells.is_empty() and _ability_target_cells.is_empty()
+		and _ability_area_cells.is_empty() and _ability_trajectory_cells.is_empty()
+		and not _ability_hover_valid):
+		return
 	_has_selection = false
 	_has_hover = false
 	_reachable_cells.clear()
@@ -165,6 +217,9 @@ func show_ability_preview(
 	trajectory_cells: Array[Vector2i],
 	is_valid: bool
 ) -> void:
+	if (_has_hover and _hover_cell == selected_cell and _ability_hover_valid == is_valid
+		and _ability_area_cells == affected_cells and _ability_trajectory_cells == trajectory_cells):
+		return
 	_has_hover = true
 	_hover_cell = selected_cell
 	_ability_hover_valid = is_valid
@@ -176,6 +231,8 @@ func show_ability_preview(
 
 
 func clear_ability_preview() -> void:
+	if not _has_hover and _ability_area_cells.is_empty() and _ability_trajectory_cells.is_empty():
+		return
 	_has_hover = false
 	_ability_area_cells.clear()
 	_ability_trajectory_cells.clear()
@@ -183,36 +240,31 @@ func clear_ability_preview() -> void:
 
 
 func _draw() -> void:
-	for y in range(grid_size.y):
-		for x in range(grid_size.x):
-			var cell := Vector2i(x, y)
-			var base_color := cell_color if (x + y) % 2 == 0 else alternate_cell_color
-			var terrain_definition := get_terrain_definition(cell)
-			if terrain_definition != null:
-				base_color = terrain_definition.tile_color
-			_draw_cell(cell, base_color, true)
+	_ensure_board_cache()
+	draw_mesh(_board_mesh, null)
+	draw_multiline(_grid_line_points, grid_line_color, grid_line_width, true)
 
 	if _ability_mode:
 		for range_cell: Vector2i in _ability_range_cells.keys():
 			if is_in_bounds(range_cell):
-				_draw_cell(range_cell, ability_targetable_color, false)
+				_draw_cell(range_cell, ability_targetable_color)
 		for target_cell: Vector2i in _ability_target_cells.keys():
 			if is_in_bounds(target_cell):
-				_draw_cell(target_cell, ability_valid_target_color, false)
+				_draw_cell(target_cell, ability_valid_target_color)
 		for area_cell in _ability_area_cells:
 			if is_in_bounds(area_cell):
-				_draw_cell(area_cell, ability_area_color, false)
+				_draw_cell(area_cell, ability_area_color)
 	else:
 		for reachable_cell: Vector2i in _reachable_cells.keys():
 			if is_in_bounds(reachable_cell):
-				_draw_cell(reachable_cell, reachable_color, false)
+				_draw_cell(reachable_cell, reachable_color)
 
 	if _has_selection and is_in_bounds(_selected_cell):
-		_draw_cell(_selected_cell, selected_color, false)
+		_draw_cell(_selected_cell, selected_color)
 
 	if _has_hover and is_in_bounds(_hover_cell):
 		var hovered_color := ability_valid_color if _ability_hover_valid else ability_invalid_color
-		_draw_cell(_hover_cell, hovered_color if _ability_mode else hover_color, false)
+		_draw_cell(_hover_cell, hovered_color if _ability_mode else hover_color)
 
 	if _path_cells.size() > 1:
 		var points := PackedVector2Array()
@@ -235,9 +287,72 @@ func _draw() -> void:
 	if _has_dev_brush_preview and is_in_bounds(_dev_brush_cell):
 		_draw_cell(
 			_dev_brush_cell,
-			_dev_brush_color if _dev_brush_valid else ability_invalid_color,
-			false
+			_dev_brush_color if _dev_brush_valid else ability_invalid_color
 		)
+
+
+func _invalidate_board_cache() -> void:
+	_board_cache_dirty = true
+	queue_redraw()
+
+
+func _ensure_board_cache() -> void:
+	if not _board_cache_dirty and _board_mesh != null:
+		return
+	var cell_count := grid_size.x * grid_size.y
+	var vertices := PackedVector3Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	vertices.resize(cell_count * 4)
+	colors.resize(cell_count * 4)
+	indices.resize(cell_count * 6)
+	var half_width := cell_size.x * 0.5
+	var half_height := cell_size.y * 0.5
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			var cell := Vector2i(x, y)
+			var center := grid_to_world(cell)
+			var cell_index := y * grid_size.x + x
+			var vertex_index := cell_index * 4
+			vertices[vertex_index] = Vector3(center.x, center.y - half_height, 0.0)
+			vertices[vertex_index + 1] = Vector3(center.x + half_width, center.y, 0.0)
+			vertices[vertex_index + 2] = Vector3(center.x, center.y + half_height, 0.0)
+			vertices[vertex_index + 3] = Vector3(center.x - half_width, center.y, 0.0)
+			var base_color := cell_color if (x + y) % 2 == 0 else alternate_cell_color
+			var fill_color: Color = _terrain_colors.get(cell, base_color)
+			for corner in range(4):
+				colors[vertex_index + corner] = fill_color
+			var index_offset := cell_index * 6
+			indices[index_offset] = vertex_index
+			indices[index_offset + 1] = vertex_index + 1
+			indices[index_offset + 2] = vertex_index + 2
+			indices[index_offset + 3] = vertex_index
+			indices[index_offset + 4] = vertex_index + 2
+			indices[index_offset + 5] = vertex_index + 3
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	_board_mesh = ArrayMesh.new()
+	_board_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	# Full rows and columns share their edges, so each grid line is drawn once.
+	_grid_line_points.clear()
+	for x in range(grid_size.x + 1):
+		_grid_line_points.append(_project_grid_point(Vector2(float(x) - 0.5, -0.5)))
+		_grid_line_points.append(_project_grid_point(Vector2(float(x) - 0.5, float(grid_size.y) - 0.5)))
+	for y in range(grid_size.y + 1):
+		_grid_line_points.append(_project_grid_point(Vector2(-0.5, float(y) - 0.5)))
+		_grid_line_points.append(_project_grid_point(Vector2(float(grid_size.x) - 0.5, float(y) - 0.5)))
+	_board_cache_dirty = false
+
+
+func _project_grid_point(point: Vector2) -> Vector2:
+	return Vector2(
+		(point.x - point.y) * cell_size.x * 0.5,
+		(point.x + point.y) * cell_size.y * 0.5
+	)
 
 
 func _clear_ability_state() -> void:
@@ -249,7 +364,7 @@ func _clear_ability_state() -> void:
 	_ability_hover_valid = false
 
 
-func _draw_cell(cell: Vector2i, fill_color: Color, draw_outline: bool) -> void:
+func _draw_cell(cell: Vector2i, fill_color: Color) -> void:
 	var center := grid_to_world(cell)
 	var half_width := cell_size.x * 0.5
 	var half_height := cell_size.y * 0.5
@@ -260,6 +375,3 @@ func _draw_cell(cell: Vector2i, fill_color: Color, draw_outline: bool) -> void:
 		center + Vector2(-half_width, 0.0),
 	])
 	draw_colored_polygon(points, fill_color)
-	if draw_outline:
-		points.append(points[0])
-		draw_polyline(points, grid_line_color, grid_line_width, true)

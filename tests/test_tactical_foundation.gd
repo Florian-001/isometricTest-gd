@@ -43,6 +43,99 @@ func test_grid_coordinates_and_bounds() -> void:
 	assert_false(grid.is_in_bounds(Vector2i(8, 5)), "cell beyond width should be out of bounds")
 
 
+func test_grid_render_mesh_matches_rectangular_cells() -> void:
+	var grid := track(IsometricGridScript.new()) as IsometricGrid
+	grid.grid_size = Vector2i(3, 2)
+	grid.cell_size = Vector2(80.0, 40.0)
+	var tile := TileDefinition.new()
+	tile.tile_color = Color("cc3344")
+	grid.set_terrain_definitions({Vector2i(1, 0): tile})
+	grid._ensure_board_cache()
+	var arrays := grid._board_mesh.surface_get_arrays(0)
+	assert_eq(arrays[Mesh.ARRAY_VERTEX].size(), 24, "six diamonds should have four vertices each")
+	assert_eq(arrays[Mesh.ARRAY_INDEX].size(), 36, "six diamonds should render as twelve triangles")
+	assert_eq(arrays[Mesh.ARRAY_VERTEX][4], Vector3(40.0, 0.0, 0.0), "mesh vertices should match the existing cell projection")
+	assert_true(arrays[Mesh.ARRAY_COLOR][0].is_equal_approx(grid.cell_color), "even cells should preserve the board color")
+	assert_true(arrays[Mesh.ARRAY_COLOR][4].is_equal_approx(tile.tile_color), "terrain should replace the checkerboard color")
+	assert_true(arrays[Mesh.ARRAY_COLOR][12].is_equal_approx(grid.alternate_cell_color), "odd cells should preserve the alternate color")
+	assert_eq(grid._grid_line_points.size(), 14, "a 3x2 board needs four column lines and three row lines")
+	var line_bounds := Rect2(grid._grid_line_points[0], Vector2.ZERO)
+	for point in grid._grid_line_points:
+		line_bounds = line_bounds.expand(point)
+	assert_eq(line_bounds, grid.get_local_bounds(), "outer grid lines should match board bounds")
+
+
+func test_grid_render_cache_reuses_geometry_for_overlays() -> void:
+	var grid := track(IsometricGridScript.new()) as IsometricGrid
+	grid._ensure_board_cache()
+	var mesh := grid._board_mesh
+	var lines := grid._grid_line_points.duplicate()
+	grid.show_reachable(Vector2i.ZERO, {Vector2i.ONE: 1.414})
+	grid.show_path(Vector2i.ONE, [Vector2i.ZERO, Vector2i.ONE])
+	grid.clear_path()
+	grid.clear_path()
+	grid.show_ability_targets(Vector2i.ZERO, {Vector2i.ONE: 1.414})
+	grid.show_ability_preview(Vector2i.ONE, [Vector2i.ONE], [Vector2i.ZERO, Vector2i.ONE], true)
+	grid.clear_ability_preview()
+	grid.clear_ability_preview()
+	grid.show_dev_brush_preview(Vector2i.ONE, Color.RED, true)
+	grid.clear_dev_brush_preview()
+	grid.clear_dev_brush_preview()
+	grid.clear_overlays()
+	grid.clear_overlays()
+	grid._ensure_board_cache()
+	assert_eq(grid._board_mesh, mesh, "hover, movement, targeting, and brush previews must reuse the board mesh")
+	assert_eq(grid._grid_line_points, lines, "overlay updates must reuse the shared grid lines")
+	assert_eq(lines.size(), 100, "a 24x24 board should use only fifty shared grid lines")
+
+
+func test_grid_render_cache_rebuilds_for_board_edits() -> void:
+	var grid := track(IsometricGridScript.new()) as IsometricGrid
+	grid._ensure_board_cache()
+	var replacements := {
+		"grid_size": Vector2i(5, 3),
+		"cell_size": Vector2(80.0, 40.0),
+		"cell_color": Color("223344"),
+		"alternate_cell_color": Color("334455"),
+	}
+	for property in replacements:
+		var mesh := grid._board_mesh
+		grid.set(property, grid.get(property))
+		grid._ensure_board_cache()
+		assert_eq(grid._board_mesh, mesh, "unchanged %s should preserve cached geometry" % property)
+		grid.set(property, replacements[property])
+		grid._ensure_board_cache()
+		assert_true(grid._board_mesh != mesh, "changed %s should rebuild cached geometry" % property)
+	var mesh := grid._board_mesh
+	grid.grid_line_color = Color.WHITE
+	grid.grid_line_width = 3.0
+	grid._ensure_board_cache()
+	assert_eq(grid._board_mesh, mesh, "line styling should redraw without rebuilding cell geometry")
+
+
+func test_grid_render_cache_tracks_terrain_colors() -> void:
+	var grid := track(IsometricGridScript.new()) as IsometricGrid
+	grid.grid_size = Vector2i(2, 2)
+	var tile := TileDefinition.new()
+	tile.tile_color = Color("cc3344")
+	var definitions := {Vector2i.ZERO: tile}
+	grid.set_terrain_definitions(definitions)
+	grid._ensure_board_cache()
+	var mesh := grid._board_mesh
+	tile.movement_cost_multiplier = 2.0
+	grid.set_terrain_definitions(definitions)
+	grid._ensure_board_cache()
+	assert_eq(grid._board_mesh, mesh, "terrain refreshes without color changes must reuse the mesh")
+	tile.tile_color = Color("33cc55")
+	grid.set_terrain_definitions(definitions)
+	grid._ensure_board_cache()
+	assert_true(grid._board_mesh != mesh, "editing a shared terrain color should rebuild the mesh")
+	assert_true(grid._board_mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR][0].is_equal_approx(tile.tile_color), "the rebuilt mesh should use the edited resource color")
+	grid.set_terrain_definitions({})
+	grid._ensure_board_cache()
+	assert_true(grid._board_mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR][0].is_equal_approx(grid.cell_color), "erasing or restoring terrain should restore the checkerboard color")
+
+
 func test_path_costs_and_budget_boundaries() -> void:
 	var pathfinder = GridPathfinderScript.new(Vector2i(5, 5))
 	var orthogonal_path: Array[Vector2i] = pathfinder.find_path(Vector2i.ZERO, Vector2i(2, 0))

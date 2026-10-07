@@ -64,6 +64,9 @@ enum WeaponHandedness {
 @export var weapon_handedness: WeaponHandedness = WeaponHandedness.ONE_HANDED
 ## Melee and Ranged abilities require the matching equipped weapon type.
 @export var weapon_type: WeaponType = WeaponType.MELEE
+## Optional friendly basic attack. Empty uses Strike for Melee or Shoot for Ranged.
+## Set the attack's range, damage type, and stat scaling on its AbilityDefinition.
+@export var basic_attack_override: AbilityDefinition
 ## Added to damaging abilities whose Ability Type matches this weapon.
 ## Non-weapon items should leave this at zero.
 @export_range(0, 9999, 1, "or_greater") var weapon_damage: int = 0
@@ -81,6 +84,8 @@ enum WeaponHandedness {
 func get_granted_abilities() -> Array[AbilityDefinition]:
 	if slot != EquipmentSlot.WEAPON:
 		return []
+	if basic_attack_override != null:
+		return [basic_attack_override]
 	# Load lazily: ability definitions also reference item weapon types.
 	var path := "res://resources/abilities/strike.tres" if weapon_type == WeaponType.MELEE else "res://resources/abilities/arrow.tres"
 	return [load(path) as AbilityDefinition]
@@ -104,5 +109,5 @@ func conflicts_with(other: ItemDefinition) -> bool:
 
 
 func _validate_property(property: Dictionary) -> void:
-	if property.name in [&"weapon_handedness", &"weapon_type", &"weapon_range_bonus", &"status_effect"] and slot != EquipmentSlot.WEAPON:
+	if property.name in [&"weapon_handedness", &"weapon_type", &"basic_attack_override", &"weapon_range_bonus", &"status_effect"] and slot != EquipmentSlot.WEAPON:
 		property.usage = property.usage & ~PROPERTY_USAGE_EDITOR

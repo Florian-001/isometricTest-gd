@@ -898,6 +898,7 @@ func test_automatic_item_catalog_and_typed_array_editor_model() -> void:
 		"Speed Charm",
 		"Staff",
 		"Strength Charm",
+		"Wand",
 		"Wolf Claws",
 		"Wooden Shield",
 		"Wooden Sword",

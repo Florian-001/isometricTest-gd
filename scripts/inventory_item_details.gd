@@ -23,6 +23,8 @@ func show_item(item: ItemDefinition, equipped: bool) -> void:
 		for ability in item.get_granted_abilities():
 			granted_names.append(ability.display_name)
 		lines.append("Grants while equipped: %s" % ", ".join(granted_names))
+		if item.basic_attack_override != null:
+			lines.append(item.basic_attack_override.get_description())
 		if item.status_effect != null:
 			lines.append("Applies %s\n%s" % [item.status_effect.display_name, item.status_effect.get_description()])
 	if item.armor > 0:

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="ability"]
+
+[resource]
+script = ExtResource("ability")
+display_name = "Wand Shot"
+ap_cost = 1
+cooldown_turns = 1
+ability_type = 1
+requires_weapon = true
+hit_count = 1
+effect = 1
+damage_type = 1
+innate_damage = 0
+scaling_stat = 3
+scaling_amount = 100.0
+range = 5.0
+accepts_weapon_range_bonus = false
+delivery_type = 0
+target_flags = 10
+placeholder_color = Color(0.65, 0.42, 0.94, 1)
+projectile_speed = 760.0

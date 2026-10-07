@@ -1,13 +1,12 @@
-[gd_resource type="Resource" script_class="ItemDefinition" format=3]
+[gd_resource type="Resource" script_class="ItemDefinition" format=3 uid="uid://bq13l14m1snqu"]
 
-[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
-[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
-[ext_resource type="Texture2D" path="res://assets/item_icons/constitution_charm.svg" id="icon"]
+[ext_resource type="Texture2D" uid="uid://dos1bc8q0sybw" path="res://assets/item_icons/constitution_charm.svg" id="icon"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
 
 [sub_resource type="Resource" id="ConstitutionBonus"]
 script = ExtResource("modifier")
 stat = 7
-operation = 0
 value = 1.0
 
 [resource]

@@ -1,13 +1,11 @@
-[gd_resource type="Resource" script_class="ItemDefinition" format=3]
+[gd_resource type="Resource" script_class="ItemDefinition" format=3 uid="uid://cuqnqmf3da6rn"]
 
-[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
-[ext_resource type="Script" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
-[ext_resource type="Texture2D" path="res://assets/item_icons/strength_charm.svg" id="icon"]
+[ext_resource type="Texture2D" uid="uid://kwmbixlmv1sc" path="res://assets/item_icons/strength_charm.svg" id="icon"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Script" uid="uid://ddgue458g77bw" path="res://scripts/stat_modifier_definition.gd" id="modifier"]
 
 [sub_resource type="Resource" id="StrengthBonus"]
 script = ExtResource("modifier")
-stat = 1
-operation = 0
 value = 1.0
 
 [resource]

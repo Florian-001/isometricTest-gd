@@ -1,9 +1,20 @@
-[gd_scene format=3]
-[ext_resource type="PackedScene" path="res://scenes/friendlies/friend_b.tscn" id="base"]
-[ext_resource type="Resource" path="res://resources/items/weapons/iron_sword.tres" id="weapon"]
-[ext_resource type="Script" path="res://scripts/item_definition.gd" id="item"]
-[node name="Warrior" instance=ExtResource("base")]
+[gd_scene format=3 uid="uid://dceyx4tp4jrm0"]
+
+[ext_resource type="Script" uid="uid://bjahsdfmwux0" path="res://scripts/character_class_level.gd" id="2_45yir"]
+[ext_resource type="Resource" uid="uid://1b2lkaipypt5" path="res://resources/classes/warrior.tres" id="3_2or5m"]
+[ext_resource type="PackedScene" uid="uid://d8ur1qmm0op" path="res://scenes/friendlies/friend_b.tscn" id="base"]
+[ext_resource type="Script" uid="uid://b0x3t72an07bl" path="res://scripts/item_definition.gd" id="item"]
+[ext_resource type="Resource" uid="uid://xccmj1h4s5sn" path="res://resources/items/weapons/iron_sword.tres" id="weapon"]
+
+[sub_resource type="Resource" id="Resource_6jflg"]
+script = ExtResource("2_45yir")
+character_class = ExtResource("3_2or5m")
+
+[node name="Warrior" unique_id=79662398 instance=ExtResource("base")]
 scenario_unit_id = "vanguard"
-override_template_abilities = false
+class_level_overrides = Array[ExtResource("2_45yir")]([SubResource("Resource_6jflg")])
 use_complete_equipment_override = true
 complete_equipment_overrides = Array[ExtResource("item")]([ExtResource("weapon")])
+
+[node name="UnitNameLabel" parent="." index="0" unique_id=1512159812]
+text = "Warrior"

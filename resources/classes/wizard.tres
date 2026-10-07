@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="CharacterClassDefinition" format=3 uid="uid://ca0h7tuq5ao7d"]
 
+[ext_resource type="Resource" uid="uid://c04280vi2qtp2" path="res://resources/ai/general_ai.tres" id="7_i4enn"]
 [ext_resource type="Resource" uid="uid://fbimwcq8pc21" path="res://resources/abilities/ice_shard.tres" id="ability_0"]
 [ext_resource type="Resource" uid="uid://dtnblflinhkn2" path="res://resources/abilities/searing_dagger.tres" id="ability_1"]
 [ext_resource type="Resource" uid="uid://opj3rm2mkqq2" path="res://resources/abilities/slow.tres" id="ability_2"]
@@ -36,10 +37,11 @@ required_level = 5
 script = ExtResource("class")
 class_id = &"wizard"
 display_name = "Wizard"
-default_strength = 1
-default_dexterity = 1
-default_intelligence = 1
+ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_0"), SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("Unlock_3"), SubResource("Unlock_4")])
+default_strength = 3
+default_dexterity = 3
+default_intelligence = 5
 default_constitution = 6
 default_speed = 10
 default_movement_range = 6.0
-ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_0"), SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("Unlock_3"), SubResource("Unlock_4")])
+ai_profile = ExtResource("7_i4enn")

@@ -1,7 +1,8 @@
 [gd_resource type="Resource" script_class="CharacterClassDefinition" format=3 uid="uid://dqg22tukqmrdd"]
 
+[ext_resource type="Resource" uid="uid://c04280vi2qtp2" path="res://resources/ai/general_ai.tres" id="5_war20"]
 [ext_resource type="Resource" uid="uid://coxj05o5g75fi" path="res://resources/abilities/focus.tres" id="ability_1"]
-[ext_resource type="Resource" path="res://resources/abilities/multiple_arrows.tres" id="ability_2"]
+[ext_resource type="Resource" uid="uid://ccbeterf740qn" path="res://resources/abilities/multiple_arrows.tres" id="ability_2"]
 [ext_resource type="Resource" uid="uid://c8qd6osq44oot" path="res://resources/abilities/dagger_throw.tres" id="ability_3"]
 [ext_resource type="Script" uid="uid://cb2sfxg1krtk4" path="res://scripts/character_class_definition.gd" id="class"]
 [ext_resource type="Script" uid="uid://dtcq17r6pgivp" path="res://scripts/class_ability_unlock.gd" id="unlock"]
@@ -24,10 +25,11 @@ required_level = 4
 script = ExtResource("class")
 class_id = &"archer"
 display_name = "Archer"
-default_strength = 1
-default_dexterity = 1
-default_intelligence = 1
+ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("Unlock_3")])
+default_strength = 3
+default_dexterity = 5
+default_intelligence = 3
 default_constitution = 12
 default_speed = 12
 default_movement_range = 6.0
-ability_unlocks = Array[ExtResource("unlock")]([SubResource("Unlock_1"), SubResource("Unlock_2"), SubResource("Unlock_3")])
+ai_profile = ExtResource("5_war20")

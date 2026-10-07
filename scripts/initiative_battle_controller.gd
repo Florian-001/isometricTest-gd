@@ -336,6 +336,7 @@ func _connect_character(character: TacticalCharacter) -> void:
 	character.passive_context_changed.connect(_queue_passive_refresh)
 	character.passive_abilities_changed.connect(_queue_passive_refresh)
 	character.class_progression_changed.connect(_on_character_class_progression_changed.bind(character))
+	character.stats_changed.connect(_on_character_class_progression_changed.bind(character))
 	character.movement_remaining_changed.connect(
 		_on_unit_movement_changed.bind(character)
 	)

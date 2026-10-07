@@ -78,4 +78,18 @@ static func from_data(data: Dictionary) -> RunPartyMember:
 		return null
 	if not CharacterClassProgression.prepare_setup(member.setup).is_empty():
 		return null
+	member.refresh_health_limits()
 	return member
+
+
+## Use current class defaults and saved equipment without restoring temporary battle statuses.
+func refresh_health_limits() -> void:
+	var character := TacticalCharacter.new()
+	var restored_setup := setup.duplicate(true)
+	restored_setup["complete_equipment"] = true
+	restored_setup["equipment"] = Array(equipment)
+	restored_setup["legacy_equipment"] = []
+	character.apply_setup_state(restored_setup)
+	max_health = character.get_max_health_without_statuses()
+	health = 0 if lost else clampi(health, 0, max_health)
+	character.free()

@@ -15,9 +15,6 @@ character_class = ExtResource("class")
 [node name="FriendB" type="Node2D" unique_id=1973832459]
 script = ExtResource("1_actor")
 definition = ExtResource("2_definition")
-constitution_override = 25
-movement_range_override = 5.0
-speed_override = 8
 class_level_overrides = Array[ExtResource("class_level")]([SubResource("Resource_kbadr")])
 facing_left_texture = ExtResource("3_left")
 facing_right_texture = ExtResource("4_right")

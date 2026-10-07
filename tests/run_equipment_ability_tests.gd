@@ -58,6 +58,10 @@ func _unit(friendly: bool, cell: Vector2i) -> TacticalCharacter:
 	unit.definition.constitution = 100
 	unit.definition.strength = 10
 	unit.definition.dexterity = 10
+	# These fixtures require fixed combat values regardless of the allocated class.
+	unit.constitution_override = 100
+	unit.strength_override = 10
+	unit.dexterity_override = 10
 	unit.use_complete_equipment_override = true
 	unit.starting_grid_cell = cell
 	arena.add_child(unit)

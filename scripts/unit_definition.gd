@@ -14,7 +14,10 @@ enum Faction {
 
 @export_category("Friendly Class")
 ## Friendlies start at level one in this class unless their scene overrides the allocation.
-@export var starting_class: CharacterClassDefinition
+@export var starting_class: CharacterClassDefinition:
+	set(value):
+		starting_class = value
+		emit_changed()
 
 @export_category("Stats")
 @export_range(0.0, 100.0, 0.5) var movement_range: float = 6.0

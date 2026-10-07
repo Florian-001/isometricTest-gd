@@ -146,7 +146,7 @@ func open_panel(initial_tab := UNIT_TAB) -> void:
 
 func close_panel() -> void:
 	hide()
-	_selected_unit = null
+	clear_unit_selection()
 
 
 func _focus_play_button() -> void:
@@ -160,13 +160,26 @@ func set_dirty(value: bool) -> void:
 
 
 func select_unit(unit: TacticalCharacter) -> void:
+	_disconnect_selected_unit()
 	_selected_unit = unit
+	if is_instance_valid(_selected_unit):
+		_selected_unit.stats_changed.connect(_refresh_selected_unit)
+		_selected_unit.class_progression_changed.connect(_refresh_selected_unit)
 	_refresh_selected_unit()
 
 
 func clear_unit_selection() -> void:
+	_disconnect_selected_unit()
 	_selected_unit = null
 	_refresh_selected_unit()
+
+
+func _disconnect_selected_unit() -> void:
+	if not is_instance_valid(_selected_unit):
+		return
+	for source in [_selected_unit.stats_changed, _selected_unit.class_progression_changed]:
+		if source.is_connected(_refresh_selected_unit):
+			source.disconnect(_refresh_selected_unit)
 
 
 func get_selected_unit() -> TacticalCharacter:
@@ -579,28 +592,15 @@ func _refresh_selected_unit() -> void:
 
 
 func _base_stat_value(stat: UnitStat.Type) -> float:
-	if _selected_unit == null or _selected_unit.definition == null:
+	if _selected_unit == null:
 		return 0.0
-	match stat:
-		UnitStat.Type.STRENGTH:
-			return _selected_unit.strength_override if _selected_unit.strength_override >= 0 else _selected_unit.definition.strength
-		UnitStat.Type.DEXTERITY:
-			return _selected_unit.dexterity_override if _selected_unit.dexterity_override >= 0 else _selected_unit.definition.dexterity
-		UnitStat.Type.INTELLIGENCE:
-			return _selected_unit.intelligence_override if _selected_unit.intelligence_override >= 0 else _selected_unit.definition.intelligence
-		UnitStat.Type.CONSTITUTION:
-			return _selected_unit.constitution_override if _selected_unit.constitution_override >= 0 else _selected_unit.definition.constitution
-		UnitStat.Type.SPEED:
-			return _selected_unit.speed_override if _selected_unit.speed_override >= 0 else _selected_unit.definition.speed
-	return 0.0
+	return _selected_unit.get_base_stat(stat)
 
 
 func _base_movement_value() -> float:
 	if _selected_unit == null:
 		return 0.0
-	if _selected_unit.movement_range_override >= 0.0:
-		return _selected_unit.movement_range_override
-	return _selected_unit.definition.movement_range if _selected_unit.definition != null else 0.0
+	return _selected_unit._get_base_movement_range()
 
 
 func _rebuild_abilities() -> void:

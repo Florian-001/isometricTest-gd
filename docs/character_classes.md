@@ -8,13 +8,52 @@ Every friendly class has **Strike** when unarmed (100% effective Strength) or eq
 
 ## Starting characters and multiclassing
 
+### Editing class default stats
+
+In Godot's **FileSystem** dock, select a class resource under `resources/classes/`
+(Warrior, Archer, Wizard, or Cleric). Its Inspector has a **Default Stats** section
+for **Default Strength**, **Default Dexterity**, **Default Intelligence**,
+**Default Constitution**, **Default Speed**, and **Default Movement Range**.
+Save the resource after editing. Each class's values are independent.
+
+| Class | Strength | Dexterity | Intelligence | Constitution | Speed | Base movement |
+| --- | --- | --- | --- | --- | --- | --- |
+| Warrior | 1 | 1 | 1 | 25 | 8 | 5 |
+| Archer | 1 | 1 | 1 | 12 | 12 | 6 |
+| Wizard | 1 | 1 | 1 | 6 | 10 | 6 |
+| Cleric | 1 | 1 | 1 | 6 | 10 | 6 |
+
+Each stat resolves **individual unit override → first allocated class default →
+Character Template**. Use **-1** on a unit to inherit the class value, or on a
+class default to inherit the template value. **0** is an explicit value, subject
+to the existing health/movement minimums. Classes with no authored defaults keep
+their previous template behavior. Enemies continue using templates and overrides.
+
+For multiclass characters, the **first entry** in Class Level Overrides supplies
+defaults regardless of invested levels. Reordering or removing that entry changes
+the stat source. Later classes grant their abilities without contributing stats.
+
+These fields are base values before equipment and statuses. HP remains derived
+from effective Constitution (currently ×4); initiative uses effective Speed.
+Default Movement Range is **before Speed adjustment**: the starting Warrior's
+5 base movement becomes 4.5 at Speed 8, and Archer's 6 becomes 6.5 at Speed 12.
+Existing shared scaling rules, equipment, and statuses still apply. Live changes
+refresh unit previews and stats, clamp health/movement to reduced maxima, and
+never grant healing or restore spent movement.
+
+Saved characters use current class defaults for inherited stats on load. Saved
+individual overrides remain authoritative, including older Warrior and Archer
+Constitution/Speed/movement overrides. Restored party HP limits use current
+classes and saved equipment; health is clamped without healing or reviving lost
+members. No save version change is required.
+
 Set **Starting Class** on a friendly Character Template. A character inherits that class at level 1. To customize one character, edit its **Friendly Class Progression → Class Level Overrides** array. Each `CharacterClassLevel` entry contains a class resource and invested level. An empty array inherits the template; a populated array replaces it.
 
 Class resources also expose an optional **Auto Battle → AI Profile**, using the same `EnemyAIProfile` resources and scoring controls as enemies. During Auto Battle, the unit's **Tactical AI → AI Profile Override** takes priority, followed by the first class in allocation order with a configured profile, then General AI. Empty class profiles are skipped; profiles are not blended and levels do not determine priority. Reordering or changing classes affects the next automated action. Class profiles default to empty and do not affect manual control. See [AI scoring](ai_scoring.md) for examples and save behavior.
 
 FriendA and the run Archer start as Archer 1. FriendB and the Vanguard start as Warrior 1. The generic adventurer template starts as Warrior; the spellcaster template starts as Wizard. The default run still has two characters.
 
-Total level is the sum of class levels: **Warrior 2 / Wizard 1 is level 3**, with Strike, Charge, Bloodlust, and Ice Shard when equipped with a melee weapon. Class levels do not increase each other. Any combination of classes is allowed, without prerequisites. Level changes grant no stat bonuses or equipment restrictions. Levels beyond the final unlock are valid.
+Total level is the sum of class levels: **Warrior 2 / Wizard 1 is level 3**. Class levels do not increase each other. Any combination of classes is allowed, without prerequisites. Increasing levels grants no stat bonuses or equipment restrictions; changing the first allocated class selects its defaults. Levels beyond the final unlock are valid.
 
 This version uses manual authoring and developer edits. It does not award XP or levels for victories and has no player level-up screen.
 
@@ -75,6 +114,7 @@ Run from the project directory with Godot 4.7:
 
 ```text
 godot --headless --path . --script res://tests/run_character_class_tests.gd
+godot --headless --path . --script res://tests/run_class_stat_tests.gd
 godot --headless --editor --path . --script res://tests/run_character_class_editor_tests.gd
 godot --headless --path . --script res://tests/run_dev_mode_unit.gd
 godot --headless --path . --script res://tests/run_dev_mode_integration.gd
@@ -90,6 +130,20 @@ godot --headless --path . --script res://tests/run_active_enemy_ai_integration.g
 
 The class suites cover unlock boundaries, ordering, deduplication, instance isolation, invalid allocations, execution enforcement, developer bypass, controls, persistence, legacy migration, and real Inspector save/reload. Test saves are isolated under `.godot/class_validation/`.
 
-All commands above passed on Godot 4.7.1. Combat-progression integration also passed; the full-run integration exercised ten battles. For visual captures of class controls, unlock previews, the bypass, inventory, and the run party strip, run the class suite without `--headless` and append `-- --capture`. Images are written under the same test directory.
+Default-stat verification passes 149 runtime checks, the real Inspector suite
+(headless and OpenGL), run-state saves, inventory integration, and friendly AI
+profiles. It covers all six fields, inheritance, zero overrides, multiclass order,
+nested Inspector allocation edits, modifiers, live battle/developer displays,
+resource save/reload, and saved health reconciliation. Add `-- --capture` to the
+graphical Inspector runner to save `default_stats_inspector.png` under the same
+test directory. Runtime fixtures live under `.godot/class_stat_validation/`.
+
+The current authored ability unlocks and encounter layout differ from some older
+class, starting-hub, equipment, and developer test expectations. Those failures
+were compared against an untouched HEAD checkout and are identical. The armor
+suite passes its 120 assertions but reproduces an engine shutdown crash in both
+checkouts; Inspector runners retain existing shutdown allocation diagnostics.
+
+At the original class feature's verification, the commands above passed on Godot 4.7.1. Combat-progression integration also passed; the full-run integration exercised ten battles. For visual captures of class controls, unlock previews, the bypass, inventory, and the run party strip, run the class suite without `--headless` and append `-- --capture`. Images are written under the same test directory.
 
 The full `run_headless.gd` suite still reports seven failures involving existing item/catalog/stat/HP sample expectations and AI disengagement/performance, plus script errors in stale sample fixtures referencing removed content. The disengagement assertion was reproduced with the previous template-loadout behavior in an isolated fixture. Those unrelated gameplay/data expectations were not changed. As with the project's other custom editor suites, the Inspector test passes its assertions but reports Godot allocation warnings during editor shutdown.

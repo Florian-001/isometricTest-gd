@@ -47,9 +47,11 @@ signal class_progression_changed
 @export_category("Character Template")
 @export var definition: CharacterDefinition:
 	set(value):
+		if not _class_stat_state.is_empty():
+			_remember_class_stat_state()
 		definition = value
-		_refresh_passive_sources()
 		_runtime_stats_initialized = false
+		_refresh_passive_sources()
 		if Engine.is_editor_hint():
 			notify_property_list_changed()
 		queue_redraw()
@@ -72,8 +74,8 @@ var enemy_ai_profile: EnemyAIProfile:
 		ai_profile_override = value
 
 @export_category("Unit Stats")
-## Set to zero or higher to override the template's Constitution for this unit.
-## Set to -1 to inherit the value from Character Template.
+## Set to zero or higher to override Constitution for this unit.
+## -1 inherits the first friendly class's default, then the Character Template.
 @export_range(-1, 999, 1, "or_greater") var constitution_override: int = -1:
 	set(value):
 		constitution_override = maxi(-1, value)
@@ -97,11 +99,11 @@ var enemy_ai_profile: EnemyAIProfile:
 	get:
 		return get_max_armor()
 
-## Set to zero or higher to override the template's movement range for this unit.
-## Set to -1 to inherit the value from Character Template.
+## Set to zero or higher to override base movement BEFORE Speed adjustment.
+## -1 inherits the first friendly class's default, then the Character Template.
 @export_range(-1.0, 100.0, 0.5, "or_greater") var movement_range_override: float = -1.0
 
-## Primary-stat overrides use -1 to inherit from the Character Template.
+## -1 inherits the first friendly class's default, then the Character Template.
 @export_range(-1, 999, 1, "or_greater") var strength_override: int = -1
 @export_range(-1, 999, 1, "or_greater") var dexterity_override: int = -1
 @export_range(-1, 999, 1, "or_greater") var intelligence_override: int = -1
@@ -111,7 +113,10 @@ var enemy_ai_profile: EnemyAIProfile:
 ## Empty inherits the template's Starting Class at level one. Entries are independent per unit.
 @export var class_level_overrides: Array[CharacterClassLevel] = []:
 	set(value):
+		if not _class_stat_state.is_empty():
+			_remember_class_stat_state()
 		class_level_overrides = CharacterClassProgression.copy_levels(value)
+		_refresh_class_stats()
 		class_progression_changed.emit()
 		if Engine.is_editor_hint():
 			update_configuration_warnings()
@@ -219,6 +224,7 @@ func _ready() -> void:
 	grid_cell = starting_grid_cell
 	current_facing = initial_facing
 	current_health = get_max_health()
+	_remember_class_stat_state()
 	_armor_damage_spent = 0
 	_sync_map_presence()
 	_refresh_unit_name_label()
@@ -437,7 +443,38 @@ func get_movement_range() -> float:
 func _get_base_movement_range() -> float:
 	if movement_range_override >= 0.0:
 		return movement_range_override
-	return definition.movement_range if definition != null else 0.0
+	return _get_inherited_stat(UnitStat.Type.MOVEMENT_RANGE)
+
+
+func _get_stats_class() -> CharacterClassDefinition:
+	if not is_friendly():
+		return null
+	if not class_level_overrides.is_empty():
+		var first := class_level_overrides[0]
+		return first.character_class if first != null and first.level > 0 else null
+	return definition.starting_class
+
+
+func _get_inherited_stat(stat: UnitStat.Type) -> float:
+	var character_class := _get_stats_class()
+	if character_class != null:
+		var class_default := character_class.get_default_stat(stat)
+		if class_default >= 0.0:
+			return class_default
+	match stat:
+		UnitStat.Type.STRENGTH:
+			return float(definition.strength) if definition != null else 0.0
+		UnitStat.Type.DEXTERITY:
+			return float(definition.dexterity) if definition != null else 0.0
+		UnitStat.Type.INTELLIGENCE:
+			return float(definition.intelligence) if definition != null else 0.0
+		UnitStat.Type.CONSTITUTION:
+			return float(definition.constitution) if definition != null else 1.0
+		UnitStat.Type.SPEED:
+			return float(definition.speed) if definition != null else 0.0
+		UnitStat.Type.MOVEMENT_RANGE:
+			return definition.movement_range if definition != null else 0.0
+	return 0.0
 
 
 func get_initiative() -> int:
@@ -455,23 +492,23 @@ func _get_base_stat_for_sources(stat: UnitStat.Type, include_equipment: bool) ->
 		UnitStat.Type.STRENGTH:
 			if strength_override >= 0:
 				return float(strength_override)
-			return float(definition.strength) if definition != null else 0.0
+			return _get_inherited_stat(stat)
 		UnitStat.Type.DEXTERITY:
 			if dexterity_override >= 0:
 				return float(dexterity_override)
-			return float(definition.dexterity) if definition != null else 0.0
+			return _get_inherited_stat(stat)
 		UnitStat.Type.INTELLIGENCE:
 			if intelligence_override >= 0:
 				return float(intelligence_override)
-			return float(definition.intelligence) if definition != null else 0.0
+			return _get_inherited_stat(stat)
 		UnitStat.Type.CONSTITUTION:
 			if constitution_override >= 0:
 				return float(constitution_override)
-			return float(definition.constitution) if definition != null else 1.0
+			return _get_inherited_stat(stat)
 		UnitStat.Type.SPEED:
 			if speed_override >= 0:
 				return float(speed_override)
-			return float(definition.speed) if definition != null else 0.0
+			return _get_inherited_stat(stat)
 		UnitStat.Type.MOVEMENT_RANGE:
 			return UnitStat.get_scaling_rules().calculate_speed_adjusted_base_movement(
 				_get_base_movement_range(),
@@ -1120,6 +1157,45 @@ func reset_dev_passive_loadout() -> void:
 
 
 var _watched_passive_sources: Array[Resource] = []
+var _watched_stats_class: CharacterClassDefinition
+var _watched_class_allocations: Array[CharacterClassLevel] = []
+var _class_stat_state: Dictionary = {}
+
+
+func _remember_class_stat_state() -> void:
+	_class_stat_state = {"movement": get_movement_range(), "health": get_max_health()}
+
+
+func _refresh_class_stats() -> void:
+	for allocation in _watched_class_allocations:
+		if allocation.changed.is_connected(_on_class_allocation_changed):
+			allocation.changed.disconnect(_on_class_allocation_changed)
+	_watched_class_allocations = []
+	for allocation in class_level_overrides:
+		if allocation != null and not _watched_class_allocations.has(allocation):
+			_watched_class_allocations.append(allocation)
+			allocation.changed.connect(_on_class_allocation_changed)
+	if _watched_stats_class != null and _watched_stats_class.changed.is_connected(_refresh_class_stats):
+		_watched_stats_class.changed.disconnect(_refresh_class_stats)
+	_watched_stats_class = _get_stats_class()
+	if _watched_stats_class != null:
+		_watched_stats_class.changed.connect(_refresh_class_stats)
+	if not stats_changed.is_connected(_remember_class_stat_state):
+		stats_changed.connect(_remember_class_stat_state)
+	# Scene properties (especially equipment) may still be loading before _ready.
+	# Watch resources now, but do not initialize runtime equipment from a partial scene.
+	if not _class_stat_state.is_empty():
+		_notify_stats_changed(float(_class_stat_state.movement), int(_class_stat_state.health))
+	if Engine.is_editor_hint():
+		notify_property_list_changed()
+	queue_redraw()
+
+
+func _on_class_allocation_changed() -> void:
+	_refresh_class_stats()
+	class_progression_changed.emit()
+	if Engine.is_editor_hint() and is_inside_tree():
+		update_configuration_warnings()
 
 
 func _refresh_passive_sources() -> void:
@@ -1134,6 +1210,7 @@ func _refresh_passive_sources() -> void:
 			_watched_passive_sources.append(passive)
 	for source in _watched_passive_sources:
 		source.changed.connect(_refresh_passive_sources)
+	_refresh_class_stats()
 	passive_abilities_changed.emit()
 	_notify_passive_context_changed()
 	if Engine.is_editor_hint() and is_inside_tree():
@@ -1216,6 +1293,7 @@ func apply_setup_state(state: Dictionary) -> void:
 	complete_equipment_overrides = _load_items(state.get("equipment", []))
 	starting_equipment_overrides = _load_items(state.get("legacy_equipment", []))
 	_runtime_stats_initialized = false
+	_refresh_class_stats()
 	class_progression_changed.emit()
 
 

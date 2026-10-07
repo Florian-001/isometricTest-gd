@@ -18,9 +18,6 @@ character_class = ExtResource("class")
 [node name="FriendA" type="Node2D" unique_id=1393246348]
 script = ExtResource("1_actor")
 definition = ExtResource("2_definition")
-constitution_override = 12
-movement_range_override = 6.0
-speed_override = 12
 class_level_overrides = Array[ExtResource("class_level")]([SubResource("Resource_8lpcv")])
 ability_overrides = Array[ExtResource("5_sr6f5")]([null])
 starting_equipment_overrides = Array[ExtResource("3_item_type")]([ExtResource("4_frost_bow")])

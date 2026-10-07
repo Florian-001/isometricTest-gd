@@ -493,12 +493,40 @@ theme_override_constants/separation = 6
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="BackButton" type="Button" parent="Drawer/Margin/Main/Tabs/AILog/AILogActions"]
+custom_minimum_size = Vector2(74, 38)
+layout_mode = 2
+tooltip_text = "Restore the previous action checkpoint, staying paused"
+disabled = true
+text = "← Back"
+
+[node name="ForwardButton" type="Button" parent="Drawer/Margin/Main/Tabs/AILog/AILogActions"]
+custom_minimum_size = Vector2(94, 38)
+layout_mode = 2
+tooltip_text = "Restore the next action checkpoint, or return to the live battle"
+disabled = true
+text = "Forward →"
+
 [node name="CopyAILogButton" type="Button" parent="Drawer/Margin/Main/Tabs/AILog/AILogActions"]
 custom_minimum_size = Vector2(112, 38)
 layout_mode = 2
-tooltip_text = "Copy the retained AI decision history for sharing with an LLM"
+tooltip_text = "Copy all retained combat actions, outcomes and AI diagnostics"
 disabled = true
 text = "Copy Logs"
+
+[node name="HistoryPosition" type="Label" parent="Drawer/Margin/Main/Tabs/AILog"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Live · 0 actions"
+
+[node name="HistoryDetails" type="RichTextLabel" parent="Drawer/Margin/Main/Tabs/AILog"]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.8
+theme_override_font_sizes/normal_font_size = 14
+text = "Select an action or use Back to inspect its checkpoint."
+selection_enabled = true
 
 [node name="AILogScroll" type="ScrollContainer" parent="Drawer/Margin/Main/Tabs/AILog"]
 layout_mode = 2
@@ -514,7 +542,7 @@ theme_override_constants/separation = 8
 layout_mode = 2
 theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 12
-text = "No AI decisions recorded yet.\nEnd a friendly turn to let an enemy act."
+text = "No combat actions recorded yet.\nMove, cast an ability, or end a turn to record actions."
 autowrap_mode = 2
 
 [node name="AILogEntries" type="VBoxContainer" parent="Drawer/Margin/Main/Tabs/AILog/AILogScroll/AILogContent"]

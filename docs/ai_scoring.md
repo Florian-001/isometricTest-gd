@@ -3,7 +3,8 @@
 In Godot's FileSystem dock, open `resources/ai/general_ai.tres`. Its Inspector
 exposes the shared scoring values under **Effect Scoring**, **Position Scoring**,
 and **Team Scoring**. Hover each field for its meaning. Save the resource after
-editing, then run a battle and inspect **Dev → AI Log** to compare decisions.
+editing, then run a battle and inspect **Dev → Combat Log** to compare decisions
+and actual action outcomes. See [combat log navigation](combat_log.md).
 
 To give a unit different priorities, duplicate the profile and save it as another
 `.tres`. Assign it to the unit's **Tactical AI → AI Profile Override** field, or

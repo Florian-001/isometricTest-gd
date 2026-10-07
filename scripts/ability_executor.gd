@@ -8,6 +8,12 @@ signal ability_started(caster: TacticalCharacter, ability: AbilityDefinition, ta
 signal ability_finished(caster: TacticalCharacter, ability: AbilityDefinition, target_cell: Vector2i)
 ## Emitted only when the complete outer cast and every nested reaction have returned.
 signal resolution_finished
+## Accepted ordinary casts only; emitted before paying AP/cooldown costs.
+signal action_committing(caster: TacticalCharacter, ability: AbilityDefinition, target_cell: Vector2i, targets: Array[TacticalCharacter])
+signal action_completed(succeeded: bool)
+signal reaction_started(caster: TacticalCharacter, ability: AbilityDefinition, target_cell: Vector2i, kind: String)
+signal hit_started(caster: TacticalCharacter, ability: AbilityDefinition, recipient: TacticalCharacter)
+signal knockback_started(caster: TacticalCharacter, target: TacticalCharacter, distance: int)
 
 var projectile_delivery: ProjectileDelivery
 var melee_delivery: Node
@@ -45,9 +51,12 @@ func execute(
 ) -> bool:
 	if not can_execute(caster, ability, selected_cell, units, grid, targeting, wall_cells):
 		return false
+	var no_targets: Array[TacticalCharacter] = []
+	action_committing.emit(caster, ability, selected_cell, no_targets)
 	if not caster.spend_ability_action(ability):
+		action_completed.emit(false)
 		return false
-	return await _perform(
+	var succeeded := await _perform(
 		caster,
 		ability,
 		selected_cell,
@@ -57,6 +66,8 @@ func execute(
 		wall_cells,
 		before_caster_step
 	)
+	action_completed.emit(succeeded)
+	return succeeded
 
 
 func execute_opportunity_attack(
@@ -78,6 +89,7 @@ func execute_opportunity_attack(
 		wall_cells
 	):
 		return false
+	reaction_started.emit(caster, ability, selected_cell, "Opportunity attack")
 	if not caster.spend_opportunity_reaction():
 		return false
 	return await _perform(caster, ability, selected_cell, units, grid, targeting, wall_cells)
@@ -97,6 +109,7 @@ func execute_counter_attack(
 ) -> bool:
 	if not can_execute_counter_attack(caster, attacker, units, grid, targeting, wall_cells):
 		return false
+	reaction_started.emit(caster, CounterAttackSystem.get_ability(caster), attacker.grid_cell, "Counter attack")
 	return await _perform(caster, CounterAttackSystem.get_ability(caster), attacker.grid_cell,
 		units, grid, targeting, wall_cells, Callable(), false, [attacker])
 
@@ -174,7 +187,9 @@ func execute_targets(
 	# Spending the action emits signals that clear the controller's selection array.
 	var locked_targets: Array[TacticalCharacter] = selected_targets.duplicate()
 	var first_cell := locked_targets[0].grid_cell
+	action_committing.emit(caster, ability, first_cell, locked_targets)
 	if not caster.spend_ability_action(ability):
+		action_completed.emit(false)
 		return false
 	_active_resolutions += 1
 	var reaction_context := {"allow_counters": true, "defenders": []}
@@ -189,6 +204,7 @@ func execute_targets(
 	await _resolve_counter_attacks(caster, reaction_context, units, grid, targeting, wall_cells)
 	ability_finished.emit(caster if is_instance_valid(caster) else null, ability, first_cell)
 	_finish_resolution()
+	action_completed.emit(true)
 	return true
 
 
@@ -478,6 +494,7 @@ func _apply_effects(
 			continue
 		if not locked_recipients.is_empty() and not locked_recipients.has(recipient):
 			continue
+		hit_started.emit(caster, ability, recipient)
 		if (reaction_context.get("allow_counters", false) and ability.has_damage()
 			and PassiveAbilityResolver.has_counter(recipient) and not reaction_context.defenders.has(recipient)):
 			reaction_context.defenders.append(recipient)
@@ -531,6 +548,7 @@ func _apply_knockback(caster: Variant, target: Variant, effect: KnockbackEffectD
 	var direction: Vector2i = (target.grid_cell - caster.grid_cell).sign()
 	if direction == Vector2i.ZERO or effect.distance <= 0:
 		return
+	knockback_started.emit(caster, target, effect.distance)
 	target.is_moving = true
 	target.movement_started.emit(target)
 	for _step in range(effect.distance):

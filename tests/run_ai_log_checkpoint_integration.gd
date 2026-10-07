@@ -27,6 +27,8 @@ func _test_panel_entries() -> void:
 	_check(panel.ai_log_empty_state.visible, "the authored AI Log empty state starts visible")
 	_check(panel.ai_log_entries.get_child_count() == 0, "the authored AI Log entry container starts empty")
 	_check(panel.copy_ai_log_button.disabled, "Copy Logs starts disabled")
+	_check(panel.history_back_button.disabled and panel.history_forward_button.disabled, "empty history disables navigation")
+	_check(panel.tabs.get_tab_title(DevModePanel.AI_LOG_TAB) == "Combat Log", "the tab describes both factions and manual actions")
 	var entries: Array[String] = [
 		"Round 1 · Older Enemy · General AI\n\nChosen in 2 ms: Hold position\nSearch details",
 		"Round 2 · Newer Enemy · Aggressive AI\nChosen in 4 ms: Use Fireball\nCache details",
@@ -57,7 +59,7 @@ func _test_panel_entries() -> void:
 	)
 	_check(panel.ai_log_entries.get_theme_constant("separation") == 4, "compact AI decision rows use reduced spacing")
 	_check(
-		newest_button.tooltip_text.begins_with("Restore to immediately before this AI decision\n\n"),
+		newest_button.tooltip_text.begins_with("Restore to immediately before this action\n\n"),
 		"AI decision rows explain their restore behavior"
 	)
 	_check(
@@ -72,12 +74,21 @@ func _test_panel_entries() -> void:
 		== "%s%s%s" % [entries[1], DevModePanel.AI_LOG_SEPARATOR, entries[0]],
 		"Copy Logs keeps the prior newest-first plain-text format"
 	)
+	_check(not panel.history_back_button.disabled and panel.history_forward_button.disabled, "live history allows only Back")
+	_check(panel.history_details.text == entries[1], "live view displays the newest action details")
+	var navigation_offsets: Array[int] = []
+	panel.history_navigation_requested.connect(func(offset: int) -> void: navigation_offsets.append(offset))
+	panel.history_back_button.pressed.emit()
+	panel.history_forward_button.pressed.emit()
+	_check(navigation_offsets == [-1, 1], "navigation requests use chronological directions")
 	panel.set_ai_history(entries, 0)
 	newest_button = panel.ai_log_entries.get_child(0) as Button
 	oldest_button = panel.ai_log_entries.get_child(1) as Button
 	_check(oldest_button.button_pressed, "the selected checkpoint uses the pressed button style")
 	_check(not newest_button.button_pressed and not newest_button.disabled, "future logs stay visible and clickable")
 	_check(newest_button.tooltip_text.begins_with("Future log"), "future logs explain that they remain selectable")
+	_check(panel.history_back_button.disabled and not panel.history_forward_button.disabled, "the oldest checkpoint allows only Forward")
+	_check(panel.history_details.text == entries[0], "selected checkpoint displays complete details")
 	panel.open_panel(DevModePanel.AI_LOG_TAB)
 	_check(panel.tabs.current_tab == DevModePanel.AI_LOG_TAB, "the panel can open directly on AI Log")
 	var overflow_entries: Array[String] = []
@@ -99,6 +110,22 @@ func _test_panel_entries() -> void:
 		panel.get_ai_history_scroll_position() == retained_scroll_position,
 		"rebuilding AI decision rows preserves the current scroll position"
 	)
+	var detailed_entries: Array[String] = [
+		"Round 1 · Friendly · Manual\nCompleted: Move\n" + "Full outcome details\n".repeat(100),
+		"Round 2 · Friendly · Manual\nCompleted: Cast\n" + "Full cast details\n".repeat(100),
+	]
+	panel.set_ai_history(detailed_entries, 0)
+	await process_frame
+	await process_frame
+	panel.history_details.get_v_scroll_bar().value = 150
+	var details_scroll := panel.history_details.get_v_scroll_bar().value
+	_check(details_scroll > 0, "long action details can scroll independently from history rows")
+	panel.set_ai_history(detailed_entries, 0)
+	await process_frame
+	_check(panel.history_details.get_v_scroll_bar().value == details_scroll, "refreshing the same checkpoint preserves detail scroll on restore failure")
+	panel.set_ai_history(detailed_entries, 1)
+	await process_frame
+	_check(panel.history_details.get_v_scroll_bar().value == 0, "a different checkpoint starts its details at the top")
 	root.remove_child(panel)
 	panel.free()
 
@@ -134,6 +161,7 @@ func _test_checkpoint_restore_and_branching() -> void:
 	plan.sequence = EnemyTurnPlan.Sequence.HOLD
 	plan.end_cell = enemy.grid_cell
 	battle._update_ai_debug(enemy, plan)
+	_record_hold(battle, enemy)
 
 	enemy._set_runtime_grid_cell_immediate(Vector2i(0, 0))
 	enemy.apply_damage(5)
@@ -150,6 +178,7 @@ func _test_checkpoint_restore_and_branching() -> void:
 	battle.turn_manager.round_number = 2
 	plan.end_cell = enemy.grid_cell
 	battle._update_ai_debug(enemy, plan)
+	_record_hold(battle, enemy)
 	var target_health := enemy.current_health
 	var target_cell := enemy.grid_cell
 	var target_movement := enemy.remaining_movement
@@ -164,6 +193,7 @@ func _test_checkpoint_restore_and_branching() -> void:
 	battle.turn_manager.round_number = 3
 	plan.end_cell = enemy.grid_cell
 	battle._update_ai_debug(enemy, plan)
+	_record_hold(battle, enemy)
 	_check(battle._ai_debug_history.size() == 2, "AI history obeys its configured limit")
 	_check(battle._ai_debug_checkpoints.size() == 2, "checkpoint trimming stays aligned with log trimming")
 	battle.ai_debug_history_limit = 30
@@ -177,6 +207,7 @@ func _test_checkpoint_restore_and_branching() -> void:
 			0,
 			battle._ai_debug_checkpoints[0].duplicate(true)
 		)
+		battle._combat_log_entries.insert(0, {})
 	var full_history_count := battle._ai_debug_history.size()
 	var selected_history_index := full_history_count - 2
 	var newest_history_index := full_history_count - 1
@@ -264,7 +295,7 @@ func _test_checkpoint_restore_and_branching() -> void:
 	)
 
 	var first_restore_id := restored.get_instance_id()
-	future_button.pressed.emit()
+	restored.dev_mode_panel.history_forward_button.pressed.emit()
 	await process_frame
 	await process_frame
 	restored = manager.current_battle
@@ -280,6 +311,23 @@ func _test_checkpoint_restore_and_branching() -> void:
 		"the newly selected future checkpoint is visibly marked"
 	)
 
+	restored.dev_mode_panel.history_forward_button.pressed.emit()
+	await process_frame
+	await process_frame
+	restored = manager.current_battle
+	_check(restored._pending_ai_history_cutoff == -1, "Forward beyond the newest checkpoint returns to live")
+	_check(restored.turn_manager.current_unit.is_friendly(), "returning to live restores the original active friendly")
+	_check(restored._ai_debug_history.size() == full_history_count and paused, "returning to live retains every entry and stays paused")
+	_check(restored.dev_mode_panel.history_forward_button.disabled, "Forward is disabled at live")
+	_check(not restored.auto_battle_enabled, "returning to live preserves transient Auto Battle defaults")
+	var live_enemy := _find_unit(restored, target_enemy_id)
+	_check(live_enemy.current_health == target_health - 7 and live_enemy.get_equipped_item(ItemDefinition.EquipmentSlot.WEAPON) == null, "live snapshot restores the latest health and equipment")
+	restored.dev_mode_panel.history_back_button.pressed.emit()
+	await process_frame
+	await process_frame
+	restored = manager.current_battle
+	_check(restored._pending_ai_history_cutoff == newest_history_index, "Back from live selects the newest checkpoint")
+
 	(restored.dev_mode_panel.ai_log_entries.get_child(1) as Button).pressed.emit()
 	await process_frame
 	await process_frame
@@ -292,19 +340,24 @@ func _test_checkpoint_restore_and_branching() -> void:
 	)
 
 	restored.dev_mode_panel.play_button.pressed.emit()
-	_check(restored._ai_debug_history.size() == selected_history_index + 1, "Resume synchronously discards logs newer than the selected checkpoint")
-	_check(restored._ai_debug_checkpoints.size() == selected_history_index + 1, "Resume discards matching future checkpoints")
+	_check(restored._ai_debug_history.size() == selected_history_index, "Resume discards the selected outcome and all newer logs")
+	_check(restored._ai_debug_checkpoints.size() == selected_history_index, "Resume discards matching future checkpoints")
 	_check(restored._pending_ai_history_cutoff == -1, "Resume clears the pending branch marker")
 	_check(not paused and not restored._dev_open, "Resume leaves the restored checkpoint and unpauses combat")
 	var deadline := Time.get_ticks_msec() + CHECKPOINT_TIMEOUT_MSEC
 	while (
 		Time.get_ticks_msec() < deadline
 		and is_instance_valid(restored)
-		and restored._ai_debug_history.size() < selected_history_index + 2
+		and restored._ai_debug_history.size() < selected_history_index + 1
 	):
 		await process_frame
-	_check(restored._ai_debug_history.size() == selected_history_index + 2, "resuming replans once and appends one new log to the committed timeline")
+	_check(restored._ai_debug_history.size() >= selected_history_index + 1, "resuming records new actions on the committed timeline")
 	_remove_manager(manager)
+
+
+func _record_hold(battle: TacticalBattle, enemy: TacticalCharacter) -> void:
+	battle._begin_combat_log_action("Hold", enemy, "Hold position")
+	battle._finish_combat_log_action(true)
 
 
 func _first_unit(battle: TacticalBattle, friendly: bool) -> TacticalCharacter:

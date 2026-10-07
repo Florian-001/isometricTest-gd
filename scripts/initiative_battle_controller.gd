@@ -95,6 +95,10 @@ var _last_mouse_screen_position := Vector2.ZERO
 var _has_mouse_screen_position := false
 var _ai_debug_history: Array[String] = []
 var _ai_debug_checkpoints: Array[Dictionary] = []
+var _combat_log_entries: Array[Dictionary] = []
+var _combat_log_recorder := CombatLogRecorder.new()
+var _ai_decision_diagnostics: Dictionary = {}
+var _live_ai_checkpoint: Dictionary = {}
 var _combat_over := false
 var _combat_result_text := ""
 var _return_dialog_paused_battle := false
@@ -155,6 +159,13 @@ func _ready() -> void:
 	_ability_executor = AbilityExecutor.new()
 	_ability_executor.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(_ability_executor)
+	_ability_executor.action_committing.connect(_on_combat_cast_committing)
+	_ability_executor.action_completed.connect(_finish_combat_log_action)
+	_ability_executor.reaction_started.connect(_on_combat_reaction_started)
+	_ability_executor.hit_started.connect(_on_combat_hit_started)
+	_ability_executor.knockback_started.connect(_on_combat_knockback_started)
+	turn_manager.turn_ending.connect(_on_combat_turn_ending)
+	turn_manager.turn_transition_finished.connect(_on_combat_turn_transition_finished)
 	turn_manager.turn_starting.connect(_on_turn_starting)
 	turn_manager.turn_started.connect(_on_turn_started)
 	turn_manager.turn_ended.connect(_on_turn_ended)
@@ -172,6 +183,7 @@ func _ready() -> void:
 	dev_mode_panel.save_requested.connect(_on_dev_save_requested)
 	dev_mode_panel.load_payload_requested.connect(_on_dev_load_payload_requested)
 	dev_mode_panel.ai_history_restore_requested.connect(_on_ai_history_restore_requested)
+	dev_mode_panel.history_navigation_requested.connect(_on_combat_history_navigation_requested)
 	dev_mode_panel.selected_unit_deleted.connect(_on_dev_delete_selected)
 	dev_mode_panel.selected_unit_heal_requested.connect(_on_dev_heal_selected)
 	dev_mode_panel.unit_setup_changed.connect(_on_dev_setup_changed)
@@ -333,6 +345,15 @@ func _collect_and_initialize_characters() -> void:
 
 
 func _connect_character(character: TacticalCharacter) -> void:
+	for observed in [[character.health_changed, 2], [character.armor_changed, 2],
+		[character.movement_remaining_changed, 2], [character.ability_availability_changed, 1],
+		[character.opportunity_reaction_availability_changed, 1], [character.statuses_changed, 0],
+		[character.form_changed, 1], [character.cell_entered, 2], [character.passive_context_changed, 0]]:
+		var source: Signal = observed[0]
+		var observer := _combat_log_recorder.observe.bind(character)
+		if int(observed[1]) > 0:
+			observer = observer.unbind(observed[1])
+		source.connect(observer)
 	character.passive_context_changed.connect(_queue_passive_refresh)
 	character.passive_abilities_changed.connect(_queue_passive_refresh)
 	character.class_progression_changed.connect(_on_character_class_progression_changed.bind(character))
@@ -1109,7 +1130,8 @@ func _finish_ability_cast(caster: TacticalCharacter, _cast_succeeded: bool) -> v
 
 
 func _begin_friendly_move(path: Array[Vector2i]) -> void:
-	if _movement_locked or _selected_character != turn_manager.current_unit:
+	if (_movement_locked or path.size() < 2 or not is_instance_valid(_selected_character)
+		or _selected_character != turn_manager.current_unit or not _selected_character.can_move()):
 		return
 	var path_cost := _pathfinder.get_path_cost(path, PassiveAbilityResolver.ignores_movement_modifiers(_selected_character))
 	if not _selected_character.can_afford_path(path_cost):
@@ -1117,11 +1139,13 @@ func _begin_friendly_move(path: Array[Vector2i]) -> void:
 
 	_set_movement_locked(true)
 	var moving_character := _selected_character
+	_begin_combat_log_action("Move", moving_character, "Move %s → %s" % [moving_character.grid_cell, path[-1]])
 	grid.clear_overlays()
 	await moving_character.move_along(
 		path,
 		Callable(self, "_before_character_movement_step")
 	)
+	_finish_combat_log_action(is_instance_valid(moving_character) and moving_character.grid_cell == path[-1])
 	var can_continue := (
 		is_instance_valid(moving_character)
 		and moving_character == turn_manager.current_unit
@@ -1355,10 +1379,12 @@ func _move_enemy_to(
 	var path_cost := _pathfinder.get_path_cost(path, PassiveAbilityResolver.ignores_movement_modifiers(unit))
 	if not unit.can_afford_path(path_cost):
 		return false
-	if unit != turn_manager.current_unit:
+	if unit != turn_manager.current_unit or not unit.can_move():
 		return false
 	grid.clear_overlays()
+	_begin_combat_log_action("Move", unit, "Move %s → %s" % [unit.grid_cell, destination])
 	await unit.move_along(path, Callable(self, "_before_character_movement_step"))
+	_finish_combat_log_action(is_instance_valid(unit) and unit.grid_cell == destination)
 	return is_instance_valid(unit) and unit.current_health > 0 and unit.grid_cell == destination
 
 
@@ -1433,7 +1459,7 @@ func _update_ai_debug(
 	var profile_name := effective_profile.display_name
 	var lines: Array[String] = [
 		"Round %d · %s · %s" % [turn_manager.round_number, unit.name, profile_name],
-		"%s in %d ms: %s" % [status, _enemy_ai_planner.last_planning_duration_ms, plan.get_debug_summary()],
+		"%s in %d ms: %s" % ["Chosen" if status.is_empty() else status, _enemy_ai_planner.last_planning_duration_ms, plan.get_debug_summary()],
 		"Search: %d candidates in %d ms · %d threat states in %d ms" % [
 			_enemy_ai_planner.last_candidate_count,
 			_enemy_ai_planner.last_candidate_generation_duration_ms,
@@ -1450,23 +1476,95 @@ func _update_ai_debug(
 	var count := mini(ai_debug_candidate_count, _enemy_ai_planner.ranked_candidates.size())
 	for index in range(count):
 		lines.append("%d. %s" % [index + 1, _enemy_ai_planner.ranked_candidates[index].get_debug_summary()])
+	_ai_decision_diagnostics[unit.scenario_unit_id] = "\n".join(lines)
+
+
+func _begin_combat_log_action(kind: String, unit: TacticalCharacter, description: String) -> void:
+	if _dev_open or not is_instance_valid(unit) or not _combat_log_recorder.active.is_empty():
+		return
+	var control := "Friendly · Manual" if unit.is_friendly() else "Enemy · AI"
+	if unit.is_friendly() and auto_battle_enabled:
+		control = "Friendly · Auto Battle"
+	var diagnostics := str(_ai_decision_diagnostics.get(unit.scenario_unit_id, "")) if _is_ai_controlled(unit) else ""
+	_combat_log_recorder.begin(kind, unit, turn_manager.round_number, control, description,
+		_capture_ai_debug_checkpoint(), _characters, diagnostics)
+
+
+func _finish_combat_log_action(succeeded: bool) -> void:
+	var entry := _combat_log_recorder.finish(_characters, succeeded)
+	if entry.is_empty():
+		return
 	while _ai_debug_checkpoints.size() < _ai_debug_history.size():
 		_ai_debug_checkpoints.append({})
-	_ai_debug_history.append("\n".join(lines))
-	_ai_debug_checkpoints.append(_capture_ai_debug_checkpoint())
+	while _combat_log_entries.size() < _ai_debug_history.size():
+		_combat_log_entries.append({})
+	_ai_debug_history.append(entry.text)
+	_ai_debug_checkpoints.append(entry.checkpoint)
+	entry.erase("checkpoint")
+	_combat_log_entries.append(entry)
 	while _ai_debug_history.size() > ai_debug_history_limit:
 		_ai_debug_history.remove_at(0)
-		if not _ai_debug_checkpoints.is_empty():
-			_ai_debug_checkpoints.remove_at(0)
+		_ai_debug_checkpoints.remove_at(0)
+		_combat_log_entries.remove_at(0)
 	_refresh_ai_debug_history()
+
+
+func _on_combat_cast_committing(caster: TacticalCharacter, ability: AbilityDefinition,
+		target_cell: Vector2i, targets: Array[TacticalCharacter]) -> void:
+	var description := "%s from %s @ %s" % [ability.display_name, caster.grid_cell, target_cell]
+	if not targets.is_empty():
+		var names: Array[String] = []
+		for target in targets:
+			names.append("%s [%s]" % [target.get_combat_display_name(), target.scenario_unit_id])
+		description += " · ordered targets: %s" % " → ".join(names)
+	_begin_combat_log_action("Cast", caster, description)
+
+
+func _on_combat_reaction_started(caster: TacticalCharacter, ability: AbilityDefinition,
+		target_cell: Vector2i, kind: String) -> void:
+	_combat_log_recorder.note("%s: %s [%s] uses %s @ %s" % [kind,
+		caster.get_combat_display_name(), caster.scenario_unit_id, ability.display_name, target_cell])
+
+
+func _on_combat_hit_started(caster: TacticalCharacter, ability: AbilityDefinition, recipient: TacticalCharacter) -> void:
+	_combat_log_recorder.note("Hit: %s uses %s → %s [%s]" % [caster.get_combat_display_name(),
+		ability.display_name, recipient.get_combat_display_name(), recipient.scenario_unit_id])
+
+
+func _on_combat_knockback_started(caster: TacticalCharacter, target: TacticalCharacter, distance: int) -> void:
+	_combat_log_recorder.note("Knockback: %s pushes %s [%s] up to %d cells" % [caster.get_combat_display_name(),
+		target.get_combat_display_name(), target.scenario_unit_id, distance])
+
+
+func _record_combat_terrain_trigger(unit: TacticalCharacter, trigger: TileTriggeredEffectDefinition.Trigger) -> void:
+	var definition := terrain.get_definition(unit.grid_cell)
+	if definition == null or PassiveAbilityResolver.ignores_tile_effects(unit):
+		return
+	var has_effect := definition.status_applies_on(trigger)
+	for effect in definition.effects:
+		if definition.should_apply_additional_effect(effect) and effect.applies_on(trigger):
+			has_effect = true
+	if has_effect:
+		_combat_log_recorder.note("Terrain: %s @ %s · %s → %s [%s]" % [definition.display_name, unit.grid_cell,
+			"Enter" if trigger == TileTriggeredEffectDefinition.Trigger.ENTER else "Turn start",
+			unit.get_combat_display_name(), unit.scenario_unit_id])
+
+
+func _on_combat_turn_ending(unit: TacticalCharacter) -> void:
+	_begin_combat_log_action("End turn", unit, "End turn · advance initiative and resolve turn-start effects")
+
+
+func _on_combat_turn_transition_finished() -> void:
+	if _combat_log_recorder.active.get("kind", "") == "End turn":
+		_finish_combat_log_action(true)
 
 
 func _capture_ai_debug_checkpoint() -> Dictionary:
 	var checkpoint := capture_save_payload(false)
 	var runtime: Dictionary = checkpoint.get("runtime", {})
 	var turn: Dictionary = runtime.get("turn", {})
-	# AI planning has completed, but no movement or ability has started yet. Mark
-	# this self-consistent instant as restorable even though it is an enemy turn.
+	# Called only before a committed move, cast or turn transition, and when Dev
+	# opens at a stable boundary. Controller locks do not make that instant unsafe.
 	turn["action_boundary"] = true
 	runtime["turn"] = turn
 	checkpoint["runtime"] = runtime
@@ -1507,6 +1605,8 @@ func report_reload_failed(message: String) -> void:
 
 
 func _open_dev_mode(initial_tab := DevModePanel.UNIT_TAB) -> void:
+	if _pending_ai_history_cutoff < 0:
+		_live_ai_checkpoint = _capture_ai_debug_checkpoint()
 	_clear_hit_selection()
 	_dev_open_pending = false
 	dev_button.text = "Dev"
@@ -1556,6 +1656,7 @@ func _on_dev_play_requested() -> void:
 		return
 	_commit_pending_ai_history_branch()
 	_restored_ai_turn_pending = false
+	_live_ai_checkpoint = {}
 	tactical_camera.set_dev_mode_pan_enabled(false)
 	dev_terrain_editor.cancel_stroke()
 	grid.clear_dev_brush_preview()
@@ -1563,7 +1664,11 @@ func _on_dev_play_requested() -> void:
 	_dev_open = false
 	_set_dev_blocked_actions_disabled(false)
 	get_tree().paused = false
-	_resume_unit_control(turn_manager.current_unit)
+	var current_unit := turn_manager.current_unit
+	if is_instance_valid(current_unit) and (current_unit.current_health <= 0 or current_unit.is_bone_pile):
+		_end_defeated_current_unit(current_unit)
+	else:
+		_resume_unit_control(current_unit)
 
 
 func _on_dev_save_requested(replace_path: String) -> void:
@@ -1595,17 +1700,21 @@ func _on_dev_load_payload_requested(payload: Dictionary) -> void:
 func _on_ai_history_restore_requested(history_index: int) -> void:
 	if not _dev_open:
 		return
-	if (
+	var restoring_live := history_index == _ai_debug_history.size()
+	if restoring_live and _live_ai_checkpoint.is_empty():
+		dev_mode_panel.show_message("The live battle snapshot is unavailable.", true)
+		return
+	if not restoring_live and (
 		history_index < 0
 		or history_index >= _ai_debug_history.size()
 		or history_index >= _ai_debug_checkpoints.size()
 		or _ai_debug_checkpoints[history_index].is_empty()
 	):
-		dev_mode_panel.show_message("This AI log does not have a restorable checkpoint.", true)
+		dev_mode_panel.show_message("This combat log does not have a restorable checkpoint.", true)
 		_refresh_ai_debug_history()
 		return
 	var validation := ScenarioSaveStore.validate_payload(
-		_ai_debug_checkpoints[history_index].duplicate(true)
+		(_live_ai_checkpoint if restoring_live else _ai_debug_checkpoints[history_index]).duplicate(true)
 	)
 	if not validation.ok:
 		dev_mode_panel.show_message(
@@ -1619,7 +1728,10 @@ func _on_ai_history_restore_requested(history_index: int) -> void:
 	payload[DEV_AI_RESTORE_CONTEXT] = {
 		"entries": _ai_debug_history.duplicate(),
 		"checkpoints": _ai_debug_checkpoints.duplicate(true),
-		"selected_history_index": history_index,
+		"structured_entries": _combat_log_entries.duplicate(true),
+		"live_checkpoint": _live_ai_checkpoint.duplicate(true),
+		"history_limit": ai_debug_history_limit,
+		"selected_history_index": -1 if restoring_live else history_index,
 		"scroll_vertical": _pending_ai_history_scroll_position,
 	}
 	dev_terrain_editor.cancel_stroke()
@@ -1651,6 +1763,11 @@ func _restore_ai_history_context(context: Dictionary) -> void:
 			continue
 		_ai_debug_history.append(str(raw_entries[index]))
 		_ai_debug_checkpoints.append((raw_checkpoints[index] as Dictionary).duplicate(true))
+	var structured: Array = context.get("structured_entries", [])
+	for index in range(_ai_debug_history.size()):
+		_combat_log_entries.append(structured[index].duplicate(true) if index < structured.size() and structured[index] is Dictionary else {})
+	_live_ai_checkpoint = context.get("live_checkpoint", {}).duplicate(true)
+	ai_debug_history_limit = int(context.get("history_limit", ai_debug_history_limit))
 	var selected_history_index := int(context.get("selected_history_index", -1))
 	_pending_ai_history_cutoff = (
 		selected_history_index
@@ -1663,11 +1780,14 @@ func _restore_ai_history_context(context: Dictionary) -> void:
 func _commit_pending_ai_history_branch() -> void:
 	if _pending_ai_history_cutoff < 0:
 		return
-	var retained_count := _pending_ai_history_cutoff + 1
+	# The checkpoint precedes this action; its recorded outcome is future too.
+	var retained_count := _pending_ai_history_cutoff
 	while _ai_debug_history.size() > retained_count:
 		_ai_debug_history.pop_back()
 	while _ai_debug_checkpoints.size() > retained_count:
 		_ai_debug_checkpoints.pop_back()
+	while _combat_log_entries.size() > retained_count:
+		_combat_log_entries.pop_back()
 	_pending_ai_history_cutoff = -1
 	_pending_ai_history_scroll_position = -1
 	_refresh_ai_debug_history()
@@ -1681,8 +1801,16 @@ func _open_restored_ai_checkpoint() -> void:
 		_pending_ai_history_scroll_position
 	)
 	dev_mode_panel.show_message(
-		"Restored to before the selected AI decision. All logs remain available until Resume."
+		"Returned to the live battle. All logs are retained." if _pending_ai_history_cutoff < 0 else
+		"Restored to before the selected action. All logs remain available until Resume."
 	)
+
+
+func _on_combat_history_navigation_requested(offset: int) -> void:
+	var cursor := _pending_ai_history_cutoff if _pending_ai_history_cutoff >= 0 else _ai_debug_history.size()
+	var destination := cursor + offset
+	if destination >= 0 and destination <= _ai_debug_history.size() and destination != cursor:
+		_on_ai_history_restore_requested(destination)
 
 
 func _on_dev_setup_changed() -> void:
@@ -1881,10 +2009,13 @@ func _refresh_ai_debug_history() -> void:
 func _on_turn_starting(unit: TacticalCharacter) -> void:
 	if _combat_over:
 		return
+	_combat_log_recorder.note("Turn start: %s [%s] · terrain, statuses and action resets" % [unit.get_combat_display_name(), unit.scenario_unit_id])
+	_record_combat_terrain_trigger(unit, TileTriggeredEffectDefinition.Trigger.TURN_START)
 	terrain.apply_trigger(unit, TileTriggeredEffectDefinition.Trigger.TURN_START)
 
 
 func _on_turn_started(unit: TacticalCharacter) -> void:
+	_ai_decision_diagnostics.clear()
 	_clear_hit_selection()
 	if _combat_over:
 		return
@@ -1933,6 +2064,7 @@ func _on_character_cell_entered(
 	character: TacticalCharacter,
 	_cell: Vector2i
 ) -> void:
+	_record_combat_terrain_trigger(character, TileTriggeredEffectDefinition.Trigger.ENTER)
 	terrain.apply_trigger(character, TileTriggeredEffectDefinition.Trigger.ENTER)
 
 

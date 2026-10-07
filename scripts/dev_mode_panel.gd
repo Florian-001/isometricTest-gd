@@ -14,6 +14,7 @@ signal terrain_redo_requested
 signal terrain_reset_requested
 signal active_tab_changed(tab_index: int)
 signal ai_history_restore_requested(history_index: int)
+signal history_navigation_requested(offset: int)
 
 const NORMAL_TEXT := Color("d6e4f0")
 const SUCCESS_TEXT := Color("65d98b")
@@ -75,6 +76,10 @@ const AI_LOG_SEPARATOR := "\n\n────────────────�
 @onready var reset_map_button: Button = $Drawer/Margin/Main/Tabs/Terrain/TerrainContent/History/ResetMapButton
 @onready var save_entries: VBoxContainer = $Drawer/Margin/Main/Tabs/Saves/SavesScroll/SaveEntries
 @onready var copy_ai_log_button: Button = $Drawer/Margin/Main/Tabs/AILog/AILogActions/CopyAILogButton
+@onready var history_back_button: Button = $Drawer/Margin/Main/Tabs/AILog/AILogActions/BackButton
+@onready var history_forward_button: Button = $Drawer/Margin/Main/Tabs/AILog/AILogActions/ForwardButton
+@onready var history_position: Label = $Drawer/Margin/Main/Tabs/AILog/HistoryPosition
+@onready var history_details: RichTextLabel = $Drawer/Margin/Main/Tabs/AILog/HistoryDetails
 @onready var ai_log_scroll: ScrollContainer = $Drawer/Margin/Main/Tabs/AILog/AILogScroll
 @onready var ai_log_empty_state: Label = $Drawer/Margin/Main/Tabs/AILog/AILogScroll/AILogContent/EmptyState
 @onready var ai_log_entries: VBoxContainer = $Drawer/Margin/Main/Tabs/AILog/AILogScroll/AILogContent/AILogEntries
@@ -122,8 +127,10 @@ func _ready() -> void:
 	redo_button.pressed.connect(func() -> void: terrain_redo_requested.emit())
 	reset_map_button.pressed.connect(func() -> void: terrain_reset_requested.emit())
 	copy_ai_log_button.pressed.connect(_copy_ai_history)
+	history_back_button.pressed.connect(func() -> void: history_navigation_requested.emit(-1))
+	history_forward_button.pressed.connect(func() -> void: history_navigation_requested.emit(1))
 	tabs.tab_changed.connect(_tab_changed)
-	tabs.set_tab_title(AI_LOG_TAB, "AI Log")
+	tabs.set_tab_title(AI_LOG_TAB, "Combat Log")
 	hide()
 
 
@@ -220,8 +227,16 @@ func set_terrain_history_state(can_undo: bool, can_redo: bool) -> void:
 
 func set_ai_history(entries: Array[String], selected_history_index := -1) -> void:
 	var retained_scroll_position := get_ai_history_scroll_position()
+	var retained_details_text := history_details.text
+	var retained_details_scroll := history_details.get_v_scroll_bar().value
 	_clear_children(ai_log_entries)
 	ai_log_empty_state.visible = entries.is_empty()
+	var cursor := selected_history_index if selected_history_index >= 0 else entries.size()
+	history_back_button.disabled = entries.is_empty() or cursor <= 0
+	history_forward_button.disabled = entries.is_empty() or cursor >= entries.size()
+	history_position.text = "Live · %d actions" % entries.size() if cursor == entries.size() else "Before action %d of %d" % [cursor + 1, entries.size()]
+	history_details.text = "Select an action or use Back to inspect its checkpoint." if entries.is_empty() else entries[mini(cursor, entries.size() - 1)]
+	_apply_combat_details_scroll.call_deferred(retained_details_scroll if history_details.text == retained_details_text else 0.0)
 	var newest_first: Array[String] = []
 	var selection_group := ButtonGroup.new()
 	for history_index in range(entries.size() - 1, -1, -1):
@@ -238,11 +253,11 @@ func set_ai_history(entries: Array[String], selected_history_index := -1) -> voi
 		entry_button.toggle_mode = true
 		entry_button.button_group = selection_group
 		entry_button.set_pressed_no_signal(history_index == selected_history_index)
-		var restore_guidance := "Restore to immediately before this AI decision"
+		var restore_guidance := "Restore to immediately before this action"
 		if history_index == selected_history_index:
-			restore_guidance = "Selected restore point; newer logs will be discarded on Resume"
+			restore_guidance = "Selected restore point; this action and newer outcomes will be discarded on Resume"
 		elif selected_history_index >= 0 and history_index > selected_history_index:
-			restore_guidance = "Future log; click to restore to immediately before this AI decision"
+			restore_guidance = "Future log; click to restore to immediately before this action"
 		entry_button.tooltip_text = "%s\n\n%s" % [restore_guidance, entry_text]
 		entry_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		entry_button.pressed.connect(_request_ai_history_restore.bind(history_index))
@@ -254,6 +269,11 @@ func set_ai_history(entries: Array[String], selected_history_index := -1) -> voi
 
 func get_ai_history_scroll_position() -> int:
 	return ai_log_scroll.scroll_vertical
+
+
+func _apply_combat_details_scroll(scroll_position: float) -> void:
+	if is_inside_tree():
+		history_details.get_v_scroll_bar().value = scroll_position
 
 
 func restore_ai_history_scroll_position(scroll_position: int) -> void:
@@ -276,7 +296,15 @@ func _get_ai_history_summary(entry_text: String) -> String:
 		if summary_lines.size() == 2:
 			break
 	if summary_lines.is_empty():
-		return "AI decision"
+		return "Combat action"
+	if summary_lines.size() == 2 and (summary_lines[1].begins_with("Completed:") or summary_lines[1].begins_with("Interrupted:")):
+		var header := summary_lines[0].split(" · ")
+		if header.size() >= 2:
+			var action := summary_lines[1].trim_prefix("Completed: ").trim_prefix("Interrupted: ")
+			action = action.split(" from ")[0].split(" · ")[0]
+			if summary_lines[1].begins_with("Interrupted:"):
+				action = "Interrupted: " + action
+			return "%s · %s — %s" % [header[0], header[1], action]
 	return " — ".join(summary_lines)
 
 
@@ -288,7 +316,7 @@ func _copy_ai_history() -> void:
 	if _ai_history_copy_text.is_empty():
 		return
 	DisplayServer.clipboard_set(_ai_history_copy_text)
-	show_message("AI logs copied. Paste them into your LLM chat.")
+	show_message("Combat logs copied. Paste them into your LLM chat.")
 
 
 func show_message(message: String, is_error := false) -> void:

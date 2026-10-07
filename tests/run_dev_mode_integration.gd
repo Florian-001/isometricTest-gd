@@ -245,7 +245,7 @@ func _test_ai_log_copy(battle: TacticalBattle) -> void:
 			"Copy Logs copies the displayed retained history exactly apart from platform newline representation"
 		)
 	_check(
-		panel.status_label.text == "AI logs copied. Paste them into your LLM chat.",
+		panel.status_label.text == "Combat logs copied. Paste them into your LLM chat.",
 		"Copy Logs shows paste-ready success feedback"
 	)
 	_check(paused, "copying AI logs keeps Dev mode paused")

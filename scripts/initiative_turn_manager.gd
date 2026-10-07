@@ -5,6 +5,9 @@ signal turn_started(unit: TacticalCharacter)
 ## Emitted before status ticks and action resets so terrain can apply turn-start statuses first.
 signal turn_starting(unit: TacticalCharacter)
 signal turn_ended(unit: TacticalCharacter)
+## Enclose expiry, initiative advancement, hazards, status ticks and resource resets.
+signal turn_ending(unit: TacticalCharacter)
+signal turn_transition_finished
 signal turn_order_changed(order: Array[TacticalCharacter])
 signal round_started(round_number: int)
 
@@ -41,6 +44,7 @@ func end_current_turn() -> void:
 	if current_unit == null or turn_order.is_empty():
 		return
 	var ended_unit := current_unit
+	turn_ending.emit(ended_unit)
 	ended_unit.advance_status_durations()
 	turn_ended.emit(ended_unit)
 
@@ -60,6 +64,7 @@ func end_current_turn() -> void:
 		current_index = -1
 		current_unit = null
 		turn_order_changed.emit(get_rotating_order())
+		turn_transition_finished.emit()
 		return
 
 	if wrapped:
@@ -69,6 +74,7 @@ func end_current_turn() -> void:
 			current_index = -1
 			current_unit = null
 			turn_order_changed.emit(get_rotating_order())
+			turn_transition_finished.emit()
 			return
 		current_index = 0
 		current_unit = turn_order[0]
@@ -80,6 +86,7 @@ func end_current_turn() -> void:
 		current_unit = turn_order[current_index]
 		turn_order_changed.emit(get_rotating_order())
 	_start_current_turn()
+	turn_transition_finished.emit()
 
 
 func stop_combat() -> void:

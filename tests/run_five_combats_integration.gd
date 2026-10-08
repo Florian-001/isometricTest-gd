@@ -78,11 +78,19 @@ func _run() -> void:
 		check(battle != null and battle.initialization_succeeded, "combat %d initializes" % (index + 1))
 		if battle == null:
 			break
-		check(int(run.state.pending.combat_progression.combat_rating) == index + 1 and int(run.state.pending.template_setup.total_cr) == index + 1, "actual roster spends the expected CR")
+		var settings := RunCombatProgression.resolve_floor(run.config, index + 1)
+		var effective := run.config.normal_encounters[0].battle_map.duplicate() as BattleMapTemplateDefinition
+		effective.combat_rating = int(settings.combat_rating)
+		effective.enemy_pool = settings.enemy_pool.duplicate()
+		var layout := TemplateEncounterSetup.inspect_layout(effective, run.state.party.size())
+		var preview_rng := RandomNumberGenerator.new()
+		preview_rng.seed = 0
+		var expected := EnemyEncounterGenerator.generate(effective, layout.enemy_cells.size(), preview_rng)
+		check(int(run.state.pending.combat_progression.combat_rating) == int(settings.combat_rating) and int(run.state.pending.template_setup.total_cr) == int(expected.total_cr), "actual roster spends the achievable authored floor CR")
 		check(battle.run_encounter.enemy_multiplier == 1.0 and battle.run_encounter.chief_node_name.is_empty(), "no elite or chief scaling")
 		for enemy in battle._characters:
 			if not enemy.is_friendly():
-				check(enemy.scene_file_path.contains("goblin" if index < 3 else "skeleton"), "correct enemy family for combat %d" % (index + 1))
+				check(settings.enemy_pool.any(func(scene): return scene.resource_path == enemy.scene_file_path), "enemy belongs to the authored pool for combat %d" % (index + 1))
 		if index == 0:
 			_friendly(battle).apply_damage(7)
 		if index == 1:
@@ -157,10 +165,11 @@ func _test_configuration() -> void:
 	var baseline := manager.ascent_run_controller.config
 	for floor_number in range(1, 6):
 		var short_settings := RunCombatProgression.resolve_floor(run.config, floor_number)
-		check(short_settings.error.is_empty() and int(short_settings.combat_rating) == floor_number, "short floor CR %d" % floor_number)
+		check(short_settings.error.is_empty() and int(short_settings.combat_rating) > 0 and not short_settings.enemy_pool.is_empty(), "short floor %d resolves a positive CR and units pool" % floor_number)
 		check(int(RunCombatProgression.resolve_floor(baseline, floor_number).combat_rating) == [8, 9, 10, 12, 13][floor_number - 1], "original difficulty unchanged")
 	var invalid := run.config.duplicate() as RunConfig
-	invalid.combat_stages = [invalid.combat_stages[0]]
+	invalid.combat_stages = [invalid.combat_stages[0].duplicate()]
+	invalid.combat_stages[0].last_floor -= 1
 	check(not invalid.validate_configuration(2).errors.is_empty(), "missing short floor progression rejected")
 	invalid = run.config.duplicate()
 	var elite := run.config.normal_encounters[0].duplicate() as RunEncounterDefinition

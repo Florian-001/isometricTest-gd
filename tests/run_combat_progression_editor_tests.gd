@@ -39,7 +39,7 @@ func _run() -> void:
 		config.combat_stages.append(stage.duplicate())
 	EditorInterface.edit_resource(config)
 	await _frames()
-	_check(_property("combat_stages") != null and _property("floor_overrides") != null, "RunConfig exposes both editable lists in the real Inspector")
+	_check(_property("combat_stages") != null and _property("floor_overrides") != null and _property("elite_floor_overrides") != null, "RunConfig exposes stages and both override lists in the real Inspector")
 	_check(config.validate_progression_button.is_valid(), "Inspector validation action is callable in the editor")
 	config.validate_progression_button.call()
 	_check(config.validate_configuration().errors.is_empty(), "Validation can inspect the configured party, enemy scenes, and layouts in editor mode")
@@ -52,7 +52,7 @@ func _run() -> void:
 		starting_cr.emit_changed("starting_cr", 2)
 		await _frames()
 		_check(config.combat_stages[0].starting_cr == 2, "Editing an Inspector property changes the stage resource")
-		starting_cr.emit_changed("starting_cr", 1)
+		starting_cr.emit_changed("starting_cr", source.combat_stages[0].starting_cr)
 		await _frames()
 	var override := RunCombatFloorOverride.new()
 	override.floor = 5
@@ -80,7 +80,7 @@ func _run() -> void:
 	_check(ResourceSaver.save(config, path) == OK, "Inspector-edited settings serialize as a normal Godot resource")
 	var restored := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as RunConfig
 	_check(restored != null and restored.floor_overrides.size() == 1 and restored.floor_overrides[0].combat_rating == 7 and restored.floor_overrides[0].override_enemy_pool, "Saved stages and overrides survive resource reload")
-	_check(source.floor_overrides.is_empty() and source.combat_stages[0].starting_cr == 1, "Editor checks leave the authored default configuration unchanged")
+	_check(source.floor_overrides.is_empty() and source.combat_stages[0].starting_cr == config.combat_stages[0].starting_cr, "Editor checks leave the authored default configuration unchanged")
 	if DisplayServer.get_name() != "headless":
 		await RenderingServer.frame_post_draw
 		EditorInterface.get_base_control().get_viewport().get_texture().get_image().save_png(directory + "/floor_override_inspector.png")

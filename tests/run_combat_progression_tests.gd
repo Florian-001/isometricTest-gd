@@ -44,6 +44,7 @@ func _override(floor_number: int, budget: int = 0, pool: Array[PackedScene] = []
 func _run() -> void:
 	_test_rules()
 	_test_overrides()
+	_test_elite_overrides()
 	_test_generation()
 	await process_frame
 	if _failures.is_empty():
@@ -150,6 +151,33 @@ func _test_overrides() -> void:
 	_check(RunCombatProgression.resolve_floor(config, 5).combat_rating == 5, "Disabled override values are ignored")
 
 
+func _test_elite_overrides() -> void:
+	var config := _config()
+	config.floor_overrides = [_override(5, 9, [load(GOBLIN)])]
+	var elite := RunMapGraph.NodeType.HARD_COMBAT
+	_check(RunCombatProgression.resolve_floor(config, 5, elite).combat_rating == 9, "Elites inherit normal floor CR")
+	config.elite_floor_overrides = [_override(5, 11)]
+	var resolved := RunCombatProgression.resolve_floor(config, 5, elite)
+	_check(resolved.combat_rating == 11 and resolved.enemy_pool == [load(GOBLIN)], "Elite CR override retains normal replacement pool")
+	_check(RunCombatProgression.resolve_floor(config, 5).combat_rating == 9, "Elite edits never change normal combat")
+	config.elite_floor_overrides = [_override(5, 0, [load(SKELETON)])]
+	resolved = RunCombatProgression.resolve_floor(config, 5, elite)
+	_check(resolved.combat_rating == 9 and resolved.enemy_pool == [load(SKELETON)], "Elite pool override retains normal CR")
+	config.elite_floor_overrides[0].override_enemy_pool = false
+	_check(RunCombatProgression.resolve_floor(config, 5, elite).enemy_pool == [load(GOBLIN)], "Disabling elite override restores normal inheritance")
+	config.elite_floor_overrides = [_override(5, 1, [load(GOBLIN)])]
+	_check(not RunCombatProgression.validate(config).errors.is_empty(), "Elite-only unaffordable budget fails against elite layouts")
+	config.elite_floor_overrides = [_override(5, 20, [load(SKELETON)])]
+	_check("Elite" in " ".join(RunCombatProgression.validate(config).warnings), "Elite capacity limits identify the encounter type")
+	config.elite_floor_overrides.append(_override(5, 21))
+	_invalid(config, "Duplicate elite overrides fail independently of normal overrides")
+	config = _config()
+	config.combat_stages = []
+	config.elite_floor_overrides = [_override(2, 3)]
+	_invalid(config, "Elite overrides also require stages")
+	_check(not RunCombatProgression.resolve_floor(_config(), 1, RunMapGraph.NodeType.BOSS).error.is_empty(), "Boss is not resolved through normal/elite progression")
+
+
 func _test_generation() -> void:
 	var controller := RunController.new()
 	controller.config = _config()
@@ -180,7 +208,10 @@ func _test_generation() -> void:
 	controller.config.floor_overrides = [_override(6, 4, [load(SKELETON)])]
 	var elite_node := RunMapGraph.NodeData.new(200, 5, 0, RunMapGraph.NodeType.HARD_COMBAT)
 	var elite := controller._prepare_room(elite_node)
-	_check(elite.template_setup.total_cr == 4 and elite.combat_progression.enemy_multiplier == 1.5, "Elites apply their multiplier after the overridden base CR")
+	_check(elite.template_setup.total_cr == 4 and elite.combat_progression.enemy_multiplier == 1.0, "Active elites use authored stats with the overridden base CR")
+	controller.config.elite_floor_overrides = [_override(6, 7, [load(GOBLIN)])]
+	var distinct_elite := controller._prepare_room(elite_node)
+	_check(distinct_elite.combat_progression.combat_rating == 7 and distinct_elite.combat_progression.enemy_pool == [GOBLIN], "Elite room selection commits the elite-specific CR and pool")
 	controller.config.unknown_combat_weight = 1
 	controller.config.unknown_treasure_weight = 0
 	controller.config.unknown_rest_weight = 0

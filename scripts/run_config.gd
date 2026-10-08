@@ -19,6 +19,8 @@ extends Resource
 @export var combat_stages: Array[RunCombatStage] = []
 ## Optional replacements for a single floor's CR, enemy pool, or both.
 @export var floor_overrides: Array[RunCombatFloorOverride] = []
+## Elite-only replacements, applied after normal floor settings. Empty values inherit normal combat.
+@export var elite_floor_overrides: Array[RunCombatFloorOverride] = []
 @export_tool_button("Validate Combat Progression") var validate_progression_button: Callable = _print_progression_report
 @export_category("Room Rewards")
 @export var combat_gold: int = 15

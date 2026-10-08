@@ -9,7 +9,7 @@ static func validate_rules(config: RunConfig) -> Array[String]:
 	if floor_count < 1 or floor_count > RunMapGenerator.ROOM_FLOORS:
 		return ["Combat progression requires between 1 and 15 room floors."]
 	if config.combat_stages.is_empty():
-		if not config.floor_overrides.is_empty():
+		if not config.floor_overrides.is_empty() or not config.elite_floor_overrides.is_empty():
 			errors.append("Add Combat Stages before using Floor Overrides.")
 		return errors
 	var floors := {}
@@ -34,22 +34,8 @@ static func validate_rules(config: RunConfig) -> Array[String]:
 			errors.append("Combat Stages are missing floor %d." % floor_number)
 		elif floors.has(floor_number - 1) and int(floors[floor_number]) <= int(floors[floor_number - 1]):
 			errors.append("Stage CR must increase from floor %d to %d. Use a Floor Override for a deliberate exception." % [floor_number - 1, floor_number])
-	var overridden := {}
-	for entry in config.floor_overrides:
-		if entry == null:
-			errors.append("Assign a resource to each Floor Override, or remove the empty entry.")
-			continue
-		if entry.floor < 1 or entry.floor > floor_count:
-			errors.append("Floor Overrides must target a floor within 1–%d." % floor_count)
-		if overridden.has(entry.floor):
-			errors.append("Only one Floor Override is allowed for floor %d." % entry.floor)
-		overridden[entry.floor] = true
-		if entry.override_cr and entry.combat_rating < 1:
-			errors.append("Floor %d: overridden Combat Rating must be positive." % entry.floor)
-		if entry.override_enemy_pool:
-			var pool_error := _pool_error(entry.enemy_pool)
-			if not pool_error.is_empty():
-				errors.append("Floor %d: %s" % [entry.floor, pool_error])
+	errors.append_array(_validate_overrides(config.floor_overrides, floor_count, "Normal"))
+	errors.append_array(_validate_overrides(config.elite_floor_overrides, floor_count, "Elite"))
 	for encounter in config.progression_encounters():
 		if encounter == null or not encounter.battle_map is BattleMapTemplateDefinition or not encounter.chief_node_name.is_empty():
 			errors.append("Progression needs spawn-template encounters without named chiefs in its encounter catalogs.")
@@ -60,28 +46,56 @@ static func validate_rules(config: RunConfig) -> Array[String]:
 	return errors
 
 
-static func resolve_floor(config: RunConfig, floor_number: int) -> Dictionary:
+static func _validate_overrides(entries: Array[RunCombatFloorOverride], floor_count: int, label: String) -> Array[String]:
+	var errors: Array[String] = []
+	var overridden := {}
+	for entry in entries:
+		if entry == null:
+			errors.append("%s: assign a resource to each Floor Override, or remove the empty entry." % label)
+			continue
+		if entry.floor < 1 or entry.floor > floor_count:
+			errors.append("%s Floor Overrides must target a floor within 1–%d." % [label, floor_count])
+		if overridden.has(entry.floor):
+			errors.append("%s: only one Floor Override is allowed for floor %d." % [label, entry.floor])
+		overridden[entry.floor] = true
+		if entry.override_cr and entry.combat_rating < 1:
+			errors.append("Floor %d / %s: overridden Combat Rating must be positive." % [entry.floor, label])
+		if entry.override_enemy_pool:
+			var pool_error := _pool_error(entry.enemy_pool)
+			if not pool_error.is_empty():
+				errors.append("Floor %d / %s: %s" % [entry.floor, label, pool_error])
+	return errors
+
+
+static func resolve_floor(config: RunConfig, floor_number: int, combat_type: int = RunMapGraph.NodeType.NORMAL_COMBAT) -> Dictionary:
+	if combat_type not in [RunMapGraph.NodeType.NORMAL_COMBAT, RunMapGraph.NodeType.HARD_COMBAT]:
+		return {"error": "Combat progression supports normal and elite combat only."}
 	var errors := validate_rules(config)
 	if not errors.is_empty():
 		return {"error": " ".join(errors)}
-	return _floor_settings(config, floor_number)
+	return _floor_settings(config, floor_number, combat_type)
 
 
-static func _floor_settings(config: RunConfig, floor_number: int) -> Dictionary:
+static func _floor_settings(config: RunConfig, floor_number: int, combat_type: int = RunMapGraph.NodeType.NORMAL_COMBAT) -> Dictionary:
 	for stage in config.combat_stages:
 		if floor_number < stage.first_floor or floor_number > stage.last_floor:
 			continue
 		var result := {"error": "", "floor": floor_number, "stage": stage.display_name,
 			"combat_rating": stage.combat_rating_at(floor_number), "enemy_pool": stage.enemy_pool.duplicate()}
-		for entry in config.floor_overrides:
-			if entry.floor != floor_number:
-				continue
+		_apply_overrides(result, config.floor_overrides, floor_number)
+		if combat_type == RunMapGraph.NodeType.HARD_COMBAT:
+			_apply_overrides(result, config.elite_floor_overrides, floor_number)
+		return result
+	return {"error": "No combat stage covers floor %d." % floor_number}
+
+
+static func _apply_overrides(result: Dictionary, entries: Array[RunCombatFloorOverride], floor_number: int) -> void:
+	for entry in entries:
+		if entry.floor == floor_number:
 			if entry.override_cr:
 				result.combat_rating = entry.combat_rating
 			if entry.override_enemy_pool:
 				result.enemy_pool = entry.enemy_pool.duplicate()
-		return result
-	return {"error": "No combat stage covers floor %d." % floor_number}
 
 
 ## Report generation limits as well as authoring errors; never consume gameplay randomness.
@@ -91,48 +105,53 @@ static func validate(config: RunConfig, party_slots: int = 0) -> Dictionary:
 	if not errors.is_empty() or config.combat_stages.is_empty():
 		return {"errors": errors, "warnings": warnings}
 	var layouts := {}
-	var previous_totals := {}
-	var previous_budget := 0
 	var rng := RandomNumberGenerator.new()
 	# A repeated catalog entry can weight layout selection; validate it only once per floor.
-	var encounters: Array[RunEncounterDefinition] = []
-	for encounter in config.progression_encounters():
-		if not encounters.has(encounter):
-			encounters.append(encounter)
-	for floor_number in range(1, config.combat_floor_count() + 1):
-		var settings := _floor_settings(config, floor_number)
-		if int(settings.combat_rating) <= previous_budget:
-			warnings.append("Floor %d has CR %d after CR %d because of a manual override. The override is honored." % [floor_number, settings.combat_rating, previous_budget])
-		previous_budget = int(settings.combat_rating)
-		for encounter in encounters:
-			var source := encounter.battle_map as BattleMapTemplateDefinition
-			if not layouts.has(source):
-				layouts[source] = TemplateEncounterSetup.inspect_layout(source, party_slots)
-			var layout: Dictionary = layouts[source]
-			var label := "Floor %d / %s" % [floor_number, encounter.display_name]
-			if not str(layout.error).is_empty():
-				errors.append("%s: %s" % [label, layout.error])
-				continue
-			var effective := source.duplicate() as BattleMapTemplateDefinition
-			effective.combat_rating = int(settings.combat_rating)
-			# Resource.duplicate() retains array references: replace the array before editing.
-			effective.enemy_pool = settings.enemy_pool.duplicate()
-			rng.seed = 0
-			var generated := EnemyEncounterGenerator.generate(effective, layout.enemy_cells.size(), rng)
-			if not generated.error.is_empty():
-				errors.append("%s: %s" % [label, generated.error])
-				continue
-			var total := int(generated.total_cr)
-			if total < effective.combat_rating:
-				warnings.append("%s can spend only CR %d of budget %d with this enemy pool and spawn capacity." % [label, total, effective.combat_rating])
-			if previous_totals.has(encounter) and total <= int(previous_totals[encounter]):
-				warnings.append("%s produces CR %d, which does not exceed the previous floor's achievable CR %d." % [label, total, previous_totals[encounter]])
-			previous_totals[encounter] = total
+	var catalogs := {RunMapGraph.NodeType.NORMAL_COMBAT: config.normal_encounters}
+	if not config.is_linear():
+		catalogs[RunMapGraph.NodeType.HARD_COMBAT] = config.elite_encounters
+	for combat_type: int in catalogs:
+		var type_name := "Normal" if combat_type == RunMapGraph.NodeType.NORMAL_COMBAT else "Elite"
+		var previous_totals := {}
+		var previous_budget := 0
+		var encounters: Array[RunEncounterDefinition] = []
+		for encounter in catalogs[combat_type]:
+			if not encounters.has(encounter):
+				encounters.append(encounter)
+		for floor_number in range(1, config.combat_floor_count() + 1):
+			var settings := _floor_settings(config, floor_number, combat_type)
+			if int(settings.combat_rating) <= previous_budget:
+				warnings.append("Floor %d / %s has CR %d after CR %d because of a manual override. The override is honored." % [floor_number, type_name, settings.combat_rating, previous_budget])
+			previous_budget = int(settings.combat_rating)
+			for encounter in encounters:
+				var source := encounter.battle_map as BattleMapTemplateDefinition
+				if not layouts.has(source):
+					layouts[source] = TemplateEncounterSetup.inspect_layout(source, party_slots)
+				var layout: Dictionary = layouts[source]
+				var label := "Floor %d / %s / %s" % [floor_number, type_name, encounter.display_name]
+				if not str(layout.error).is_empty():
+					errors.append("%s: %s" % [label, layout.error])
+					continue
+				var effective := source.duplicate() as BattleMapTemplateDefinition
+				effective.combat_rating = int(settings.combat_rating)
+				# Resource.duplicate() retains array references: replace the array before editing.
+				effective.enemy_pool = settings.enemy_pool.duplicate()
+				rng.seed = 0
+				var generated := EnemyEncounterGenerator.generate(effective, layout.enemy_cells.size(), rng)
+				if not generated.error.is_empty():
+					errors.append("%s: %s" % [label, generated.error])
+					continue
+				var total := int(generated.total_cr)
+				if total < effective.combat_rating:
+					warnings.append("%s can spend only CR %d of budget %d with this enemy pool and spawn capacity." % [label, total, effective.combat_rating])
+				if previous_totals.has(encounter) and total <= int(previous_totals[encounter]):
+					warnings.append("%s produces CR %d, which does not exceed the previous floor's achievable CR %d." % [label, total, previous_totals[encounter]])
+				previous_totals[encounter] = total
 	return {"errors": errors, "warnings": warnings}
 
 
-static func snapshot(config: RunConfig, floor_number: int, encounter: RunEncounterDefinition) -> Dictionary:
-	var settings := resolve_floor(config, floor_number)
+static func snapshot(config: RunConfig, floor_number: int, encounter: RunEncounterDefinition, combat_type: int = RunMapGraph.NodeType.NORMAL_COMBAT) -> Dictionary:
+	var settings := resolve_floor(config, floor_number, combat_type)
 	if not settings.error.is_empty():
 		return settings
 	var paths: Array[String] = []

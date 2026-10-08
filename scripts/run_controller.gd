@@ -247,8 +247,8 @@ func _prepare_room(node: RunMapGraph.NodeData) -> Dictionary:
 			pool.remove_at(index)
 	if not str(pending.encounter).is_empty():
 		var encounter := load(str(pending.encounter)) as RunEncounterDefinition
-		if type in [RunMapGraph.NodeType.NORMAL_COMBAT, RunMapGraph.NodeType.HARD_COMBAT] and (not config.combat_stages.is_empty() or not config.floor_overrides.is_empty()):
-			var settings := RunCombatProgression.snapshot(config, node.tier + 1, encounter)
+		if type in [RunMapGraph.NodeType.NORMAL_COMBAT, RunMapGraph.NodeType.HARD_COMBAT] and (not config.combat_stages.is_empty() or not config.floor_overrides.is_empty() or not config.elite_floor_overrides.is_empty()):
+			var settings := RunCombatProgression.snapshot(config, node.tier + 1, encounter, type)
 			if not settings.error.is_empty():
 				_problem(settings.error)
 				return {}

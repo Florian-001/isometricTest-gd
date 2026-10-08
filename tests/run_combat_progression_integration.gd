@@ -71,7 +71,7 @@ func _test_checkpoint_and_battle() -> void:
 	_check(enemies.size() == 4, "A four-CR override spawns four current CR-1 enemies")
 	for actor: TacticalCharacter in enemies:
 		_check(actor.definition.display_name == "Skeleton Archer", "The runtime battle uses the replacement pool")
-		_check(actor.constitution_override == ceili(actor.definition.constitution * 1.5), "The existing elite stat multiplier is applied to generated enemies")
+		_check(actor.get_effective_stat(UnitStat.Type.CONSTITUTION) == actor.definition.constitution, "New elite battles retain authored enemy stats at multiplier 1.0")
 	var initial_units: Array = battle.capture_save_payload(true).setup.units
 	var initial_pending: Dictionary = JSON.parse_string(JSON.stringify(run.state.pending))
 	var checkpoint := run.save_store.load_run()
@@ -112,6 +112,23 @@ func _test_checkpoint_and_battle() -> void:
 		await process_frame
 		return
 	var valid_data := run.state.to_data()
+	# Simulate a pre-plugin committed elite checkpoint with its saved 1.5 multiplier.
+	var old_elite_data := valid_data.duplicate(true)
+	old_elite_data.pending.combat_progression.enemy_multiplier = 1.5
+	run.state = RunState.from_data(old_elite_data)
+	_check(run.state != null and run.save_store.save_run(run.state), "An older elite checkpoint with multiplier 1.5 remains save-compatible")
+	run.state = run.save_store.load_run()
+	if run.state != null:
+		run.resume_room()
+		_check(manager.current_battle != null and manager.current_battle.initialization_succeeded, "Older committed elite checkpoint reopens as a real battle")
+		if manager.current_battle != null:
+			for actor: TacticalCharacter in manager.current_battle._characters:
+				if not actor.is_friendly():
+					_check(actor.constitution_override == ceili(actor.definition.constitution * 1.5), "Older elite checkpoint retains its saved scaled stats")
+	manager.return_to_level_select()
+	await process_frame
+	run.battle_open = false
+	run.state = RunState.from_data(valid_data)
 	for key in ["floor", "stage", "combat_rating", "enemy_pool", "enemy_multiplier"]:
 		var invalid := valid_data.duplicate(true)
 		invalid.pending.combat_progression[key] = null

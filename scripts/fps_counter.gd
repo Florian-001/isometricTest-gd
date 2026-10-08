@@ -10,7 +10,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	_elapsed += delta
+	_elapsed += delta / Engine.time_scale
 	if _elapsed < UPDATE_INTERVAL:
 		return
 	_elapsed = 0.0

@@ -145,7 +145,7 @@ z_index = 10
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -688.0
+offset_left = -786.0
 offset_top = 118.0
 offset_right = -16.0
 offset_bottom = 158.0
@@ -160,6 +160,13 @@ tooltip_text = "Control friendly units with the battle AI. Switch off to return 
 theme_override_font_sizes/font_size = 15
 toggle_mode = true
 text = "Auto Battle: Off"
+
+[node name="SpeedButton" type="Button" parent="HUD/TopRightActions"]
+custom_minimum_size = Vector2(90, 40)
+layout_mode = 2
+tooltip_text = "Cycle combat speed: 1×, 2×, 3×. Remembered across game launches."
+theme_override_font_sizes/font_size = 15
+text = "Speed: 1×"
 
 [node name="DevButton" type="Button" parent="HUD/TopRightActions"]
 custom_minimum_size = Vector2(82, 40)

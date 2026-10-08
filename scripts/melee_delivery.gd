@@ -103,7 +103,7 @@ func perform(
 	slash_tween.parallel().tween_property(slash, "modulate:a", 0.0, ability.melee_slash_duration)
 
 	await get_tree().create_timer(
-		maxf(ability.melee_return_duration, ability.melee_slash_duration)
+		maxf(ability.melee_return_duration, ability.melee_slash_duration), false
 	).timeout
 	if is_instance_valid(caster):
 		caster.global_position = original_position

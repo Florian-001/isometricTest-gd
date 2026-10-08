@@ -560,13 +560,15 @@ func _apply_knockback(caster: Variant, target: Variant, effect: KnockbackEffectD
 			var origin: Vector2 = target.global_position
 			var destination := grid.grid_to_global(result.landing)
 			var duration := maxf(0.04, origin.distance_to(destination) / target.movement_animation_speed)
-			var began := Time.get_ticks_msec()
+			var elapsed := 0.0
 			while _is_present_living(target, units):
-				var progress := minf(1.0, (Time.get_ticks_msec() - began) / (duration * 1000.0))
+				var progress := minf(1.0, elapsed / duration)
 				target.global_position = origin.lerp(destination, smoothstep(0.0, 1.0, progress))
 				if progress >= 1.0:
 					break
 				await get_tree().process_frame
+				if not get_tree().paused:
+					elapsed += get_process_delta_time()
 			if not _is_present_living(target, units):
 				break
 			# Signals or scene edits may have changed occupancy during the animation.

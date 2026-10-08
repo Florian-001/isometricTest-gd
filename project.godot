@@ -17,6 +17,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+CombatSpeedSettings="*res://scripts/combat_speed_settings.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [display]

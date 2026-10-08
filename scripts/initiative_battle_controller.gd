@@ -5,6 +5,7 @@ const OpportunityAttackSystemScript = preload("res://scripts/opportunity_attack_
 const BattleMapDefinitionScript = preload("res://scripts/battle_map_definition.gd")
 const BattleMapScript = preload("res://scripts/battle_map.gd")
 const AbilityCasterMovementScript = preload("res://scripts/ability_caster_movement.gd")
+const CombatSpeedSettingsScript = preload("res://scripts/combat_speed_settings.gd")
 const DEV_AI_RESTORE_CONTEXT := "_dev_ai_history_restore"
 const ABILITY_SHORTCUT_ACTIONS := [
 	&"battle_ability_1",
@@ -60,6 +61,8 @@ var enable_dev_tools := true
 @onready var general_inventory: GeneralInventory = $GeneralInventory
 @onready var names_button: Button = $HUD/TopRightActions/NamesButton
 @onready var auto_battle_button: Button = $HUD/TopRightActions/AutoBattleButton
+@onready var speed_button: Button = $HUD/TopRightActions/SpeedButton
+@onready var _combat_speed_settings: CombatSpeedSettingsScript = get_node("/root/CombatSpeedSettings")
 @onready var inventory_button: Button = $HUD/TopRightActions/InventoryButton
 @onready var restart_button: Button = $HUD/TopRightActions/RestartButton
 @onready var levels_button: Button = $HUD/TopRightActions/LevelsButton
@@ -132,6 +135,9 @@ func _ready() -> void:
 	return_to_levels_dialog.canceled.connect(_on_return_to_levels_canceled)
 	names_button.toggled.connect(_on_names_button_toggled)
 	auto_battle_button.toggled.connect(set_auto_battle_enabled)
+	speed_button.pressed.connect(_on_speed_button_pressed)
+	_combat_speed_settings.speed_changed.connect(_on_combat_speed_changed)
+	_refresh_speed_button()
 	if not _instantiate_battle_map():
 		_combat_over = true
 		_combat_result_text = "Invalid Level"
@@ -235,6 +241,8 @@ func _ready() -> void:
 	inventory_screen.setup(general_inventory, _get_living_friendlies())
 	_update_turn_hud()
 	initialization_succeeded = true
+	if not _combat_over:
+		_combat_speed_settings.activate_battle(self)
 	if _combat_over:
 		_queue_run_result()
 	if not ai_restore_context.is_empty():
@@ -247,6 +255,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_combat_speed_settings.deactivate_battle(self)
 	dev_terrain_editor.cancel_stroke()
 	if grid != null:
 		grid.clear_dev_brush_preview()
@@ -257,6 +266,7 @@ func _exit_tree() -> void:
 
 
 func shutdown_battle() -> void:
+	_combat_speed_settings.deactivate_battle(self)
 	_ai_turn_generation += 1
 	_ai_turn_unit = null
 	_clear_hit_selection()
@@ -1899,8 +1909,25 @@ func _on_names_button_toggled(value: bool) -> void:
 	unit_name_visibility_changed.emit(value)
 
 
+func _on_speed_button_pressed() -> void:
+	if _combat_over or _dev_open or _return_dialog_paused_battle:
+		return
+	_combat_speed_settings.set_speed(_combat_speed_settings.speed % 3 + 1)
+
+
+func _on_combat_speed_changed(_speed: int) -> void:
+	_refresh_speed_button()
+
+
+func _refresh_speed_button() -> void:
+	if is_instance_valid(speed_button):
+		speed_button.text = "Speed: %d×" % _combat_speed_settings.speed
+		speed_button.disabled = _combat_over or _dev_open or _return_dialog_paused_battle
+
+
 func _set_dev_blocked_actions_disabled(disabled: bool) -> void:
 	auto_battle_button.disabled = disabled or _combat_over
+	speed_button.disabled = disabled or _combat_over or _return_dialog_paused_battle
 	dev_button.disabled = disabled
 	inventory_button.disabled = disabled
 	restart_button.disabled = disabled
@@ -1924,6 +1951,7 @@ func _on_levels_button_pressed() -> void:
 	if not _return_dialog_paused_battle:
 		_return_dialog_paused_battle = true
 		get_tree().paused = true
+	_refresh_speed_button()
 	return_to_levels_dialog.popup_centered()
 
 
@@ -1941,6 +1969,7 @@ func _resume_after_return_dialog() -> void:
 	if not _return_dialog_paused_battle:
 		return
 	_return_dialog_paused_battle = false
+	_refresh_speed_button()
 	if get_tree() != null:
 		get_tree().paused = false
 
@@ -2145,6 +2174,7 @@ func _update_turn_hud() -> void:
 		action_points_label.visible = not _combat_over and is_instance_valid(active)
 		if is_instance_valid(active):
 			action_points_label.text = "AP %d / %d" % [active.action_points, TacticalCharacter.AP_PER_TURN]
+	_refresh_speed_button()
 	if auto_battle_button != null:
 		auto_battle_button.set_pressed_no_signal(auto_battle_enabled and not _combat_over)
 		auto_battle_button.text = "Auto Battle: On" if auto_battle_enabled and not _combat_over else "Auto Battle: Off"
@@ -2384,6 +2414,7 @@ func _finalize_combat() -> void:
 			if is_instance_valid(character) and character.is_moving:
 				return
 		_combat_finalized = true
+		_combat_speed_settings.deactivate_battle(self)
 		for character in _characters:
 			if is_instance_valid(character):
 				character.remove_battle_end_statuses()

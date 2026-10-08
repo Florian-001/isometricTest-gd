@@ -27,7 +27,7 @@ func _process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_D):
 		direction.x += 1.0
 	if direction != Vector2.ZERO:
-		position += direction.normalized() * pan_speed * delta / zoom.x
+		position += direction.normalized() * pan_speed * (delta / Engine.time_scale) / zoom.x
 
 
 func _input(event: InputEvent) -> void:
